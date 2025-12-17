@@ -1,0 +1,28 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "compia-app",
+	"main": "./src/worker/index.ts",
+	"build": {
+		"command": "npm run build"
+	},
+	"tsconfig": "tsconfig.worker.json",
+	"compatibility_date": "2025-06-17",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true,
+	},
+	"upload_source_maps": true,
+	"assets": {
+		"directory": "./dist/client",
+		"not_found_handling": "single-page-application"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "compia-prod",
+			"database_id": "ffffc2e2-b1d6-4962-a2d0-8a993c4400d8"
+		}
+	],
+}

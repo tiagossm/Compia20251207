@@ -1,0 +1,684 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { fetchWithAuth } from '../utils/auth';
+import { useAuth } from '@/react-app/context/AuthContext';
+import Layout from '@/react-app/components/Layout';
+// OrganizationSelector removed - organization is set automatically from user context
+import {
+  Save, ArrowLeft, ArrowRight, FileCheck, MapPin, Navigation, Brain,
+  CheckCircle, ClipboardList, Building2, Users, Settings,
+  Calendar, AlertTriangle, Sparkles
+} from 'lucide-react';
+import { ChecklistTemplate, ChecklistFolder } from '@/shared/checklist-types';
+import { ExtendedMochaUser } from '@/shared/user-types';
+import AutoSuggestField from '@/react-app/components/AutoSuggestField';
+import SuggestionTags from '@/react-app/components/SuggestionTags';
+import NewUserModal from '@/react-app/components/NewUserModal';
+import NewOrganizationModal from '@/react-app/components/NewOrganizationModal';
+import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
+
+interface WizardStep {
+  id: number;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  { id: 1, title: 'Informações Básicas', description: 'Título e descrição', icon: <ClipboardList className="w-5 h-5" /> },
+  { id: 2, title: 'Localização', description: 'Empresa e endereço', icon: <Building2 className="w-5 h-5" /> },
+  { id: 3, title: 'Equipe', description: 'Responsáveis e data', icon: <Users className="w-5 h-5" /> },
+  { id: 4, title: 'Configuração', description: 'Template e IA', icon: <Settings className="w-5 h-5" /> },
+];
+
+export default function NewInspection() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const extendedUser = user as ExtendedMochaUser;
+  const [searchParams] = useSearchParams();
+  const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [folders, setFolders] = useState<ChecklistFolder[]>([]);
+  const [aiAssistants, setAiAssistants] = useState<any[]>([]);
+  const [showNewUserModal, setShowNewUserModal] = useState(false);
+  const [showNewOrgModal, setShowNewOrgModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [stepValidation, setStepValidation] = useState<Record<number, boolean>>({});
+  const [submitProtection, setSubmitProtection] = useState(false); // New protection state
+  const [selectedOrgId] = useState<number | null>(
+    searchParams.get('org') ? parseInt(searchParams.get('org')!) :
+      extendedUser?.profile?.organization_id || null
+  );
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    location: '',
+    company_name: '',
+    cep: '',
+    address: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
+    inspector_name: extendedUser?.profile?.name || '',
+    inspector_email: extendedUser?.email || '',
+    responsible_name: '',
+    responsible_email: '',
+    priority: 'media' as const,
+    scheduled_date: '',
+    template_id: '',
+    action_plan_type: '5w2h' as const,
+    ai_assistant_id: '',
+    compliance_enabled: true, // Habilitar análise de conformidade
+  });
+
+  useEffect(() => {
+    fetchTemplates();
+    fetchFolders();
+    fetchAiAssistants();
+  }, []);
+
+  useEffect(() => {
+    const validation: Record<number, boolean> = {};
+    validation[1] = !!(formData.title.trim());
+    validation[2] = !!(formData.company_name.trim() && formData.location.trim());
+    validation[3] = !!(formData.inspector_name.trim());
+    validation[4] = true;
+    setStepValidation(validation);
+  }, [formData]);
+
+  const fetchAiAssistants = async () => {
+    try {
+      const response = await fetchWithAuth('/api/ai-assistants');
+      if (response.ok) {
+        const data = await response.json();
+        setAiAssistants(data.assistants || []);
+      } else {
+        setAiAssistants([]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar assistentes de IA:', error);
+      setAiAssistants([]);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await fetchWithAuth('/api/checklist/checklist-templates');
+      if (response.ok) {
+        const data = await response.json();
+        const validTemplates = (data.templates || []).filter((template: any) =>
+          !template.is_category_folder && template.name && template.category
+        );
+        setTemplates(validTemplates);
+      } else {
+        setTemplates([]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+      setTemplates([]);
+    }
+  };
+
+  const fetchFolders = async () => {
+    try {
+      const response = await fetchWithAuth('/api/checklist/tree');
+      if (response.ok) {
+        const data = await response.json();
+        setFolders(data.folders || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar pastas:', error);
+    }
+  };
+
+  const handleTemplateSelect = (template: ChecklistTemplate) => {
+    setFormData(prev => ({ ...prev, template_id: String(template.id) }));
+    setShowTemplateModal(false);
+  };
+
+  const getSelectedTemplate = () => {
+    const templateId = formData.template_id;
+    return templates.find(t => String(t.id) === templateId);
+  };
+
+  useEffect(() => {
+    // When entering step 4, enable protection briefly
+    if (currentStep === 4) {
+      setSubmitProtection(true);
+      const timer = setTimeout(() => setSubmitProtection(false), 1000); // 1s delay
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep]);
+
+  // ... (existing code)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitProtection) return; // Double check
+
+    setLoading(true);
+
+    try {
+      const inspectionData = {
+        ...formData,
+        organization_id: selectedOrgId
+      };
+
+      console.log('[NewInspection] Submitting data:', inspectionData);
+
+      const response = await fetchWithAuth('/api/inspections', {
+        method: 'POST',
+        body: JSON.stringify(inspectionData),
+      });
+
+      console.log('[NewInspection] Response status:', response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[NewInspection] Created inspection:', result);
+
+        if (result.id) {
+          navigate(`/inspections/${result.id}`);
+        } else {
+          console.error('[NewInspection] Created but ID is missing:', result);
+          alert('Inspeção criada, mas houve um erro ao redirecionar. Verifique na lista.');
+          navigate('/inspections');
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Erro ao criar inspeção');
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      alert(`Erro ao criar inspeção: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cep = e.target.value.replace(/\D/g, '');
+    setFormData(prev => ({ ...prev, cep }));
+
+    if (cep.length === 8) {
+      try {
+        const response = await fetchWithAuth(`/api/cep/${cep}`);
+        if (response.ok) {
+          const data = await response.json();
+          setFormData(prev => ({ ...prev, address: data.address }));
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+      }
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setFormData(prev => ({
+            ...prev,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          }));
+        },
+        (error) => {
+          console.error('Erro ao obter localização:', error);
+          alert('Erro ao obter localização GPS');
+        }
+      );
+    } else {
+      alert('Geolocalização não é suportada neste navegador');
+    }
+  };
+
+  const goToNextStep = () => {
+    if (currentStep < 4) setCurrentStep(prev => prev + 1);
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 1) setCurrentStep(prev => prev - 1);
+  };
+
+  const canProceed = stepValidation[currentStep];
+
+  const StepProgressBar = () => (
+    <div className="mb-8">
+      <div className="relative flex items-start justify-between">
+        {/* Background Line */}
+        <div className="absolute top-6 left-6 right-6 h-1 bg-slate-200 rounded-full" />
+        <div
+          className="absolute top-6 left-6 h-1 bg-green-500 rounded-full transition-all duration-500"
+          style={{ width: `${((currentStep - 1) / (WIZARD_STEPS.length - 1)) * 100}%`, maxWidth: 'calc(100% - 48px)' }}
+        />
+
+        {WIZARD_STEPS.map((step) => (
+          <div key={step.id} className="flex flex-col items-center z-10" style={{ width: '25%' }}>
+            <button
+              type="button"
+              onClick={() => (stepValidation[step.id] || step.id < currentStep) && setCurrentStep(step.id)}
+              disabled={!stepValidation[step.id] && step.id > currentStep}
+              className={`flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 bg-white ${currentStep === step.id
+                ? 'border-blue-500 text-blue-600 shadow-lg shadow-blue-500/30 ring-4 ring-blue-100'
+                : currentStep > step.id || stepValidation[step.id]
+                  ? 'bg-green-500 border-green-500 text-white'
+                  : 'border-slate-300 text-slate-400'
+                } ${(stepValidation[step.id] || step.id < currentStep) ? 'cursor-pointer hover:scale-105' : 'cursor-not-allowed'}`}
+            >
+              {currentStep > step.id ? (
+                <CheckCircle className="w-6 h-6" />
+              ) : (
+                step.icon
+              )}
+            </button>
+            <div className="mt-3 text-center">
+              <p className={`text-sm font-medium ${currentStep === step.id ? 'text-blue-600' : 'text-slate-600'}`}>
+                {step.title}
+              </p>
+              <p className="text-xs text-slate-400 hidden md:block">{step.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-lg">
+                <ClipboardList className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Informações Básicas</h3>
+                <p className="text-slate-500">Defina o título e descrição da inspeção</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="title" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Título da Inspeção <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  required
+                  value={formData.title}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 ${formData.title ? 'border-green-300 bg-green-50/30' : 'border-slate-200'}`}
+                  placeholder="Ex: Inspeção de Equipamentos de Proteção"
+                />
+                <SuggestionTags
+                  label="Sugestões de Títulos"
+                  apiEndpoint="/api/autosuggest/inspection-titles"
+                  onTagSelect={(value) => setFormData(prev => ({ ...prev, title: value }))}
+                  maxTags={5}
+                />
+              </div>
+              <div>
+                <label htmlFor="description" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Descrição <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={4}
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 resize-none"
+                  placeholder="Descreva os objetivos e escopo da inspeção..."
+                />
+                <SuggestionTags
+                  label="Sugestões de Descrições"
+                  apiEndpoint="/api/autosuggest/inspection-descriptions"
+                  onTagSelect={(value) => setFormData(prev => ({ ...prev, description: value }))}
+                  maxTags={4}
+                />
+              </div>
+              {/* Organization is set automatically from user context (multi-tenant) */}
+            </div>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Localização</h3>
+                <p className="text-slate-500">Informações da empresa e endereço</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <AutoSuggestField
+                  label="Nome da Empresa"
+                  name="company_name"
+                  value={formData.company_name}
+                  onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
+                  placeholder="Ex: ABC Indústria Ltda"
+                  required
+                  apiEndpoint="/api/autosuggest/companies"
+                  onAddNew={() => setShowNewOrgModal(true)}
+                  addNewText="Nova Empresa"
+                />
+              </div>
+              <AutoSuggestField
+                label="Local / Setor"
+                name="location"
+                value={formData.location}
+                onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
+                placeholder="Ex: Galpão A - Setor de Produção"
+                required
+                apiEndpoint="/api/autosuggest/locations"
+              />
+              <div>
+                <label htmlFor="cep" className="block text-sm font-semibold text-slate-700 mb-2">CEP</label>
+                <input
+                  type="text"
+                  id="cep"
+                  name="cep"
+                  value={formData.cep}
+                  onChange={handleCEPChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                  placeholder="00000-000"
+                  maxLength={8}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="address" className="block text-sm font-semibold text-slate-700">Endereço Completo</label>
+                  <button
+                    type="button"
+                    onClick={getCurrentLocation}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                  >
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Capturar GPS
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                  placeholder="Endereço será preenchido automaticamente pelo CEP"
+                />
+                {formData.latitude && formData.longitude && (
+                  <div className="flex items-center gap-3 mt-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
+                    <div className="p-2 bg-green-500 rounded-lg text-white">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-green-800">GPS Capturado com Sucesso</p>
+                      <p className="text-xs text-green-600">{formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}</p>
+                    </div>
+                    <CheckCircle className="w-5 h-5 text-green-500 ml-auto" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl text-white shadow-lg">
+                <Users className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Equipe e Agendamento</h3>
+                <p className="text-slate-500">Responsáveis e cronograma</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AutoSuggestField
+                label="Nome do Técnico / Inspetor"
+                name="inspector_name"
+                value={formData.inspector_name}
+                onChange={(value, email) => setFormData(prev => ({ ...prev, inspector_name: value, inspector_email: email || prev.inspector_email }))}
+                placeholder="Nome completo do responsável"
+                required
+                apiEndpoint="/api/autosuggest/inspectors"
+                onAddNew={() => setShowNewUserModal(true)}
+                addNewText="Novo Inspetor"
+                showEmail={true}
+              />
+              <div>
+                <label htmlFor="inspector_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Técnico</label>
+                <input type="email" id="inspector_email" name="inspector_email" value={formData.inspector_email} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <AutoSuggestField
+                label="Responsável da Empresa"
+                name="responsible_name"
+                value={formData.responsible_name}
+                onChange={(value, email) => setFormData(prev => ({ ...prev, responsible_name: value, responsible_email: email || prev.responsible_email }))}
+                placeholder="Nome do responsável técnico"
+                apiEndpoint="/api/autosuggest/responsibles"
+                showEmail={true}
+              />
+              <div>
+                <label htmlFor="responsible_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Responsável</label>
+                <input type="email" id="responsible_email" name="responsible_email" value={formData.responsible_email} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                  placeholder="responsavel@empresa.com"
+                />
+              </div>
+              <div>
+                <label htmlFor="scheduled_date" className="block text-sm font-semibold text-slate-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-1" />Data Agendada
+                </label>
+                <input type="date" id="scheduled_date" name="scheduled_date" value={formData.scheduled_date} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
+                  <AlertTriangle className="w-4 h-4 inline mr-1" />Prioridade
+                </label>
+                <select id="priority" name="priority" value={formData.priority} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                >
+                  <option value="baixa">🟢 Baixa</option>
+                  <option value="media">🟡 Média</option>
+                  <option value="alta">🟠 Alta</option>
+                  <option value="critica">🔴 Crítica</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg">
+                <Settings className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Configuração Final</h3>
+                <p className="text-slate-500">Template, IA e tipo de plano</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <label htmlFor="ai_assistant_id" className="block text-sm font-semibold text-slate-700 mb-2">
+                  <Sparkles className="w-4 h-4 inline mr-1 text-purple-500" />Assistente de IA Especializado
+                </label>
+                <select id="ai_assistant_id" name="ai_assistant_id" value={formData.ai_assistant_id} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-500 transition-all"
+                >
+                  <option value="">Assistente Geral de Segurança do Trabalho</option>
+                  {aiAssistants.map(assistant => (
+                    <option key={assistant.id} value={assistant.id}>{assistant.name} - {assistant.specialization}</option>
+                  ))}
+                </select>
+                {formData.ai_assistant_id && aiAssistants.find(a => a.id == formData.ai_assistant_id) && (
+                  <div className="mt-3 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Brain className="w-5 h-5 text-purple-600" />
+                      <span className="font-medium text-purple-900">Especialista Selecionado</span>
+                    </div>
+                    <p className="text-purple-700 text-sm mt-1">
+                      {aiAssistants.find(a => a.id == formData.ai_assistant_id)?.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <FileCheck className="w-4 h-4 inline mr-1" />Template de Checklist
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(true)}
+                  className="w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all text-left flex items-center justify-between group"
+                >
+                  <span className={formData.template_id ? 'text-slate-900 font-medium' : 'text-slate-500'}>
+                    {getSelectedTemplate() ? getSelectedTemplate()!.name : 'Selecionar Template...'}
+                  </span>
+                  <FileCheck className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                </button>
+                {formData.template_id && (
+                  <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileCheck className="w-5 h-5 text-blue-600" />
+                        <span className="font-medium text-blue-900">Template Selecionado</span>
+                      </div>
+                      <button type="button" onClick={() => setFormData(prev => ({ ...prev, template_id: '' }))}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline">Remover</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label htmlFor="action_plan_type" className="block text-sm font-semibold text-slate-700 mb-2">Tipo de Plano de Ação</label>
+                <select id="action_plan_type" name="action_plan_type" value={formData.action_plan_type} onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                >
+                  <option value="5w2h">5W2H (Completo)</option>
+                  <option value="simple">Simples</option>
+                </select>
+                <p className="text-xs text-slate-500 mt-2">5W2H: O quê, Por quê, Onde, Quando, Quem, Como, Quanto</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-xl cursor-pointer hover:border-emerald-400 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-500 rounded-lg text-white">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-emerald-900 block">Habilitar Análise de Conformidade</span>
+                      <span className="text-sm text-emerald-700">Permite avaliar cada item como Conforme, Não Conforme ou N/A</span>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.compliance_enabled}
+                    onChange={(e) => setFormData(prev => ({ ...prev, compliance_enabled: e.target.checked }))}
+                    className="w-6 h-6 text-emerald-600 border-2 border-emerald-300 rounded-md focus:ring-emerald-500 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="mt-8 p-6 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-2xl">
+              <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500" />Resumo da Inspeção
+              </h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><p className="text-slate-500">Título</p><p className="font-medium text-slate-900">{formData.title || '-'}</p></div>
+                <div><p className="text-slate-500">Empresa</p><p className="font-medium text-slate-900">{formData.company_name || '-'}</p></div>
+                <div><p className="text-slate-500">Local</p><p className="font-medium text-slate-900">{formData.location || '-'}</p></div>
+                <div><p className="text-slate-500">Técnico</p><p className="font-medium text-slate-900">{formData.inspector_name || '-'}</p></div>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Layout>
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => navigate('/inspections')} className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-200">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="font-heading text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Nova Inspeção</h1>
+            <p className="text-slate-500 mt-1">Crie uma nova inspeção de segurança do trabalho</p>
+          </div>
+        </div>
+
+        <StepProgressBar />
+
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <form onSubmit={(e) => e.preventDefault()}>
+            <div className="p-8">{renderStepContent()}</div>
+
+            <div className="px-8 py-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button type="button" onClick={currentStep === 1 ? () => navigate('/inspections') : goToPreviousStep}
+                className="flex items-center px-5 py-2.5 text-slate-600 border border-slate-300 rounded-xl hover:bg-white transition-all duration-200"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />{currentStep === 1 ? 'Cancelar' : 'Voltar'}
+              </button>
+
+              {currentStep < 4 ? (
+                <button type="button" onClick={goToNextStep} disabled={!canProceed}
+                  className={`flex items-center px-6 py-2.5 rounded-xl font-medium transition-all duration-200 ${canProceed
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                >
+                  Próximo<ArrowRight className="w-4 h-4 ml-2" />
+                </button>
+              ) : (
+                <button type="button" disabled={loading || !canProceed || submitProtection}
+                  onClick={handleSubmit} // Explicit click handler
+                  className={`flex items-center px-6 py-2.5 rounded-xl font-medium transition-all duration-200 ${!loading && canProceed && !submitProtection
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg shadow-green-500/25'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                >
+                  {loading ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Criando...</>)
+                    : (<><Save className="w-4 h-4 mr-2" />Criar Inspeção</>)}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        <NewUserModal isOpen={showNewUserModal} onClose={() => setShowNewUserModal(false)}
+          onUserCreated={(user) => setFormData(prev => ({ ...prev, inspector_name: user.name, inspector_email: user.email }))}
+          organizationId={selectedOrgId || undefined}
+        />
+        <NewOrganizationModal isOpen={showNewOrgModal} onClose={() => setShowNewOrgModal(false)} onSuccess={() => { }} parentOrganizations={[]} />
+        <TemplateSelectionModal isOpen={showTemplateModal} onClose={() => setShowTemplateModal(false)} onSelect={handleTemplateSelect} folders={folders} templates={templates} />
+      </div>
+    </Layout>
+  );
+}
