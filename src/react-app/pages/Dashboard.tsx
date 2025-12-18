@@ -19,6 +19,7 @@ import {
   PlusCircle,
   FileCheck,
   BarChart3,
+
   Zap
 } from 'lucide-react';
 
@@ -189,7 +190,6 @@ export default function Dashboard() {
             color="purple"
             trend={stats?.inProgress ? { value: "+8%", isPositive: true } : undefined}
           />
-
           <StatsCard
             title="Concluídas"
             value={stats?.completed || 0}
@@ -421,6 +421,7 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
 
       </div>
     </Layout>

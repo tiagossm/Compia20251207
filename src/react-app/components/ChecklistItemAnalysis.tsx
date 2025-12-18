@@ -679,6 +679,7 @@ export default function ChecklistItemAnalysis({
           </div>
         </div>
       )}
+
       {/* Modal de Seleção de Mídia */}
       {showMediaSelector && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -743,38 +744,41 @@ export default function ChecklistItemAnalysis({
                         <span className="uppercase">{media.media_type}</span>
                         <span>•</span>
                         <span className="truncate max-w-[150px]">
-                          Recente
+                          {media.file_url ? '.../' + media.file_url.split('/').pop() : 'URL indisponível'}
                         </span>
                       </div>
                     </div>
-                    {media.file_url && (media.media_type === 'image') && (
-                      <img src={media.file_url} alt="" className="w-10 h-10 object-cover rounded bg-slate-100" />
-                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-              <span className="text-xs text-slate-500 font-medium">
-                {selectedMediaIds.length} selecionado(s)
-              </span>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                onClick={() => setShowMediaSelector(false)}
+                className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
               <button
                 onClick={() => {
                   setShowMediaSelector(false);
-                  if (pendingAction === 'analysis') executePreAnalysis();
-                  if (pendingAction === 'action_plan') executeCreateAction();
+                  if (pendingAction === 'analysis') {
+                    executePreAnalysis();
+                  } else if (pendingAction === 'action_plan') {
+                    executeCreateAction();
+                  }
+                  setPendingAction(null);
                 }}
                 disabled={selectedMediaIds.length === 0}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
               >
-                Confirmar e Analisar
+                Confirmar Seleção ({selectedMediaIds.length})
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

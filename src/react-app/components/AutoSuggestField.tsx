@@ -128,7 +128,6 @@ export default function AutoSuggestField({
           <div className="relative flex-1">
             {/* Search Icon */}
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-
             <input
               ref={inputRef}
               type="text"
@@ -149,7 +148,6 @@ export default function AutoSuggestField({
               </div>
             )}
           </div>
-
           {onAddNew && (
             <button
               type="button"

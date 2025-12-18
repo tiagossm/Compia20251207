@@ -3,35 +3,43 @@ import { X, Send, Loader2, Copy, Check, Sparkles } from 'lucide-react';
 import { fetchWithAuth } from '../utils/auth';
 
 interface Message {
-    id: string;
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
-    suggestions?: string[];
+    type?: 'text' | 'code' | 'suggestion';
 }
 
 const QUICK_ACTIONS = [
-    { label: '📊 Converter dados para CSV', prompt: 'Quero converter uma lista de itens para o formato CSV de checklist' },
-    { label: '❓ Como criar inspeção?', prompt: 'Como faço para criar uma nova inspeção no sistema?' },
-    { label: '📋 O que é análise de conformidade?', prompt: 'Explique o que é a análise de conformidade e como funciona' },
-    { label: '📥 Como importar checklist?', prompt: 'Como importo um checklist via CSV?' },
+    { label: 'Resumir Inspeção', prompt: 'Faça um resumo executivo desta inspeção destacando os principais pontos de atenção.' },
+    { label: 'Sugerir Ações', prompt: 'Com base nos itens não conformes, sugira um plano de ação corretiva.' },
+    { label: 'Analisar Riscos', prompt: 'Quais são os principais riscos identificados nesta inspeção?' },
+    { label: 'Melhorar Redação', prompt: 'Reescreva as observações dos itens para serem mais técnicas e claras.' }
 ];
 
 export default function FloatingAiAssistant() {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            role: 'assistant',
+            content: 'Olá! Sou a IA especialista da Compia. Como posso ajudar você hoje na sua inspeção?',
+            timestamp: new Date()
+        }
+    ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [showActions, setShowActions] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
-    // Scroll to bottom when messages change
-    useEffect(() => {
+    const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    };
 
-    // Focus input when opened
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages, isOpen]);
+
     useEffect(() => {
         if (isOpen && inputRef.current) {
             inputRef.current.focus();
@@ -39,52 +47,53 @@ export default function FloatingAiAssistant() {
     }, [isOpen]);
 
     const sendMessage = async (content: string) => {
-        if (!content.trim() || isLoading) return;
+        if (!content.trim()) return;
 
-        const userMessage: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: content.trim(),
-            timestamp: new Date(),
-        };
-
-        setMessages(prev => [...prev, userMessage]);
+        const userMsg: Message = { role: 'user', content, timestamp: new Date() };
+        setMessages(prev => [...prev, userMsg]);
         setInputValue('');
         setIsLoading(true);
+        setShowActions(false);
 
         try {
+            // Context da página atual (pode ser melhorado pegando dados reais)
+            const pageContext = {
+                url: window.location.pathname,
+                title: document.title
+            };
+
             const response = await fetchWithAuth('/api/ai-assistant/chat', {
                 method: 'POST',
                 body: JSON.stringify({
                     message: content,
-                    history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
-                }),
+                    context: pageContext,
+                    history: messages.slice(-5) // Envia último histórico recente
+                })
             });
 
-            if (!response.ok) {
-                throw new Error('Erro ao comunicar com o assistente');
+            if (response.ok) {
+                const data = await response.json();
+                const aiMsg: Message = {
+                    role: 'assistant',
+                    content: data.reply || 'Desculpe, não consegui processar sua solicitação.',
+                    timestamp: new Date()
+                };
+                setMessages(prev => [...prev, aiMsg]);
+
+                if (data.suggestions && data.suggestions.length > 0) {
+                    // Opcional: atualizar sugestões
+                }
+            } else {
+                throw new Error('Falha na comunicação com IA');
             }
 
-            const data = await response.json();
-
-            const assistantMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: data.reply || 'Desculpe, não consegui processar sua solicitação.',
-                timestamp: new Date(),
-                suggestions: data.suggestions,
-            };
-
-            setMessages(prev => [...prev, assistantMessage]);
         } catch (error) {
-            console.error('AI Assistant error:', error);
-            const errorMessage: Message = {
-                id: (Date.now() + 1).toString(),
+            console.error('Erro IA:', error);
+            setMessages(prev => [...prev, {
                 role: 'assistant',
-                content: '❌ Desculpe, ocorreu um erro. Por favor, tente novamente.',
-                timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, errorMessage]);
+                content: 'Desculpe, estou enfrentando problemas de conexão. Tente novamente em instantes.',
+                timestamp: new Date()
+            }]);
         } finally {
             setIsLoading(false);
         }
@@ -97,41 +106,44 @@ export default function FloatingAiAssistant() {
         }
     };
 
-    const copyToClipboard = async (text: string, id: string) => {
-        try {
-            // Extract code blocks if present
-            const codeMatch = text.match(/```[\s\S]*?\n([\s\S]*?)```/);
-            const textToCopy = codeMatch ? codeMatch[1].trim() : text;
-
-            await navigator.clipboard.writeText(textToCopy);
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
-        }
+    const copyToClipboard = (text: string, id: string) => {
+        navigator.clipboard.writeText(text);
+        setCopySuccess(id);
+        setTimeout(() => setCopySuccess(null), 2000);
     };
 
-    const formatMessage = (content: string) => {
-        // Format code blocks
-        const parts = content.split(/(```[\s\S]*?```)/g);
-        return parts.map((part, index) => {
-            if (part.startsWith('```')) {
-                const code = part.replace(/```\w*\n?/g, '').replace(/```$/, '');
-                return (
-                    <pre key={index} className="bg-slate-800 text-green-400 p-3 rounded-lg my-2 overflow-x-auto text-sm font-mono whitespace-pre-wrap">
-                        {code}
-                    </pre>
-                );
-            }
-            // Format bold text
-            return (
-                <span key={index} dangerouslySetInnerHTML={{
-                    __html: part
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\n/g, '<br/>')
-                }} />
-            );
-        });
+    // Formata mensagem para exibir código se tiver markdown basic
+    const formatMessage = (content: string, msgIndex: number) => {
+        // Detecção simples de blocos de código
+        if (content.includes('```')) {
+            const parts = content.split(/```/);
+            return parts.map((part, i) => {
+                if (i % 2 === 1) {
+                    // É código
+                    const lang = part.split('\n')[0].trim();
+                    const code = part.replace(lang, '').trim();
+                    return (
+                        <div key={i} className="my-2 bg-slate-900 rounded-md overflow-hidden text-xs">
+                            <div className="flex justify-between items-center px-3 py-1.5 bg-slate-800 text-slate-400 border-b border-slate-700">
+                                <span className="uppercase text-[10px] font-mono">{lang || 'CODE'}</span>
+                                <button
+                                    onClick={() => copyToClipboard(code, `code-${msgIndex}-${i}`)}
+                                    className="hover:text-white flex items-center gap-1"
+                                >
+                                    {copySuccess === `code-${msgIndex}-${i}` ? <Check size={12} /> : <Copy size={12} />}
+                                    <span className="text-[10px]">{copySuccess === `code-${msgIndex}-${i}` ? 'Copiado!' : 'Copiar'}</span>
+                                </button>
+                            </div>
+                            <pre className="p-3 overflow-x-auto text-slate-300 font-mono">
+                                <code>{code}</code>
+                            </pre>
+                        </div>
+                    );
+                }
+                return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+            });
+        }
+        return <span className="whitespace-pre-wrap">{content}</span>;
     };
 
     return (
@@ -139,157 +151,139 @@ export default function FloatingAiAssistant() {
             {/* Floating Button */}
             <button
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-emerald-300 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
-                    }`}
-                style={{
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                }}
-                aria-label="Abrir assistente IA"
+                className={`fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full shadow-2xl flex items-center justify-center text-white z-40 transition-all hover:scale-110 active:scale-95 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
             >
-                <img
-                    src="/compia-logo.png"
-                    alt="COMPIA AI"
-                    className="w-10 h-10 mx-auto filter brightness-0 invert"
-                />
-                {/* Pulse animation for first time */}
-                {messages.length === 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-ping" />
-                )}
+                <img src="/compia-logo.png" alt="COMPIA AI" className="w-8 h-8 object-contain brightness-0 invert" />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-500"></span>
+                </span>
             </button>
 
             {/* Chat Modal */}
-            <div
-                className={`fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-2xl transition-all duration-300 origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'
-                    }`}
-                style={{ maxHeight: 'calc(100vh - 6rem)' }}
-            >
+            <div className={`fixed bottom-6 right-6 w-[95vw] sm:w-[400px] h-[550px] max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col z-50 transition-all duration-300 origin-bottom-right border border-slate-200 overflow-hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
+
                 {/* Header */}
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-3 rounded-t-2xl flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <img src="/compia-logo.png" alt="COMPIA" className="w-6 h-6 filter brightness-0 invert" />
+                <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/20 backdrop-blur-sm">
+                            <Sparkles size={20} className="text-sky-400" />
+                        </div>
                         <div>
-                            <h3 className="font-bold text-sm">COMPIA AI</h3>
-                            <p className="text-xs text-emerald-100">Seu assistente inteligente</p>
+                            <h3 className="font-semibold text-white text-base">Compia Assistant</h3>
+                            <p className="text-white/60 text-xs flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                                Online e pronto para ajudar
+                            </p>
                         </div>
                     </div>
                     <button
                         onClick={() => setIsOpen(false)}
-                        className="p-1 hover:bg-white/20 rounded-full transition-colors"
-                        aria-label="Fechar"
+                        className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
                     >
-                        <X className="w-5 h-5" />
+                        <X size={20} />
                     </button>
                 </div>
 
                 {/* Messages Area */}
-                <div className="h-80 overflow-y-auto p-4 space-y-3 bg-slate-50">
-                    {messages.length === 0 ? (
-                        <div className="text-center py-4">
-                            <Sparkles className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                            <p className="text-slate-600 text-sm mb-4">
-                                Olá! Sou o assistente do COMPIA.<br />
-                                Como posso ajudar?
-                            </p>
-                            <div className="space-y-2">
-                                {QUICK_ACTIONS.map((action, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => sendMessage(action.prompt)}
-                                        className="w-full text-left px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
-                                    >
-                                        {action.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        messages.map((message) => (
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                    <div className="text-center py-4">
+                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Início da Conversa</p>
+                    </div>
+
+                    {messages.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            {msg.role === 'assistant' && (
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 mr-2 mt-1 shadow-sm">
+                                    <Bot size={16} />
+                                </div>
+                            )}
                             <div
-                                key={message.id}
-                                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm text-sm ${msg.role === 'user'
+                                    ? 'bg-blue-600 text-white rounded-br-none'
+                                    : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none'
+                                    }`}
                             >
-                                <div
-                                    className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${message.role === 'user'
-                                        ? 'bg-emerald-500 text-white rounded-br-md'
-                                        : 'bg-white border border-slate-200 text-slate-700 rounded-bl-md shadow-sm'
-                                        }`}
-                                >
-                                    <div className="break-words">{formatMessage(message.content)}</div>
-
-                                    {/* Copy button for assistant messages with code */}
-                                    {message.role === 'assistant' && message.content.includes('```') && (
-                                        <button
-                                            onClick={() => copyToClipboard(message.content, message.id)}
-                                            className="mt-2 flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 transition-colors"
-                                        >
-                                            {copiedId === message.id ? (
-                                                <>
-                                                    <Check className="w-3 h-3" />
-                                                    Copiado!
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Copy className="w-3 h-3" />
-                                                    Copiar CSV
-                                                </>
-                                            )}
-                                        </button>
-                                    )}
-
-                                    {/* Suggestions */}
-                                    {message.suggestions && message.suggestions.length > 0 && (
-                                        <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
-                                            {message.suggestions.map((sug, i) => (
-                                                <button
-                                                    key={i}
-                                                    onClick={() => sendMessage(sug)}
-                                                    className="block w-full text-left text-xs text-emerald-600 hover:text-emerald-800 hover:underline"
-                                                >
-                                                    → {sug}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
+                                {formatMessage(msg.content, idx)}
+                                <div className={`text-[10px] mt-1.5 text-right ${msg.role === 'user' ? 'text-blue-100' : 'text-slate-400'}`}>
+                                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             </div>
-                        ))
-                    )}
+                        </div>
+                    ))}
+
                     {isLoading && (
                         <div className="flex justify-start">
-                            <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl rounded-bl-md shadow-sm">
-                                <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 mr-2 mt-1 shadow-sm">
+                                <Bot size={16} />
+                            </div>
+                            <div className="bg-white rounded-2xl rounded-tl-none px-4 py-3 shadow-sm border border-slate-200 flex items-center gap-2">
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
                             </div>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input Area */}
-                <div className="p-3 border-t border-slate-200 bg-white rounded-b-2xl">
-                    <div className="flex gap-2">
-                        <textarea
+                {/* Actions & Input Area */}
+                <div className="bg-white p-3 border-t border-slate-100 shrink-0">
+                    {/* Quick Actions Carousel */}
+                    {showActions && !isLoading && (
+                        <div className="flex gap-2 overflow-x-auto pb-3 mb-1 no-scrollbar mask-gradient-r">
+                            {QUICK_ACTIONS.map((action, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => sendMessage(action.prompt)}
+                                    className="whitespace-nowrap px-3 py-1.5 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 hover:border-blue-200 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5"
+                                >
+                                    <Sparkles size={12} className="text-amber-500" />
+                                    {action.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="relative flex items-end gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400 transition-all">
+                        <input
                             ref={inputRef}
+                            type="text"
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Digite sua mensagem..."
-                            className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-500"
-                            rows={1}
+                            placeholder="Digite sua mensagem para a IA..."
+                            className="flex-1 bg-transparent border-none text-sm px-3 py-2.5 focus:ring-0 placeholder:text-slate-400 max-h-32 font-medium"
                             disabled={isLoading}
+                            autoComplete="off"
                         />
                         <button
                             onClick={() => sendMessage(inputValue)}
                             disabled={!inputValue.trim() || isLoading}
-                            className="px-3 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="p-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-sm mb-[1px] mr-[1px]"
                         >
-                            <Send className="w-4 h-4" />
+                            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                         </button>
                     </div>
-                    <p className="text-xs text-slate-400 text-center mt-2">
-                        Pressione Enter para enviar
-                    </p>
+                    <div className="text-center mt-2 text-[10px] text-slate-400">
+                        IA pode cometer erros. Verifique informações importantes.
+                    </div>
                 </div>
             </div>
         </>
     );
+}
+
+// Icon helper workaround se Lucide não importar Bot corretamente em algumas versões
+function Bot({ size = 24, className = "" }: { size?: number, className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+            <path d="M12 22a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2a2 2 0 0 0 2 2z" />
+            <path d="M20 12a8 8 0 0 0-16 0" />
+            <rect x="2" y="12" width="20" height="6" rx="2" />
+            <path d="M6 12v6" />
+            <path d="M18 12v6" />
+        </svg>
+    )
 }

@@ -66,6 +66,7 @@ export default function AdminDataSync() {
         text: `Dados exportados com sucesso! Total de ${data.total_counts.inspections} inspeções encontradas.`
       });
 
+
     } catch (error) {
       console.error('Erro ao exportar dados:', error);
       setMessage({
@@ -78,6 +79,7 @@ export default function AdminDataSync() {
   };
 
   const downloadExportData = () => {
+    if (!exportData) return;
     if (!exportData) return;
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -94,7 +96,6 @@ export default function AdminDataSync() {
   const checkProdData = async () => {
     setLoading(true);
     setMessage(null);
-
     try {
       const response = await fetch('/api/admin/inspections-all');
 
@@ -107,7 +108,6 @@ export default function AdminDataSync() {
         type: 'info',
         text: `Produção tem ${data.total_count} inspeções totais (bypass de filtros ativo).`
       });
-
     } catch (error) {
       console.error('Erro ao verificar dados da produção:', error);
       setMessage({
@@ -130,7 +130,6 @@ export default function AdminDataSync() {
 
     setLoading(true);
     setMessage(null);
-
     try {
       const fileContent = await importData.text();
       let jsonData;
@@ -230,16 +229,16 @@ export default function AdminDataSync() {
           {/* Message display */}
           {message && (
             <div className={`rounded-lg p-4 mb-6 ${message.type === 'success' ? 'bg-green-50 border border-green-200' :
-                message.type === 'error' ? 'bg-red-50 border border-red-200' :
-                  'bg-blue-50 border border-blue-200'
+              message.type === 'error' ? 'bg-red-50 border border-red-200' :
+                'bg-blue-50 border border-blue-200'
               }`}>
               <div className="flex items-start gap-3">
                 {message.type === 'success' && <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />}
                 {message.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />}
                 {message.type === 'info' && <Database className="w-5 h-5 text-blue-600 mt-0.5" />}
                 <p className={`text-sm ${message.type === 'success' ? 'text-green-800' :
-                    message.type === 'error' ? 'text-red-800' :
-                      'text-blue-800'
+                  message.type === 'error' ? 'text-red-800' :
+                    'text-blue-800'
                   }`}>
                   {message.text}
                 </p>

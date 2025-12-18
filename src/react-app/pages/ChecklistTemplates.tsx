@@ -708,6 +708,7 @@ export default function ChecklistTemplates() {
                               onClick: (e) => openMoveModal(e, 'template', template.id!, template.name)
                             },
                             {
+
                               label: 'Compartilhar',
                               icon: <Share2 className="w-4 h-4" />,
                               onClick: () => setShareModal({
@@ -740,8 +741,9 @@ export default function ChecklistTemplates() {
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+                }
+              </div >
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                 <table className="w-full text-left text-sm">
@@ -854,12 +856,12 @@ export default function ChecklistTemplates() {
                 </table>
               </div>
             )}
-          </div>
-        </div>
-      </div>
+          </div >
+        </div >
+      </div >
 
       {/* New Category Modal */}
-      <NewCategoryModal
+      < NewCategoryModal
         isOpen={showNewCategoryModal}
         onClose={() => setShowNewCategoryModal(false)}
         onSave={handleCreateCategory}
@@ -868,7 +870,7 @@ export default function ChecklistTemplates() {
       />
 
       {/* Move Item Modal */}
-      <MoveItemModal
+      < MoveItemModal
         isOpen={showMoveModal}
         onClose={() => setShowMoveModal(false)}
         onMove={handleMoveItem}
@@ -878,21 +880,23 @@ export default function ChecklistTemplates() {
       />
 
       {/* Preview Modal */}
-      {showPreviewModal && previewTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[90vh] overflow-hidden flex flex-col">
-            <ChecklistPreview
-              template={previewTemplate}
-              fields={previewFields}
-              onSave={handleSavePreview}
-              onCancel={() => setShowPreviewModal(false)}
-              loading={previewLoading}
-              title="Visualizar Template"
-              folders={folderTree}
-            />
+      {
+        showPreviewModal && previewTemplate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[90vh] overflow-hidden flex flex-col">
+              <ChecklistPreview
+                template={previewTemplate}
+                fields={previewFields}
+                onSave={handleSavePreview}
+                onCancel={() => setShowPreviewModal(false)}
+                loading={previewLoading}
+                title="Visualizar Template"
+                folders={folderTree}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Confirmation Modal */}
       <ConfirmationModal
@@ -906,10 +910,12 @@ export default function ChecklistTemplates() {
         loading={deleteLoading}
       />
 
+
       {/* Share Modal */}
       <ShareChecklistModal
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ ...shareModal, isOpen: false })}
+        checklistTitle={shareModal.templateName}
         templateId={shareModal.templateId}
         templateName={shareModal.templateName}
         currentVisibility={shareModal.visibility}
@@ -918,97 +924,99 @@ export default function ChecklistTemplates() {
       />
 
       {/* New Checklist Modal */}
-      {showNewChecklistModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setShowNewChecklistModal(false)}
-        >
+      {
+        showNewChecklistModal && (
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowNewChecklistModal(false)}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">Criar Novo Checklist</h3>
-              <button
-                type="button"
-                onClick={() => setShowNewChecklistModal(false)}
-                className="p-1 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Criar Novo Checklist</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNewChecklistModal(false)}
+                  className="p-1 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-            {/* Options */}
-            <div className="p-4 space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewChecklistModal(false);
-                  const url = currentFolderId ? `/checklists/import?folder_id=${currentFolderId}` : '/checklists/import';
-                  navigate(url);
-                }}
-                className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-green-50 transition-all border-2 border-transparent hover:border-green-200 group"
-              >
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-green-100 group-hover:bg-green-200 transition-colors">
-                  <Upload className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-semibold text-slate-900 text-lg">Importar/Colar CSV</div>
-                  <div className="text-sm text-slate-500">Upload de arquivo ou colar dados</div>
-                </div>
-              </button>
+              {/* Options */}
+              <div className="p-4 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewChecklistModal(false);
+                    const url = currentFolderId ? `/checklists/import?folder_id=${currentFolderId}` : '/checklists/import';
+                    navigate(url);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-green-50 transition-all border-2 border-transparent hover:border-green-200 group"
+                >
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-green-100 group-hover:bg-green-200 transition-colors">
+                    <Upload className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold text-slate-900 text-lg">Importar/Colar CSV</div>
+                    <div className="text-sm text-slate-500">Upload de arquivo ou colar dados</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewChecklistModal(false);
-                  const url = currentFolderId ? `/checklists/ai-generate?folder_id=${currentFolderId}` : '/checklists/ai-generate';
-                  navigate(url);
-                }}
-                className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-purple-50 transition-all border-2 border-transparent hover:border-purple-200 group"
-              >
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 group-hover:bg-purple-200 transition-colors">
-                  <Brain className="w-6 h-6 text-purple-600" />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-semibold text-slate-900 text-lg">Gerar com IA</div>
-                  <div className="text-sm text-slate-500">Criação inteligente e automatizada</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewChecklistModal(false);
+                    const url = currentFolderId ? `/checklists/ai-generate?folder_id=${currentFolderId}` : '/checklists/ai-generate';
+                    navigate(url);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-purple-50 transition-all border-2 border-transparent hover:border-purple-200 group"
+                >
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 group-hover:bg-purple-200 transition-colors">
+                    <Brain className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold text-slate-900 text-lg">Gerar com IA</div>
+                    <div className="text-sm text-slate-500">Criação inteligente e automatizada</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewChecklistModal(false);
-                  const url = currentFolderId ? `/checklists/new?folder_id=${currentFolderId}` : '/checklists/new';
-                  navigate(url);
-                }}
-                className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-blue-50 transition-all border-2 border-transparent hover:border-blue-200 group"
-              >
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
-                  <FileEdit className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-semibold text-slate-900 text-lg">Manual</div>
-                  <div className="text-sm text-slate-500">Criar do zero passo a passo</div>
-                </div>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewChecklistModal(false);
+                    const url = currentFolderId ? `/checklists/new?folder_id=${currentFolderId}` : '/checklists/new';
+                    navigate(url);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-blue-50 transition-all border-2 border-transparent hover:border-blue-200 group"
+                >
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-colors">
+                    <FileEdit className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold text-slate-900 text-lg">Manual</div>
+                    <div className="text-sm text-slate-500">Criar do zero passo a passo</div>
+                  </div>
+                </button>
+              </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setShowNewChecklistModal(false)}
-                className="w-full px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-              >
-                Cancelar
-              </button>
+              {/* Footer */}
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowNewChecklistModal(false)}
+                  className="w-full px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
     </Layout >
   );

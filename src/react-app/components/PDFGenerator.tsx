@@ -22,7 +22,6 @@ interface PDFGeneratorProps {
 }
 
 type LogoPreference = 'organization' | 'parent' | 'both' | 'none';
-
 export default function PDFGenerator({
   inspection,
   items,
@@ -543,7 +542,8 @@ export default function PDFGenerator({
               } catch (e) {
                 return '';
               }
-            })() : ''}
+            })() : ''
+            }
         ${includeMedia && itemMedia.length > 0 ? `
         <div>
           <div class="response-label">Evidências (${itemMedia.length}):</div>
@@ -569,12 +569,14 @@ export default function PDFGenerator({
               </div>`;
             }).join('')}
           </div>
-        </div>` : ''}
+        </div>` : ''
+            }
       </div>`;
-        } catch (err) {
+        } catch (e) {
           return '';
         }
-      }).join('')}` : ''}
+      }).join('')}` : ''
+      }
 
   ${items.length > 0 ? `
   <h2>Itens Manuais</h2>
@@ -625,9 +627,11 @@ export default function PDFGenerator({
             </div>`;
         }).join('')}
         </div>
-      </div>` : ''}
+      </div>` : ''
+          }
     </div>`;
-      }).join('')}` : ''}
+      }).join('')}` : ''
+      }
 
   ${actionItems.length > 0 ? `
   <h2>Planos de Ação Executivos</h2>
@@ -707,7 +711,8 @@ export default function PDFGenerator({
         </div>` : ''}
       </div>
     `).join('')}
-  </div>` : ''}
+  </div>` : ''
+      }
 
   ${includeSignatures ? `
   <div class="signatures-section page-break">
@@ -732,7 +737,8 @@ export default function PDFGenerator({
         <div class="signature-role">Empresa</div>
       </div>
     </div>
-  </div>` : ''}
+  </div>` : ''
+      }
 
   ${qrCodeDataUrl ? `
   <div class="page-break" style="text-align: center; margin-top: 40px; padding: 30px; border-top: 3px solid #3b82f6; background: linear-gradient(135deg, #f0f9ff, #e0f2fe);">
@@ -769,20 +775,21 @@ export default function PDFGenerator({
       </div>
     </div>
   </div>
-  ` : ''}
+  ` : ''
+      }
 
-  <div class="footer">
-    <p><strong>Relatório gerado automaticamente pelo Sistema Compia</strong></p>
-    <p>Este documento possui validade legal conforme legislação vigente</p>
-    <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
-    ${inspection.latitude && inspection.longitude ? `
-    <p style="margin-top: 10px;"><strong>Localização GPS:</strong> 
+                      <div class="footer">
+                        <p><strong>Relatório gerado automaticamente pelo Sistema Compia</strong></p>
+                        <p>Este documento possui validade legal conforme legislação vigente</p>
+                        <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+                        ${inspection.latitude && inspection.longitude ? `
+    <p style="margin-top: 10px;"><strong>Localização GPS:</strong>
       <a href="https://www.google.com/maps/search/?api=1&query=${inspection.latitude},${inspection.longitude}" target="_blank" style="color: #2563eb; text-decoration: underline;">
         ${inspection.latitude.toFixed(6)}, ${inspection.longitude.toFixed(6)}
       </a>
     </p>` : ''}
-    ${media.length > 0 ? `<p style="margin-top: 10px;"><strong>Mídias completas:</strong> Disponíveis na versão digital</p>` : ''}
-  </div>
+                        ${media.length > 0 ? `<p style="margin-top: 10px;"><strong>Mídias completas:</strong> Disponíveis na versão digital</p>` : ''}
+                      </div>
 </body>
 </html>`;
   };
@@ -812,7 +819,6 @@ export default function PDFGenerator({
         URL.revokeObjectURL(blobUrl); // Clean up
         throw new Error('Erro ao carregar conteúdo do PDF');
       };
-
       // Enhanced loading wait with multiple fallbacks
       await new Promise((resolve, reject) => {
         let resolved = false;
@@ -1004,74 +1010,76 @@ export default function PDFGenerator({
               </div>
 
               {/* Logo Selection */}
-              {(organizationLogoUrl || parentOrganizationLogoUrl) && (
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <h4 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    Logo no Relatório
-                  </h4>
-                  <div className="space-y-2">
-                    {parentOrganizationLogoUrl && (
+              {
+                (organizationLogoUrl || parentOrganizationLogoUrl) && (
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <h4 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
+                      <Image className="w-4 h-4" />
+                      Logo no Relatório
+                    </h4>
+                    <div className="space-y-2">
+                      {parentOrganizationLogoUrl && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="logoPreference"
+                            value="parent"
+                            checked={logoPreference === 'parent'}
+                            onChange={() => setLogoPreference('parent')}
+                            className="text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-700">
+                            Apenas logo da {parentOrganizationName}
+                          </span>
+                        </label>
+                      )}
+                      {organizationLogoUrl && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="logoPreference"
+                            value="organization"
+                            checked={logoPreference === 'organization'}
+                            onChange={() => setLogoPreference('organization')}
+                            className="text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-700">
+                            Apenas logo da {organizationName}
+                          </span>
+                        </label>
+                      )}
+                      {organizationLogoUrl && parentOrganizationLogoUrl && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="logoPreference"
+                            value="both"
+                            checked={logoPreference === 'both'}
+                            onChange={() => setLogoPreference('both')}
+                            className="text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-700">
+                            Ambos os logos
+                          </span>
+                        </label>
+                      )}
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
                           name="logoPreference"
-                          value="parent"
-                          checked={logoPreference === 'parent'}
-                          onChange={() => setLogoPreference('parent')}
+                          value="none"
+                          checked={logoPreference === 'none'}
+                          onChange={() => setLogoPreference('none')}
                           className="text-blue-600 focus:ring-blue-500"
                         />
                         <span className="text-sm text-slate-700">
-                          Apenas logo da {parentOrganizationName}
+                          Sem logo
                         </span>
                       </label>
-                    )}
-                    {organizationLogoUrl && (
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="logoPreference"
-                          value="organization"
-                          checked={logoPreference === 'organization'}
-                          onChange={() => setLogoPreference('organization')}
-                          className="text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-slate-700">
-                          Apenas logo da {organizationName}
-                        </span>
-                      </label>
-                    )}
-                    {organizationLogoUrl && parentOrganizationLogoUrl && (
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="logoPreference"
-                          value="both"
-                          checked={logoPreference === 'both'}
-                          onChange={() => setLogoPreference('both')}
-                          className="text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-slate-700">
-                          Ambos os logos
-                        </span>
-                      </label>
-                    )}
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="logoPreference"
-                        value="none"
-                        checked={logoPreference === 'none'}
-                        onChange={() => setLogoPreference('none')}
-                        className="text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-slate-700">
-                        Sem logo
-                      </span>
-                    </label>
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              }
             </div>
 
             {/* Preview */}

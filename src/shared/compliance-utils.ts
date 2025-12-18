@@ -1,141 +1,107 @@
-// compliance-utils.ts - Utility functions for compliance calculation
+/**
+ * Utilities for calculating and managing compliance status
+ */
 
-import { ChecklistField } from './checklist-types';
-
-// Extended type to include validation_rules if present
-type ExtendedChecklistField = ChecklistField & {
-    validation_rules?: string | Record<string, unknown>;
-};
+import { ComplianceStatus } from './checklist-types';
 
 /**
- * Calculate automatic compliance status based on field value and rules
+ * Calculates the compliance status based on field type and value
+ * Used when complianceMode is 'auto' (default)
  */
 export function calculateAutoCompliance(
-    field: ExtendedChecklistField,
-    value: unknown
-): 'conforme' | 'nao_conforme' | 'na' | null {
-    // If no value, return null (no auto-calculation)
+    value: any,
+    fieldType: string,
+    expectedValue?: any
+): ComplianceStatus {
+    // If no value, it's unanswered
     if (value === undefined || value === null || value === '') {
-        return null;
+        return 'unanswered';
     }
 
-    // Boolean fields
-    if (field.field_type === 'boolean') {
-        return value === true ? 'conforme' : 'nao_conforme';
-    }
-
-    // Rating fields (1-5 scale)
-    if (field.field_type === 'rating') {
-        const rating = Number(value);
-        if (rating >= 4) return 'conforme';
-        if (rating <= 2) return 'nao_conforme';
-        return null; // Neutral ratings need manual review
-    }
-
-    // Select/Radio with compliance rules
-    if (field.field_type === 'select' || field.field_type === 'radio') {
-        const strValue = String(value).toLowerCase();
-
-        // Common positive answers
-        if (['sim', 'yes', 'ok', 'conforme', 'adequado', 'atende'].includes(strValue)) {
-            return 'conforme';
+    // Boolean/Checkbox logic
+    if (fieldType === 'boolean' || fieldType === 'checkbox') {
+        const boolValue = value === true || value === 'true' || value === 'on';
+        // Compliant if true (checked) OR if it matches expected value if provided
+        if (expectedValue !== undefined) {
+            return boolValue === expectedValue ? 'compliant' : 'non_compliant';
         }
-
-        // Common negative answers
-        if (['não', 'nao', 'no', 'não conforme', 'inadequado', 'não atende'].includes(strValue)) {
-            return 'nao_conforme';
-        }
-
-        // N/A answers
-        if (['n/a', 'na', 'não aplicável', 'não se aplica'].includes(strValue)) {
-            return 'na';
-        }
+        return boolValue ? 'compliant' : 'non_compliant';
     }
 
-    // Number fields with min/max thresholds - check if validation_rules exists
-    if (field.field_type === 'number' && 'validation_rules' in field && field.validation_rules) {
-        try {
-            const rules = typeof field.validation_rules === 'string'
-                ? JSON.parse(field.validation_rules)
-                : field.validation_rules;
-
-            const numValue = Number(value);
-
-            if (rules && typeof rules === 'object') {
-                const rulesObj = rules as Record<string, number>;
-                if (rulesObj.min !== undefined && numValue < rulesObj.min) {
-                    return 'nao_conforme';
-                }
-                if (rulesObj.max !== undefined && numValue > rulesObj.max) {
-                    return 'nao_conforme';
-                }
-                if (rulesObj.min !== undefined || rulesObj.max !== undefined) {
-                    return 'conforme';
-                }
-            }
-        } catch {
-            // Invalid rules, skip auto-calculation
-        }
+    // Select/Radio logic - usually handled by specific expected values meta-data, 
+    // but here we assume if selected it's compliant unless configured otherwise
+    // Real implementation would check against 'correct_answer' or 'non_compliant_options'
+    if (['select', 'radio'].includes(fieldType)) {
+        // This is a simplified check. In a real app, you'd pass the 'item' object 
+        // to check its specific compliance rules logic.
+        return 'compliant';
     }
 
-    // Default: no auto-calculation
-    return null;
+    // Text/Textarea/File - Usually manual, but if 'auto', any content is compliant
+    if (['text', 'textarea', 'file', 'photo'].includes(fieldType)) {
+        return value ? 'compliant' : 'unanswered';
+    }
+
+    // Date/Time - Always compliant if filled
+    if (['date', 'time', 'datetime'].includes(fieldType)) {
+        return 'compliant';
+    }
+
+    return 'compliant';
 }
 
 /**
- * Get compliance status label in Portuguese
+ * Returns the human readable label for a compliance status
  */
-export function getComplianceLabel(status: string): string {
+export function getComplianceLabel(status: ComplianceStatus): string {
     switch (status) {
-        case 'conforme':
-            return 'Conforme';
-        case 'nao_conforme':
-            return 'Não Conforme';
-        case 'na':
-            return 'N/A';
-        case 'unanswered':
-            return 'Não Respondido';
-        default:
-            return status;
+        case 'compliant': return 'Conforme';
+        case 'non_compliant': return 'Não Conforme';
+        case 'not_applicable': return 'N/A';
+        case 'unanswered': return 'Pendente';
+        default: return '-';
     }
 }
 
 /**
- * Get compliance status color
+ * Returns the color class for a compliance status
  */
-export function getComplianceColor(status: string): string {
+export function getComplianceColor(status: ComplianceStatus): string {
     switch (status) {
-        case 'conforme':
-            return 'green';
-        case 'nao_conforme':
-            return 'red';
-        case 'na':
-            return 'gray';
-        default:
-            return 'amber';
+        case 'compliant': return 'text-green-600 bg-green-50 border-green-200';
+        case 'non_compliant': return 'text-red-600 bg-red-50 border-red-200';
+        case 'not_applicable': return 'text-slate-500 bg-slate-100 border-slate-200';
+        case 'unanswered': return 'text-slate-400 bg-white border-slate-200';
+        default: return 'text-slate-400';
     }
 }
 
 /**
- * Calculate overall compliance percentage
+ * Calculates the overall compliance percentage for an inspection
  */
-export function calculateCompliancePercentage(
-    statuses: Record<number, string>
-): { total: number; conforme: number; naoConforme: number; na: number; percentage: number } {
-    const values = Object.values(statuses);
-    const total = values.length;
-    const conforme = values.filter(s => s === 'conforme').length;
-    const naoConforme = values.filter(s => s === 'nao_conforme').length;
-    const na = values.filter(s => s === 'na').length;
+export function calculateCompliancePercentage(items: any[]): number {
+    if (!items || items.length === 0) return 0;
 
-    const applicable = total - na;
-    const percentage = applicable > 0 ? (conforme / applicable) * 100 : 0;
+    let applicableCount = 0;
+    let compliantCount = 0;
 
-    return {
-        total,
-        conforme,
-        naoConforme,
-        na,
-        percentage: Math.round(percentage * 10) / 10
-    };
+    items.forEach(item => {
+        // Skip informational items or separators if any
+
+        const status = item.compliance_status || 'unanswered';
+
+        // Not applicable items don't count towards total
+        if (status === 'not_applicable') return;
+
+        // Unanswered items count as applicable but not compliant
+        applicableCount++;
+
+        if (status === 'compliant') {
+            compliantCount++;
+        }
+    });
+
+    if (applicableCount === 0) return 0;
+
+    return Math.round((compliantCount / applicableCount) * 100);
 }

@@ -79,7 +79,6 @@ export default function NotificationSystem() {
 
       // Generate notifications based on data
       if (actionSummary?.overdue_actions > 0) {
-        // ... existing smart logic (restored below in smartNotifications array if needed, but here simple merge)
         smartNotifications.push({
           id: 'overdue-actions',
           type: 'urgent',

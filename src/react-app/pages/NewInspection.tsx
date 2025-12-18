@@ -151,8 +151,6 @@ export default function NewInspection() {
     }
   }, [currentStep]);
 
-  // ... (existing code)
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitProtection) return; // Double check

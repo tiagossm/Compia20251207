@@ -22,7 +22,6 @@ export default function AuthGuard({ children, requiredRole, requiredRoles }: Aut
   React.useEffect(() => {
     const isDemoAuth = localStorage.getItem('demo-auth');
     const storedDemoUser = localStorage.getItem('demo-user');
-
     if (isDemoAuth === 'true' && storedDemoUser) {
       try {
         const parsedDemoUser = JSON.parse(storedDemoUser);
@@ -158,7 +157,6 @@ export default function AuthGuard({ children, requiredRole, requiredRoles }: Aut
     }
 
     const userRole = currentUser.profile?.role || currentUser.role;
-
     // Admin has access to everything
     if (userRole === 'admin' || userRole === 'system_admin' || userRole === 'sys_admin') {
       return true;
@@ -171,7 +169,6 @@ export default function AuthGuard({ children, requiredRole, requiredRoles }: Aut
     if (requiredRoles && requiredRoles.length > 0) {
       return requiredRoles.includes(userRole || '');
     }
-
     return true;
   };
 

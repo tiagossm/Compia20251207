@@ -33,8 +33,6 @@ import RolePermissions from "@/react-app/pages/RolePermissions";
 import AdminDataSync from "@/react-app/pages/AdminDataSync";
 import LandingPage from "@/react-app/pages/LandingPage";
 
-
-
 // Demo Banner removed
 
 
@@ -42,6 +40,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+
         <Router>
           <Routes>
             {/* Public routes */}
@@ -62,6 +61,7 @@ export default function App() {
             <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
             <Route path="/settings/permissions" element={<AuthGuard requiredRole="system_admin"><RolePermissions /></AuthGuard>} />
             <Route path="/admin/data-sync" element={<AuthGuard requiredRole="system_admin"><AdminDataSync /></AuthGuard>} />
+
 
             <Route path="/checklists" element={<AuthGuard><ChecklistTemplates /></AuthGuard>} />
             <Route path="/checklists/new" element={<AuthGuard><NewChecklistTemplate /></AuthGuard>} />

@@ -5,7 +5,6 @@ import {
   X,
   Building2,
   Loader2,
-  Settings,
   Crown,
   Search,
   CheckCircle,
@@ -751,16 +750,13 @@ export default function NewOrganizationModal({
                     <option value="">Selecione o setor</option>
                     <option value="Construção Civil">Construção Civil</option>
                     <option value="Indústria">Indústria</option>
-                    <option value="Petróleo e Gás">Petróleo e Gás</option>
+                    <option value="Manufatura">Manufatura</option>
                     <option value="Mineração">Mineração</option>
-                    <option value="Química">Química</option>
-                    <option value="Metalúrgica">Metalúrgica</option>
-                    <option value="Alimentícia">Alimentícia</option>
-                    <option value="Têxtil">Têxtil</option>
+                    <option value="Petróleo e Gás">Petróleo e Gás</option>
+                    <option value="Energia">Energia</option>
                     <option value="Logística">Logística</option>
                     <option value="Saúde">Saúde</option>
-                    <option value="Educação">Educação</option>
-                    <option value="Tecnologia">Tecnologia</option>
+                    <option value="Varejo">Varejo</option>
                     <option value="Serviços">Serviços</option>
                     <option value="Outros">Outros</option>
                   </select>
@@ -768,14 +764,15 @@ export default function NewOrganizationModal({
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Subsetor
+                    Natureza Jurídica
                   </label>
                   <input
                     type="text"
-                    value={formData.subsetor_industria}
-                    onChange={(e) => setFormData({ ...formData, subsetor_industria: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Construção Pesada, Offshore, etc."
+                    value={formData.natureza_juridica}
+                    onChange={(e) => setFormData({ ...formData, natureza_juridica: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50"
+                    placeholder="Natureza jurídica"
+                    readOnly={cnpjStatus === 'success'}
                   />
                 </div>
               </div>
@@ -785,104 +782,73 @@ export default function NewOrganizationModal({
           {/* Safety & Compliance Tab */}
           {activeTab === 'safety' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    <Shield className="w-4 h-4 inline mr-1" />
-                    Nível de Risco
-                  </label>
-                  <select
-                    value={formData.nivel_risco}
-                    onChange={(e) => setFormData({ ...formData, nivel_risco: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="baixo">Baixo</option>
-                    <option value="medio">Médio</option>
-                    <option value="alto">Alto</option>
-                    <option value="critico">Crítico</option>
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Baseado no setor, atividades e histórico de incidentes
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Data da Última Auditoria de SST
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.data_ultima_auditoria}
-                    onChange={(e) => setFormData({ ...formData, data_ultima_auditoria: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Certificações de Segurança
-                </label>
-                <textarea
-                  value={formData.certificacoes_seguranca}
-                  onChange={(e) => setFormData({ ...formData, certificacoes_seguranca: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: ISO 45001, OHSAS 18001, ISO 14001, etc."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Responsável pela Segurança
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contato_seguranca_nome}
-                    onChange={(e) => setFormData({ ...formData, contato_seguranca_nome: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nome do responsável"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Email do Responsável
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.contato_seguranca_email}
-                    onChange={(e) => setFormData({ ...formData, contato_seguranca_email: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="seguranca@empresa.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Telefone do Responsável
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.contato_seguranca_telefone}
-                    onChange={(e) => setFormData({ ...formData, contato_seguranca_telefone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="(11) 9999-9999"
-                  />
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
+                <h3 className="font-medium text-slate-900 mb-2">Informações do Responsável de Segurança</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nome Completo
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.contato_seguranca_nome}
+                      onChange={(e) => setFormData({ ...formData, contato_seguranca_nome: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      placeholder="Nome do responsável SST"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Email Corporativo
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.contato_seguranca_email}
+                      onChange={(e) => setFormData({ ...formData, contato_seguranca_email: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      placeholder="email.sst@empresa.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Telefone / Ramal
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.contato_seguranca_telefone}
+                      onChange={(e) => setFormData({ ...formData, contato_seguranca_telefone: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      placeholder="(11) 9999-9999"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nível de Risco Calculado
+                    </label>
+                    <select
+                      value={formData.nivel_risco}
+                      onChange={(e) => setFormData({ ...formData, nivel_risco: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                    >
+                      <option value="baixo">Baixo (Grau 1 e 2)</option>
+                      <option value="medio">Médio (Grau 3)</option>
+                      <option value="alto">Alto (Grau 4)</option>
+                      <option value="critico">Crítico (Atividades Especiais)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Histórico de Incidentes Relevantes
+                  Histórico de Incidentes
                 </label>
                 <textarea
                   value={formData.historico_incidentes}
                   onChange={(e) => setFormData({ ...formData, historico_incidentes: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Resumo de incidentes graves ou estatísticas relevantes..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Resumo de incidentes relevantes nos últimos 12 meses..."
                 />
               </div>
 
@@ -894,25 +860,33 @@ export default function NewOrganizationModal({
                   value={formData.observacoes_compliance}
                   onChange={(e) => setFormData({ ...formData, observacoes_compliance: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Informações sobre conformidade regulatória, pendências, etc."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Detalhes sobre certificações, auditorias pendentes ou requisitos especiais..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Certificações de Segurança (Separadas por vírgula)
+                </label>
+                <input
+                  type="text"
+                  value={formData.certificacoes_seguranca}
+                  onChange={(e) => setFormData({ ...formData, certificacoes_seguranca: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Ex: ISO 45001, OHSAS 18001, NR-12"
                 />
               </div>
             </div>
           )}
 
-          {/* Subscription Settings - Only for System Admin */}
+          {/* Subscription Tab (Admin Only) */}
           {activeTab === 'subscription' && extendedUser?.profile?.role === USER_ROLES.SYSTEM_ADMIN && (
-            <div className="bg-blue-50 rounded-lg p-6 space-y-6">
-              <h3 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
-                <Settings className="w-4 h-4 text-blue-600" />
-                Configurações de Assinatura
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Plano
+                    Plano de Assinatura
                   </label>
                   <select
                     value={formData.subscription_plan}
@@ -927,98 +901,58 @@ export default function NewOrganizationModal({
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Máx. Usuários
+                    Limite de Usuários
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="1000"
                     value={formData.max_users}
-                    onChange={(e) => setFormData({ ...formData, max_users: parseInt(e.target.value) || 50 })}
+                    onChange={(e) => setFormData({ ...formData, max_users: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="1"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Máx. Subsidiárias
+                    Limite de Subsidiárias
                   </label>
                   <input
                     type="number"
-                    min="0"
-                    max="100"
                     value={formData.max_subsidiaries}
-                    onChange={(e) => setFormData({ ...formData, max_subsidiaries: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, max_subsidiaries: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
                   />
                 </div>
               </div>
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-6 border-t border-slate-200">
-            <div className="flex items-center gap-2">
-              {activeTab !== 'basic' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const tabs = ['basic', 'company', 'safety', 'subscription'];
-                    const currentIndex = tabs.indexOf(activeTab);
-                    if (currentIndex > 0) {
-                      setActiveTab(tabs[currentIndex - 1]);
-                    }
-                  }}
-                  className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Anterior
-                </button>
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Criar Organização
+                </>
               )}
-              {activeTab !== (extendedUser?.profile?.role === USER_ROLES.SYSTEM_ADMIN ? 'subscription' : 'safety') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const tabs = extendedUser?.profile?.role === USER_ROLES.SYSTEM_ADMIN
-                      ? ['basic', 'company', 'safety', 'subscription']
-                      : ['basic', 'company', 'safety'];
-                    const currentIndex = tabs.indexOf(activeTab);
-                    if (currentIndex < tabs.length - 1) {
-                      setActiveTab(tabs[currentIndex + 1]);
-                    }
-                  }}
-                  className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
-                >
-                  Próximo
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                disabled={loading}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Criando...
-                  </>
-                ) : (
-                  <>
-                    <Building2 className="w-4 h-4 mr-2" />
-                    Criar Organização
-                  </>
-                )}
-              </button>
-            </div>
+            </button>
           </div>
         </form>
       </div>

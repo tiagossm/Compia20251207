@@ -111,7 +111,6 @@ export default function InspectionDetail() {
             console.log('[DEBUG_FE] First Item Description:', templateBasedItems[0].item_description);
           }
         }
-
         setItems(manualItems);
         setTemplateItems(templateBasedItems);
         setMedia(data.media || []);
@@ -392,7 +391,6 @@ export default function InspectionDetail() {
         acc[response.field_id] = response.value;
         return acc;
       }, {} as Record<number, any>);
-
       // Merge with existing logic to preserve other fields/comments if needed
       setResponses(prev => ({
         ...prev,
@@ -405,7 +403,6 @@ export default function InspectionDetail() {
       // fetchInspectionDetails(); 
       // User requested not to refresh? "Don't refresh inspection details after manual save to prevent losing form state"
       // But if we saved successfully, refreshing is safer.
-
     } catch (err) {
       console.error('Erro ao salvar respostas:', err);
       error('Erro ao salvar respostas', 'Não foi possível salvar as respostas. Tente novamente.');
@@ -1285,16 +1282,17 @@ export default function InspectionDetail() {
                           {item.is_compliant ? 'Conforme' : 'Não Conforme'}
                         </span>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    )
+                    }
+                  </div >
+                </div >
               ))
             )}
-          </div>
-        </div>
+          </div >
+        </div >
 
         {/* Media Upload Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        < div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6" >
           <div className="flex items-center gap-2 mb-4">
             <ImageIcon className="w-5 h-5 text-slate-600" />
             <h2 className="font-heading text-xl font-semibold text-slate-900">
@@ -1308,253 +1306,259 @@ export default function InspectionDetail() {
             onMediaDeleted={handleMediaDeleted}
             inspectionTitle={inspection.title}
           />
-        </div>
+        </div >
 
         {/* Action Items Section */}
-        {actionItems.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="w-5 h-5 text-slate-600" />
-              <h2 className="font-heading text-xl font-semibold text-slate-900">
-                Itens de Ação
-              </h2>
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                {actionItems.length} {actionItems.length === 1 ? 'item' : 'itens'}
-              </span>
-            </div>
+        {
+          actionItems.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-5 h-5 text-slate-600" />
+                <h2 className="font-heading text-xl font-semibold text-slate-900">
+                  Itens de Ação
+                </h2>
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                  {actionItems.length} {actionItems.length === 1 ? 'item' : 'itens'}
+                </span>
+              </div>
 
-            <div className="space-y-4">
-              {actionItems.map((action: any, index: number) => (
-                <div key={action.id} className="border border-slate-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <h4 className="font-medium text-slate-900">
-                      {index + 1}. {action.title}
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${action.priority === 'alta' || action.priority === 'critica' ? 'bg-red-100 text-red-800' :
-                        action.priority === 'media' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                        {action.priority}
-                      </span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${action.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        action.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                        {action.status === 'pending' ? 'Pendente' :
-                          action.status === 'in_progress' ? 'Em Progresso' :
-                            action.status === 'completed' ? 'Concluído' : action.status}
-                      </span>
+              <div className="space-y-4">
+                {actionItems.map((action: any, index: number) => (
+                  <div key={action.id} className="border border-slate-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="font-medium text-slate-900">
+                        {index + 1}. {action.title}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${action.priority === 'alta' || action.priority === 'critica' ? 'bg-red-100 text-red-800' :
+                          action.priority === 'media' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                          {action.priority}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${action.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          action.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                          {action.status === 'pending' ? 'Pendente' :
+                            action.status === 'in_progress' ? 'Em Progresso' :
+                              action.status === 'completed' ? 'Concluído' : action.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {action.is_ai_generated && (
+                      <div className="mb-3 flex items-center gap-1 text-xs text-purple-600">
+                        <Brain className="w-3 h-3" />
+                        <span>Gerado por IA</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      {action.what_description && (
+                        <div>
+                          <span className="font-medium text-red-600">O que:</span>
+                          <p className="text-slate-700 mt-1">{action.what_description}</p>
+                        </div>
+                      )}
+                      {action.where_location && (
+                        <div>
+                          <span className="font-medium text-green-600">Onde:</span>
+                          <p className="text-slate-700 mt-1">{action.where_location}</p>
+                        </div>
+                      )}
+                      {action.why_reason && (
+                        <div>
+                          <span className="font-medium text-blue-600">Por que:</span>
+                          <p className="text-slate-700 mt-1">{action.why_reason}</p>
+                        </div>
+                      )}
+                      {action.how_method && (
+                        <div>
+                          <span className="font-medium text-indigo-600">Como:</span>
+                          <p className="text-slate-700 mt-1">{action.how_method}</p>
+                        </div>
+                      )}
+                      {action.who_responsible && (
+                        <div>
+                          <span className="font-medium text-purple-600">Quem:</span>
+                          <p className="text-slate-700 mt-1">{action.who_responsible}</p>
+                        </div>
+                      )}
+                      {action.when_deadline && (
+                        <div>
+                          <span className="font-medium text-yellow-600">Quando:</span>
+                          <p className="text-slate-700 mt-1">
+                            {new Date(action.when_deadline).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      )}
+                      {action.how_much_cost && (
+                        <div className="md:col-span-2">
+                          <span className="font-medium text-orange-600">Quanto:</span>
+                          <p className="text-slate-700 mt-1">{action.how_much_cost}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {action.is_ai_generated && (
-                    <div className="mb-3 flex items-center gap-1 text-xs text-purple-600">
-                      <Brain className="w-3 h-3" />
-                      <span>Gerado por IA</span>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    {action.what_description && (
-                      <div>
-                        <span className="font-medium text-red-600">O que:</span>
-                        <p className="text-slate-700 mt-1">{action.what_description}</p>
-                      </div>
-                    )}
-                    {action.where_location && (
-                      <div>
-                        <span className="font-medium text-green-600">Onde:</span>
-                        <p className="text-slate-700 mt-1">{action.where_location}</p>
-                      </div>
-                    )}
-                    {action.why_reason && (
-                      <div>
-                        <span className="font-medium text-blue-600">Por que:</span>
-                        <p className="text-slate-700 mt-1">{action.why_reason}</p>
-                      </div>
-                    )}
-                    {action.how_method && (
-                      <div>
-                        <span className="font-medium text-indigo-600">Como:</span>
-                        <p className="text-slate-700 mt-1">{action.how_method}</p>
-                      </div>
-                    )}
-                    {action.who_responsible && (
-                      <div>
-                        <span className="font-medium text-purple-600">Quem:</span>
-                        <p className="text-slate-700 mt-1">{action.who_responsible}</p>
-                      </div>
-                    )}
-                    {action.when_deadline && (
-                      <div>
-                        <span className="font-medium text-yellow-600">Quando:</span>
-                        <p className="text-slate-700 mt-1">
-                          {new Date(action.when_deadline).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                    )}
-                    {action.how_much_cost && (
-                      <div className="md:col-span-2">
-                        <span className="font-medium text-orange-600">Quanto:</span>
-                        <p className="text-slate-700 mt-1">{action.how_much_cost}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* AI Action Plan Section - Legacy support */}
-        {actionPlan && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-slate-600" />
-              <h2 className="font-heading text-xl font-semibold text-slate-900">
-                Plano de Ação 5W2H
-              </h2>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${actionPlan.priority_level === 'alta' ? 'bg-red-100 text-red-800' :
-                actionPlan.priority_level === 'media' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-green-100 text-green-800'
-                }`}>
-                Prioridade {actionPlan.priority_level}
-              </span>
-            </div>
-
-            {actionPlan.summary && (
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h3 className="font-medium text-blue-900 mb-2">Resumo Executivo</h3>
-                <p className="text-blue-800 text-sm">{actionPlan.summary}</p>
-                {actionPlan.estimated_completion && (
-                  <p className="text-blue-700 text-sm mt-2">
-                    <strong>Conclusão Estimada:</strong> {actionPlan.estimated_completion}
-                  </p>
-                )}
+        {
+          actionPlan && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-slate-600" />
+                <h2 className="font-heading text-xl font-semibold text-slate-900">
+                  Plano de Ação 5W2H
+                </h2>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${actionPlan.priority_level === 'alta' ? 'bg-red-100 text-red-800' :
+                  actionPlan.priority_level === 'media' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                  Prioridade {actionPlan.priority_level}
+                </span>
               </div>
-            )}
 
-            <div className="space-y-4">
-              {actionPlan.actions && actionPlan.actions.map((action: any, index: number) => (
-                <div key={index} className="border border-slate-200 rounded-lg p-4">
-                  <h4 className="font-medium text-slate-900 mb-3">
-                    {index + 1}. {action.item}
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm font-medium text-red-600">O que (What):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.what}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-blue-600">Por que (Why):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.why}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-green-600">Onde (Where):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.where}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-yellow-600">Quando (When):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.when}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-purple-600">Quem (Who):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.who}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-indigo-600">Como (How):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.how}</p>
-                    </div>
-                    <div className="md:col-span-2">
-                      <span className="text-sm font-medium text-orange-600">Quanto (How Much):</span>
-                      <p className="text-sm text-slate-700 mt-1">{action.how_much}</p>
+              {actionPlan.summary && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h3 className="font-medium text-blue-900 mb-2">Resumo Executivo</h3>
+                  <p className="text-blue-800 text-sm">{actionPlan.summary}</p>
+                  {actionPlan.estimated_completion && (
+                    <p className="text-blue-700 text-sm mt-2">
+                      <strong>Conclusão Estimada:</strong> {actionPlan.estimated_completion}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {actionPlan.actions && actionPlan.actions.map((action: any, index: number) => (
+                  <div key={index} className="border border-slate-200 rounded-lg p-4">
+                    <h4 className="font-medium text-slate-900 mb-3">
+                      {index + 1}. {action.item}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm font-medium text-red-600">O que (What):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.what}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-blue-600">Por que (Why):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.why}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-green-600">Onde (Where):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.where}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-yellow-600">Quando (When):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.when}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-purple-600">Quem (Who):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.who}</p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-indigo-600">Como (How):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.how}</p>
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="text-sm font-medium text-orange-600">Quanto (How Much):</span>
+                        <p className="text-sm text-slate-700 mt-1">{action.how_much}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Signatures Modal - Mobile Optimized */}
-        {showSignatures && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[95vh] overflow-y-auto">
-              <div className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h2 className="font-heading text-xl sm:text-2xl font-bold text-slate-900">
-                    Finalizar Inspeção
-                  </h2>
-                  <button
-                    onClick={() => setShowSignatures(false)}
-                    className="text-slate-500 hover:text-slate-700 p-1"
-                  >
-                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </button>
-                </div>
-
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Debug block - Only show in development */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="text-sm text-yellow-800 font-mono">
-                        Debug - Signatures object:
-                      </p>
-                      <pre className="text-xs text-yellow-700 mt-1">
-                        {JSON.stringify({
-                          inspector: signatures.inspector ? 'Present' : 'Missing',
-                          responsible: signatures.responsible ? 'Present' : 'Missing'
-                        }, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                    <InspectionSignature
-                      onSignatureSaved={(signature) => handleSignatureSaved('inspector', signature)}
-                      existingSignature={signatures.inspector}
-                      signerName={inspection.inspector_name}
-                      signerRole="Inspetor Responsável"
-                    />
-                    <InspectionSignature
-                      onSignatureSaved={(signature) => handleSignatureSaved('responsible', signature)}
-                      existingSignature={signatures.responsible}
-                      signerName={inspection.responsible_name || "Responsável Técnico"}
-                      signerRole="Empresa"
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-slate-200">
+        {
+          showSignatures && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[95vh] overflow-y-auto">
+                <div className="p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <h2 className="font-heading text-xl sm:text-2xl font-bold text-slate-900">
+                      Finalizar Inspeção
+                    </h2>
                     <button
                       onClick={() => setShowSignatures(false)}
-                      className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors order-2 sm:order-1"
+                      className="text-slate-500 hover:text-slate-700 p-1"
                     >
-                      Cancelar
+                      <X className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
-                    <button
-                      onClick={handleFinalizeInspection}
-                      disabled={!signatures.inspector || !signatures.responsible || isSubmitting}
-                      className="flex items-center justify-center px-6 py-3 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors order-1 sm:order-2"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <LoadingSpinner size="sm" />
-                          <span className="ml-2">Finalizando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FileCheck className="w-4 h-4 mr-2" />
-                          <span>Finalizar Inspeção</span>
-                        </>
-                      )}
-                    </button>
+                  </div>
+
+                  <div className="space-y-4 sm:space-y-6">
+                    {/* Debug block - Only show in development */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p className="text-sm text-yellow-800 font-mono">
+                          Debug - Signatures object:
+                        </p>
+                        <pre className="text-xs text-yellow-700 mt-1">
+                          {JSON.stringify({
+                            inspector: signatures.inspector ? 'Present' : 'Missing',
+                            responsible: signatures.responsible ? 'Present' : 'Missing'
+                          }, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+                      <InspectionSignature
+                        onSignatureSaved={(signature) => handleSignatureSaved('inspector', signature)}
+                        existingSignature={signatures.inspector}
+                        signerName={inspection.inspector_name}
+                        signerRole="Inspetor Responsável"
+                      />
+                      <InspectionSignature
+                        onSignatureSaved={(signature) => handleSignatureSaved('responsible', signature)}
+                        existingSignature={signatures.responsible}
+                        signerName={inspection.responsible_name || "Responsável Técnico"}
+                        signerRole="Empresa"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-slate-200">
+                      <button
+                        onClick={() => setShowSignatures(false)}
+                        className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors order-2 sm:order-1"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleFinalizeInspection}
+                        disabled={!signatures.inspector || !signatures.responsible || isSubmitting}
+                        className="flex items-center justify-center px-6 py-3 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors order-1 sm:order-2"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <LoadingSpinner size="sm" />
+                            <span className="ml-2">Finalizando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileCheck className="w-4 h-4 mr-2" />
+                            <span>Finalizar Inspeção</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Share Modal */}
         <InspectionShare
@@ -1580,7 +1584,7 @@ export default function InspectionDetail() {
           organizationName={inspection.company_name || 'Organização'}
           parentOrganizationName="Matriz"
         />
-      </div>
-    </Layout>
+      </div >
+    </Layout >
   );
 }

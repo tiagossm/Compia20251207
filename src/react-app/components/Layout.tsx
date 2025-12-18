@@ -31,7 +31,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, actionButton }: LayoutProps) {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const extendedUser = user as ExtendedMochaUser;
   const profile = extendedUser?.profile;
 
@@ -74,7 +74,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await signOut();
       navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
