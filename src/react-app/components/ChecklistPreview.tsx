@@ -207,8 +207,8 @@ export default function ChecklistPreview({
                 <div
                   key={index}
                   className={`group bg-white border border-slate-200 rounded-lg transition-all duration-200 ${editingField === index
-                      ? 'ring-2 ring-blue-500 border-transparent shadow-lg z-10 relative'
-                      : 'hover:border-blue-300 hover:shadow-sm'
+                    ? 'ring-2 ring-blue-500 border-transparent shadow-lg z-10 relative'
+                    : 'hover:border-blue-300 hover:shadow-sm'
                     }`}
                 >
                   {editingField === index ? (

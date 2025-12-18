@@ -106,7 +106,6 @@ export default function UserEditModal({
 
         // Close modal
         onClose();
-
         // Notify parent to refresh
         onSave(updatedUser);
       } else {

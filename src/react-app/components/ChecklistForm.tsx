@@ -8,7 +8,7 @@ import InspectionItem from './InspectionItem';
 import CameraModal from './CameraModal';
 import {
   Star, Calendar, Clock,
-  Hash, Upload, CheckCircle
+  Upload, CheckCircle
 } from 'lucide-react';
 
 interface ChecklistFormProps {
@@ -20,7 +20,7 @@ interface ChecklistFormProps {
   inspectionItems?: any[];
   onAutoSave?: (responses: Record<number, any>, comments: Record<number, string>, complianceStatuses?: Record<number, any>) => void;
   onSaveSuccess?: () => void;
-  showComplianceSelector?: boolean; // Controla exibição do seletor de conformidade
+  showComplianceSelector?: boolean;
 }
 
 export default function ChecklistForm({
@@ -29,17 +29,18 @@ export default function ChecklistForm({
   initialValues = {},
   onAutoSave,
   inspectionId,
-  showComplianceSelector = true // Padrão: mostrar
+  showComplianceSelector = true
 }: ChecklistFormProps) {
 
   // State
   const [responses, setResponses] = useState<Record<number, any>>(initialValues);
   const [itemsComments, setItemsComments] = useState<Record<number, string>>({});
   const [complianceStatuses, setComplianceStatuses] = useState<Record<number, string>>({});
-  const [itemsMedia, setItemsMedia] = useState<Record<number, any[]>>({}); // Using simple array for now
+  const [itemsMedia, setItemsMedia] = useState<Record<number, any[]>>({});
   const [generatingResponse, setGeneratingResponse] = useState<Record<number, boolean>>({});
   const [itemsAnalysis, setItemsAnalysis] = useState<Record<number, string>>({});
-  const [isCameraOpen, setIsCameraOpen] = useState(false); // Camera State
+  const [creatingAction, setCreatingAction] = useState<Record<number, boolean>>({});
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Media Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +48,6 @@ export default function ChecklistForm({
   const activeMediaType = useRef<string>('image');
 
   const updateResponse = (fieldId: number, value: any) => {
-    // Encontrar o campo para calcular conformidade automática
     const field = fields.find(f => f.id === fieldId);
 
     setResponses(prev => {
@@ -87,8 +87,7 @@ export default function ChecklistForm({
     });
   };
 
-  // --- Media Logic (Restored) ---
-  // --- Media Logic (Restored) ---
+  // --- Media Logic ---
   const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime } = useMediaHandling({
     inspectionId: inspectionId || 0,
     onMediaUploaded: (media) => {
@@ -108,10 +107,8 @@ export default function ChecklistForm({
 
     if (type === 'image') {
       if (source === 'camera') {
-        // Open camera modal
         setIsCameraOpen(true);
       } else {
-        // Open file picker for images
         if (fileInputRef.current) {
           fileInputRef.current.accept = 'image/*';
           fileInputRef.current.removeAttribute('capture');
@@ -120,7 +117,6 @@ export default function ChecklistForm({
       }
     } else if (type === 'audio') {
       if (source === 'camera') {
-        // Start recording
         if (recording === 'audio') {
           stopRecording();
         } else {
@@ -128,7 +124,6 @@ export default function ChecklistForm({
           await startAudioRecording();
         }
       } else {
-        // Open file picker for audio
         if (fileInputRef.current) {
           fileInputRef.current.accept = 'audio/*';
           fileInputRef.current.removeAttribute('capture');
@@ -162,7 +157,6 @@ export default function ChecklistForm({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // --- Media Delete ---
   const handleMediaDelete = async (fieldId: number, mediaId: number) => {
     try {
       const response = await fetchWithAuth(`/api/media/${mediaId}`, {
@@ -170,7 +164,6 @@ export default function ChecklistForm({
       });
 
       if (response.ok) {
-        // Remove from local state
         setItemsMedia(prev => ({
           ...prev,
           [fieldId]: (prev[fieldId] || []).filter(m => m.id !== mediaId)
@@ -185,7 +178,7 @@ export default function ChecklistForm({
     }
   };
 
-  // --- AI Logic: Análise de Conformidade ---
+  // --- AI Logic ---
   const handleAiAnalysisRequest = async (fieldId: number, mediaIds: number[] = []) => {
     if (!fieldId) return;
     setGeneratingResponse(prev => ({ ...prev, [fieldId]: true }));
@@ -226,9 +219,6 @@ export default function ChecklistForm({
       setGeneratingResponse(prev => ({ ...prev, [fieldId]: false }));
     }
   };
-
-  // --- AI Logic: Gerar Plano 5W2H com IA ---
-  const [creatingAction, setCreatingAction] = useState<Record<number, boolean>>({});
 
   const handleAiActionPlanRequest = async (fieldId: number, mediaIds: number[] = []) => {
     if (!fieldId) return;
@@ -273,7 +263,6 @@ export default function ChecklistForm({
     }
   };
 
-  // --- Manual Action Save ---
   const handleManualActionSave = async (fieldId: number, actionData: { title: string; priority: string; what_description?: string }) => {
     if (!inspectionId) return;
 
@@ -303,31 +292,31 @@ export default function ChecklistForm({
     }
   };
 
+  const handleFinalize = () => {
+    // Collect responses with compliance status
+    const submitData: FieldResponse[] = Object.keys(responses).map(key => {
+      const fid = Number(key);
+      const field = fields.find(f => f.id === fid);
+      if (!field) return null;
 
-  // --- Render Custom Inputs for InspectionItem ---
+      return {
+        field_id: fid,
+        field_name: field.field_name,
+        field_type: field.field_type,
+        value: responses[fid],
+        comment: itemsComments[fid],
+        compliance_status: complianceStatuses[fid] || 'unanswered'
+      } as FieldResponse;
+    }).filter((item): item is FieldResponse => item !== null);
+
+    onSubmit(submitData);
+  };
+
   const renderInput = (field: ChecklistField) => {
     const value = responses[field.id!];
     const update = (val: any) => updateResponse(field.id!, val);
 
     switch (field.field_type) {
-      case 'boolean':
-        return (
-          <div className="flex gap-2">
-            <button
-              onClick={() => update(true)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
-            >
-              Conforme
-            </button>
-            <button
-              onClick={() => update(false)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
-            >
-              Não Conforme
-            </button>
-          </div>
-        );
-
       case 'text':
         return (
           <input
@@ -371,6 +360,7 @@ export default function ChecklistForm({
             {options.map(opt => (
               <button
                 key={opt}
+                type="button"
                 onClick={() => update(opt)}
                 className={`px-4 py-2 rounded-full text-xs font-medium border transition-all ${value === opt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
               >
@@ -386,7 +376,6 @@ export default function ChecklistForm({
         let options: string[] = ['Opção A', 'Opção B'];
         try {
           if (field.options) {
-            // Try JSON parsing first, fallback to split pipe
             try {
               const parsed = JSON.parse(field.options);
               if (Array.isArray(parsed)) options = parsed;
@@ -412,6 +401,7 @@ export default function ChecklistForm({
               return (
                 <button
                   key={opt}
+                  type="button"
                   onClick={() => toggleOption(opt)}
                   className={`px-4 py-2 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${isActive ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                 >
@@ -450,26 +440,13 @@ export default function ChecklistForm({
           </div>
         );
 
-      case 'number':
-        return (
-          <div className="relative">
-            <Hash className="absolute left-0 top-3 text-slate-400 w-5 h-5" />
-            <input
-              type="number"
-              value={value || ''}
-              onChange={e => update(e.target.value)}
-              placeholder="0.00"
-              className="w-full border-b border-slate-200 py-3 pl-8 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent"
-            />
-          </div>
-        );
-
       case 'rating':
         return (
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
+                type="button"
                 onClick={() => update(star)}
                 className="p-1 hover:scale-110 transition-transform focus:outline-none"
               >
@@ -486,10 +463,9 @@ export default function ChecklistForm({
         return (
           <div className="flex items-center gap-3">
             <button
+              type="button"
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-200 transition-colors"
               onClick={() => {
-                // Trigger file input specific for this answer
-                // Implemented via ref logic similar to media but purely for value
                 alert("Upload de arquivo de resposta (Simulação)");
                 update("arquivo_simulado.pdf");
               }}
@@ -501,29 +477,38 @@ export default function ChecklistForm({
           </div>
         );
 
+      case 'boolean':
+        return (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => update(true)}
+              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+            >
+              Conforme
+            </button>
+            <button
+              type="button"
+              onClick={() => update(false)}
+              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+            >
+              Não Conforme
+            </button>
+          </div>
+        );
+
       default:
-        return <div className="text-xs text-red-400 bg-red-50 p-2 rounded">Tipo não suportado: {field.field_type}</div>;
+        // Default to text if type not recognized
+        return (
+          <input
+            type="text"
+            value={value || ''}
+            onChange={e => update(e.target.value)}
+            className="w-full border-b border-slate-200 py-3 text-slate-800 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none bg-transparent transition-colors"
+            placeholder="Digite a resposta..."
+          />
+        );
     }
-  };
-
-  const handleFinalize = () => {
-    // Collect responses with compliance status
-    const submitData: FieldResponse[] = Object.keys(responses).map(key => {
-      const fid = Number(key);
-      const field = fields.find(f => f.id === fid);
-      if (!field) return null;
-
-      return {
-        field_id: fid,
-        field_name: field.field_name,
-        field_type: field.field_type,
-        value: responses[fid],
-        comment: itemsComments[fid],
-        compliance_status: complianceStatuses[fid] || 'unanswered'
-      } as FieldResponse;
-    }).filter((item): item is FieldResponse => item !== null);
-
-    onSubmit(submitData);
   };
 
   return (
@@ -547,15 +532,16 @@ export default function ChecklistForm({
             id: field.id,
             description: field.field_name,
             category: 'Geral',
-            response: responses[field.id], // Pass response
+            response: responses[field.id],
             comment: itemsComments[field.id],
-            aiAnalysis: itemsAnalysis[field.id] // Pass AI analysis
+            aiAnalysis: itemsAnalysis[field.id],
+            field_type: field.field_type
           };
 
           return (
             <InspectionItem
               key={field.id}
-              item={{ ...itemData, field_type: field.field_type }}
+              item={itemData}
               media={itemsMedia[field.id] || []}
               complianceEnabled={field.compliance_enabled !== false}
               complianceMode={field.compliance_mode || 'auto'}

@@ -25,6 +25,8 @@ export const ComplianceModeSchema = z.enum([
 ]);
 export type ComplianceMode = z.infer<typeof ComplianceModeSchema>;
 
+export type ComplianceStatus = 'compliant' | 'non_compliant' | 'not_applicable' | 'unanswered';
+
 // Configuração de conformidade por tipo de campo
 export const ComplianceConfigSchema = z.object({
   // Para boolean: qual valor = conforme

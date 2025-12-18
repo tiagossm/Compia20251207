@@ -113,8 +113,6 @@ export default function Organizations() {
     }
   };
 
-
-
   const handleUpdateOrganization = async (organizationId: number, data: Partial<Organization>) => {
     try {
       const response = await fetchWithAuth(`/api/organizations/${organizationId}`, {
@@ -183,8 +181,6 @@ export default function Organizations() {
       console.error('Erro ao alterar status da organização:', error);
     }
   };
-
-
 
   // Funções para ações em lote
   const handleBulkDelete = async (organizationIds: number[]) => {
@@ -372,10 +368,7 @@ export default function Organizations() {
               </button>
             </div>
 
-            {/* Botão Global removido ou adaptado - Atribuição exige contexto de organização */}
-            {/* Se quisermos permitir atribuição global, precisaríamos abrir um modal que seleciona a org primeiro. */}
-            {/* Por ora, vamos ocultar este botão global se não houver org selecionada, ou mantê-lo disabled */}
-
+            {/* Nova Organização */}
             <button
               onClick={() => setShowNewOrgModal(true)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium"

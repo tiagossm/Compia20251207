@@ -306,8 +306,8 @@ export default function RolePermissions() {
                               <button
                                 onClick={() => togglePermission(role.value, permission.type)}
                                 className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${hasChange
-                                    ? 'ring-2 ring-blue-500 ring-offset-2'
-                                    : ''
+                                  ? 'ring-2 ring-blue-500 ring-offset-2'
+                                  : ''
                                   } ${isAllowed
                                     ? 'bg-green-100 text-green-600 hover:bg-green-200'
                                     : 'bg-red-100 text-red-600 hover:bg-red-200'

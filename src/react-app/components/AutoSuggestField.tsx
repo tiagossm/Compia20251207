@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, ChevronDown } from 'lucide-react';
+import { Plus, Search, Loader2 } from 'lucide-react';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 
 interface AutoSuggestOption {
@@ -39,13 +39,14 @@ export default function AutoSuggestField({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [inputValue, setInputValue] = useState(value);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch suggestions based on input
+  // Fetch suggestions based on input (now accepts empty string for initial load)
   const fetchSuggestions = async (searchText: string) => {
-    if (searchText.length < 2) {
-      setSuggestions([]);
+    // Only skip if between 1-2 characters (too short to search meaningfully)
+    if (searchText.length > 0 && searchText.length < 2) {
       return;
     }
 
@@ -55,6 +56,7 @@ export default function AutoSuggestField({
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.suggestions || []);
+        setIsInitialLoad(searchText === '');
       }
     } catch (error) {
       console.error('Erro ao buscar sugestões:', error);
@@ -74,8 +76,9 @@ export default function AutoSuggestField({
       fetchSuggestions(newValue.trim());
       setShowSuggestions(true);
     } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      // When clearing, fetch initial suggestions
+      fetchSuggestions('');
+      setShowSuggestions(true);
     }
   };
 
@@ -86,10 +89,14 @@ export default function AutoSuggestField({
     setShowSuggestions(false);
   };
 
-  // Handle input focus
+  // Handle input focus - now loads suggestions automatically
   const handleFocus = () => {
-    if (inputValue.trim() && suggestions.length > 0) {
-      setShowSuggestions(true);
+    // Always show suggestions panel on focus
+    setShowSuggestions(true);
+
+    // If no suggestions loaded yet, fetch initial ones
+    if (suggestions.length === 0) {
+      fetchSuggestions(inputValue.trim() || '');
     }
   };
 
@@ -119,6 +126,8 @@ export default function AutoSuggestField({
       <div ref={containerRef} className="relative">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
+            {/* Search Icon */}
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
@@ -129,21 +138,16 @@ export default function AutoSuggestField({
               onFocus={handleFocus}
               required={required}
               placeholder={placeholder}
-              className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoComplete="off"
             />
 
             {loading && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
               </div>
             )}
-
-            {!loading && suggestions.length > 0 && (
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-            )}
           </div>
-
           {onAddNew && (
             <button
               type="button"
@@ -157,26 +161,55 @@ export default function AutoSuggestField({
         </div>
 
         {/* Suggestions dropdown */}
-        {showSuggestions && suggestions.length > 0 && (
+        {showSuggestions && (
           <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => handleSuggestionSelect(suggestion)}
-                className="w-full px-3 py-2 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-slate-900">{suggestion.label}</span>
-                  {showEmail && suggestion.email && (
-                    <span className="text-xs text-slate-500">{suggestion.email}</span>
-                  )}
-                </div>
-              </button>
-            ))}
+            {loading && suggestions.length === 0 ? (
+              <div className="px-3 py-4 text-center text-slate-500">
+                <Loader2 className="w-5 h-5 mx-auto mb-2 text-blue-600 animate-spin" />
+                <span className="text-sm">Buscando...</span>
+              </div>
+            ) : suggestions.length > 0 ? (
+              <>
+                {isInitialLoad && !inputValue.trim() && (
+                  <div className="px-3 py-2 text-xs font-medium text-slate-500 bg-slate-50 border-b border-slate-200">
+                    📋 Recentes / Disponíveis
+                  </div>
+                )}
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleSuggestionSelect(suggestion)}
+                    className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors border-b border-slate-100 last:border-b-0"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-slate-900">{suggestion.label}</span>
+                      {showEmail && suggestion.email && (
+                        <span className="text-xs text-slate-500">{suggestion.email}</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </>
+            ) : !loading ? (
+              <div className="px-3 py-4 text-center text-slate-500">
+                <span className="text-sm">Nenhum resultado encontrado</span>
+                {onAddNew && (
+                  <button
+                    type="button"
+                    onClick={onAddNew}
+                    className="block w-full mt-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  >
+                    <Plus className="w-4 h-4 inline mr-1" />
+                    {addNewText}
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
     </div>
   );
 }
+

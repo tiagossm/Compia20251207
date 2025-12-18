@@ -1,6 +1,5 @@
 
 import { useEffect, useState } from 'react';
-
 import { useAuth } from '@/react-app/context/AuthContext';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import { Navigate, useLocation, useNavigate, Link } from 'react-router-dom';

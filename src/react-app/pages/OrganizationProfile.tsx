@@ -142,7 +142,6 @@ export default function OrganizationProfile() {
   };
 
 
-
   if (loading) {
     return (
       <Layout>
@@ -649,45 +648,28 @@ export default function OrganizationProfile() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
               to={`/inspections/new?org=${organization.id}`}
-              className="flex items-center gap-3 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex items-center justify-center p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <ClipboardList className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="font-medium text-slate-900">Nova Inspeção</p>
-                <p className="text-sm text-slate-600">Criar inspeção para esta organização</p>
-              </div>
+              <ClipboardList className="w-5 h-5 text-blue-600 mr-2" />
+              <span className="text-sm font-medium text-slate-900">Nova Inspeção</span>
             </Link>
-
             <Link
-              to={`/action-plans?org=${organization.id}`}
-              className="flex items-center gap-3 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              to={`/users?org=${organization.id}`}
+              className="flex items-center justify-center p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Target className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="font-medium text-slate-900">Planos de Ação</p>
-                <p className="text-sm text-slate-600">Ver ações corretivas</p>
-              </div>
+              <Users className="w-5 h-5 text-green-600 mr-2" />
+              <span className="text-sm font-medium text-slate-900">Gerenciar Equipe</span>
             </Link>
-
             <Link
-              to={`/reports?org=${organization.id}`}
-              className="flex items-center gap-3 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              to={`/organizations/${organization.id}/edit`}
+              className="flex items-center justify-center p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Shield className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="font-medium text-slate-900">Relatórios</p>
-                <p className="text-sm text-slate-600">Análises e métricas</p>
-              </div>
+              <Building2 className="w-5 h-5 text-purple-600 mr-2" />
+              <span className="text-sm font-medium text-slate-900">Editar Dados</span>
             </Link>
           </div>
         </div>
       </div>
-    </Layout>
+    </Layout >
   );
 }
