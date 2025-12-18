@@ -3,7 +3,7 @@ import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
 
 const autosuggest = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
-// Companies autosuggest
+// Companies autosuggest - now returns recent companies when search is empty
 autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query("search") || "";
@@ -22,35 +22,69 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
 
     if (isSystemAdmin) {
       // System admin can see all organizations
-      companies = await env.DB.prepare(`
-        SELECT DISTINCT 
-          COALESCE(o.nome_fantasia, o.name) as value, 
-          COALESCE(o.nome_fantasia, o.name) as label, 
-          o.contact_email as email,
-          o.id as org_id
-        FROM organizations o
-        WHERE (COALESCE(o.nome_fantasia, o.name) LIKE ? OR o.razao_social LIKE ?)
-          AND o.is_active = true
-        ORDER BY COALESCE(o.nome_fantasia, o.name) 
-        LIMIT 10
-      `).bind(`%${search}%`, `%${search}%`).all();
+      if (search.trim()) {
+        // With search term - filter by name
+        companies = await env.DB.prepare(`
+          SELECT DISTINCT 
+            COALESCE(o.nome_fantasia, o.name) as value, 
+            COALESCE(o.nome_fantasia, o.name) as label, 
+            o.contact_email as email,
+            o.id as org_id
+          FROM organizations o
+          WHERE (COALESCE(o.nome_fantasia, o.name) LIKE ? OR o.razao_social LIKE ?)
+            AND o.is_active = true
+          ORDER BY COALESCE(o.nome_fantasia, o.name) 
+          LIMIT 10
+        `).bind(`%${search}%`, `%${search}%`).all();
+      } else {
+        // No search term - return all active companies ordered by name
+        companies = await env.DB.prepare(`
+          SELECT DISTINCT 
+            COALESCE(o.nome_fantasia, o.name) as value, 
+            COALESCE(o.nome_fantasia, o.name) as label, 
+            o.contact_email as email,
+            o.id as org_id
+          FROM organizations o
+          WHERE o.is_active = true
+          ORDER BY COALESCE(o.nome_fantasia, o.name) 
+          LIMIT 10
+        `).all();
+      }
     } else {
       // Non-admin users: get organizations from user_organizations table
-      companies = await env.DB.prepare(`
-        SELECT DISTINCT 
-          COALESCE(o.nome_fantasia, o.name) as value, 
-          COALESCE(o.nome_fantasia, o.name) as label, 
-          o.contact_email as email,
-          o.id as org_id
-        FROM organizations o
-        INNER JOIN user_organizations uo ON uo.organization_id = o.id
-        WHERE uo.user_id = ?
-          AND uo.is_active = true
-          AND o.is_active = true
-          AND (COALESCE(o.nome_fantasia, o.name) LIKE ? OR o.razao_social LIKE ?)
-        ORDER BY COALESCE(o.nome_fantasia, o.name) 
-        LIMIT 10
-      `).bind(user.id, `%${search}%`, `%${search}%`).all();
+      if (search.trim()) {
+        companies = await env.DB.prepare(`
+          SELECT DISTINCT 
+            COALESCE(o.nome_fantasia, o.name) as value, 
+            COALESCE(o.nome_fantasia, o.name) as label, 
+            o.contact_email as email,
+            o.id as org_id
+          FROM organizations o
+          INNER JOIN user_organizations uo ON uo.organization_id = o.id
+          WHERE uo.user_id = ?
+            AND uo.is_active = true
+            AND o.is_active = true
+            AND (COALESCE(o.nome_fantasia, o.name) LIKE ? OR o.razao_social LIKE ?)
+          ORDER BY COALESCE(o.nome_fantasia, o.name) 
+          LIMIT 10
+        `).bind(user.id, `%${search}%`, `%${search}%`).all();
+      } else {
+        // No search - return all companies user has access to
+        companies = await env.DB.prepare(`
+          SELECT DISTINCT 
+            COALESCE(o.nome_fantasia, o.name) as value, 
+            COALESCE(o.nome_fantasia, o.name) as label, 
+            o.contact_email as email,
+            o.id as org_id
+          FROM organizations o
+          INNER JOIN user_organizations uo ON uo.organization_id = o.id
+          WHERE uo.user_id = ?
+            AND uo.is_active = true
+            AND o.is_active = true
+          ORDER BY COALESCE(o.nome_fantasia, o.name) 
+          LIMIT 10
+        `).bind(user.id).all();
+      }
 
       // If no results from user_organizations, try user's primary organization
       if ((!companies.results || companies.results.length === 0) && userProfile?.organization_id) {
@@ -77,6 +111,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
     return c.json({ suggestions: [] });
   }
 });
+
 
 // Inspector suggestions
 autosuggest.get('/inspectors', demoAuthMiddleware, async (c) => {
