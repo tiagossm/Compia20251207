@@ -116,10 +116,10 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         `}
       >
         {/* Logo Area */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-3">
-            <CompiaLogo size={60} textSize={24} />
-          </div>
+        <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
+          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <CompiaLogo size={36} textSize={22} />
+          </Link>
           <button
             className="lg:hidden ml-auto text-gray-500 hover:text-primary"
             onClick={() => setIsSidebarOpen(false)}
@@ -131,9 +131,12 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
 
-          {/* Default Groups */}
-          {navigationGroups.map((group) => (
-            <div key={group.title} className="mb-2">
+          {/* Default Groups with Category Titles */}
+          {navigationGroups.map((group, groupIndex) => (
+            <div key={group.title} className={groupIndex > 0 ? "pt-4" : ""}>
+              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                {group.title}
+              </p>
               <div className="space-y-1">
                 {group.items.map((item) => (
                   <NavItem key={item.name} item={item} />

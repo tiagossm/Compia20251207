@@ -1,4 +1,3 @@
-import React from 'react';
 import './CompiaLogo.css';
 
 interface CompiaLogoProps {
@@ -8,15 +7,9 @@ interface CompiaLogoProps {
     className?: string;
 }
 
-export default function CompiaLogo({ size = 40, textSize = 24, className = '' }: CompiaLogoProps) {
-    // We utilize CSS variables or inline styles to control size dynamically
-    const style = {
-        '--symbol-size': `${size}px`,
-        '--text-size': `${textSize}px`,
-    } as React.CSSProperties;
-
+export default function CompiaLogo({ size = 36, textSize = 22, className = '' }: CompiaLogoProps) {
     return (
-        <div className={`compia-logo-container ${className}`} style={style}>
+        <div className={`compia-logo-container ${className}`}>
             <div className="compia-symbol" style={{ width: size, height: size }}>
                 <img
                     src="/compia_logo.png"
@@ -29,7 +22,7 @@ export default function CompiaLogo({ size = 40, textSize = 24, className = '' }:
                 />
             </div>
 
-            <div className="compia-logotype" style={{ fontSize: textSize, marginLeft: -19 }}>
+            <div className="compia-logotype" style={{ fontSize: textSize }}>
                 Compia
             </div>
         </div>
