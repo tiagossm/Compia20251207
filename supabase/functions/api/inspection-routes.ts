@@ -26,7 +26,7 @@ inspectionRoutes.get("/", demoAuthMiddleware, async (c) => {
     const userProfile = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first() as any;
 
     let query = `
-      SELECT i.*, u.name as created_by_name, o.name as organization_name
+      SELECT i.*, u.name as created_by_name, u.google_user_data as creator_google_data, o.name as organization_name
       FROM inspections i
       LEFT JOIN users u ON i.created_by = u.id
       LEFT JOIN organizations o ON i.organization_id = o.id
@@ -63,7 +63,25 @@ inspectionRoutes.get("/", demoAuthMiddleware, async (c) => {
 
     const inspections = await env.DB.prepare(query).bind(...params).all();
 
-    return c.json({ inspections: inspections.results || [] });
+    // Process results to extract avatar URL from google_user_data
+    const processedInspections = (inspections.results || []).map((insp: any) => {
+      let inspector_avatar = null;
+      try {
+        if (insp.creator_google_data) {
+          const googleData = typeof insp.creator_google_data === 'string'
+            ? JSON.parse(insp.creator_google_data)
+            : insp.creator_google_data;
+          inspector_avatar = googleData?.picture || null;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+      // Remove raw google data from response, add processed avatar
+      const { creator_google_data, ...rest } = insp;
+      return { ...rest, inspector_avatar };
+    });
+
+    return c.json({ inspections: processedInspections });
   } catch (error) {
     console.error('Error fetching inspections:', error);
     return c.json({ error: "Failed to fetch inspections" }, 500);

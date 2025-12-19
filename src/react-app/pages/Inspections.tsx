@@ -381,7 +381,15 @@ export default function Inspections() {
                         <span className="truncate max-w-[80px] sm:max-w-none">{inspection.location}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
+                        {(inspection as any).inspector_avatar ? (
+                          <img
+                            src={(inspection as any).inspector_avatar}
+                            alt={inspection.inspector_name}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-4 h-4" />
+                        )}
                         <span className="truncate max-w-[80px] sm:max-w-none">{inspection.inspector_name}</span>
                       </div>
                       {inspection.scheduled_date && (
