@@ -180,7 +180,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 bg-white">
 
         {/* HEADER */}
-        <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton} userName={profile?.name || user?.email?.split('@')[0]}>
+        <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton}>
           {/* Notification System */}
           <NotificationSystem />
 

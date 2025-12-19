@@ -7,10 +7,9 @@ interface HeaderProps {
     pageTitle?: string;
     children?: React.ReactNode;
     actionButton?: React.ReactNode;
-    userName?: string;
 }
 
-export default function Header({ onMenuClick, pageTitle, children, actionButton, userName }: HeaderProps) {
+export default function Header({ onMenuClick, pageTitle, children, actionButton }: HeaderProps) {
     const location = useLocation();
 
     // Helper to determine breadcrumb/title based on location if not provided
@@ -47,7 +46,6 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton,
     };
 
     const greeting = getGreeting();
-    const firstName = userName?.split(' ')[0] || '';
     const isHome = location.pathname === '/';
 
     return (
@@ -67,10 +65,14 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton,
 
             {/* DESKTOP: Title or Greeting */}
             <div className="hidden md:flex items-center gap-4">
-                {isHome && firstName ? (
+                {isHome ? (
                     <h1 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
                         <span>{greeting.emoji}</span>
-                        {greeting.text}, {firstName}!
+                        {greeting.text}!
+                        <span className="text-slate-400 font-normal text-base">·</span>
+                        <span className="text-slate-500 font-normal text-base">
+                            {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
+                        </span>
                     </h1>
                 ) : (
                     <h1 className="text-2xl font-bold text-slate-800">

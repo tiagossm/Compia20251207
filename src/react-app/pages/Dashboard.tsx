@@ -3,24 +3,19 @@ import { useAuth } from '@/react-app/context/AuthContext';
 import Layout from '@/react-app/components/Layout';
 import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import DashboardCharts from '@/react-app/components/DashboardCharts';
-import StatsCard from '@/react-app/components/StatsCard';
 import WelcomeHero from '@/react-app/components/WelcomeHero';
 import { ExtendedMochaUser } from '@/shared/user-types';
 import UnassignedUserBanner from '@/react-app/components/UnassignedUserBanner';
 import {
   Shield,
-  ClipboardList,
   Target,
   AlertTriangle,
-  CheckCircle2,
   Clock,
-  TrendingUp,
   Users,
   Building2,
   PlusCircle,
   FileCheck,
   BarChart3,
-
   Zap
 } from 'lucide-react';
 
@@ -138,39 +133,7 @@ export default function Dashboard() {
           }
         />
 
-        {/* Stats Cards - Clean White */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatsCard
-            title="Total de Inspeções"
-            value={stats?.total || 0}
-            icon={ClipboardList}
-            color="blue"
-            trend={stats?.total ? { value: "+12%", isPositive: true } : undefined}
-          />
 
-          <StatsCard
-            title="Pendentes"
-            value={stats?.pending || 0}
-            icon={Clock}
-            color="yellow"
-            trend={stats?.pending ? { value: "-5%", isPositive: true } : undefined}
-          />
-
-          <StatsCard
-            title="Em Andamento"
-            value={stats?.inProgress || 0}
-            icon={TrendingUp}
-            color="purple"
-            trend={stats?.inProgress ? { value: "+8%", isPositive: true } : undefined}
-          />
-          <StatsCard
-            title="Concluídas"
-            value={stats?.completed || 0}
-            icon={CheckCircle2}
-            color="green"
-            trend={stats?.completed ? { value: "+15%", isPositive: true } : undefined}
-          />
-        </div>
 
         {/* Priority Alerts - Light Theme */}
         {actionSummary && (actionSummary.overdue_actions > 0 || actionSummary.high_priority_pending > 0) && (
