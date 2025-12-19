@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { createClient, Session } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { ExtendedMochaUser } from '../../shared/user-types';
 import { fetchWithAuth } from '../utils/auth';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface AuthContextType {
     user: ExtendedMochaUser | null;
