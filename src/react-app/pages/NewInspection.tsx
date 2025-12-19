@@ -6,7 +6,7 @@ import Layout from '@/react-app/components/Layout';
 // OrganizationSelector removed - organization is set automatically from user context
 import {
   Save, ArrowLeft, ArrowRight, FileCheck, MapPin, Navigation, Brain,
-  CheckCircle, ClipboardList, Building2, Users, Settings,
+  CheckCircle, ClipboardList, Building2, Users, Settings, Shield,
   Calendar, AlertTriangle, Sparkles
 } from 'lucide-react';
 import { ChecklistTemplate, ChecklistFolder } from '@/shared/checklist-types';
@@ -16,6 +16,13 @@ import SuggestionTags from '@/react-app/components/SuggestionTags';
 import NewUserModal from '@/react-app/components/NewUserModal';
 import NewOrganizationModal from '@/react-app/components/NewOrganizationModal';
 import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
+import UserAvatar from '@/react-app/components/UserAvatar';
+
+interface InspectorType {
+  name: string;
+  email: string;
+  avatar_url?: string;
+}
 
 interface WizardStep {
   id: number;
@@ -67,8 +74,15 @@ export default function NewInspection() {
     address: '',
     latitude: null as number | null,
     longitude: null as number | null,
-    inspector_name: extendedUser?.profile?.name || '',
+    // Inspectors - array for multiple
+    inspectors: [{
+      name: extendedUser?.profile?.name || '',
+      email: extendedUser?.email || '',
+      avatar_url: extendedUser?.google_user_data?.picture || ''
+    }] as InspectorType[],
+    inspector_name: extendedUser?.profile?.name || '', // Keep for backward compat
     inspector_email: extendedUser?.email || '',
+    // Responsible from org's security contact
     responsible_name: '',
     responsible_email: '',
     priority: 'media' as const,
@@ -76,7 +90,7 @@ export default function NewInspection() {
     template_id: '',
     action_plan_type: '5w2h' as const,
     ai_assistant_id: '',
-    compliance_enabled: true, // Habilitar análise de conformidade
+    compliance_enabled: true,
   });
 
   useEffect(() => {
@@ -630,50 +644,124 @@ export default function NewInspection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Equipe e Agendamento</h3>
-                <p className="text-slate-500">Responsáveis e cronograma</p>
+                <p className="text-slate-500">Inspetores e cronograma</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AutoSuggestField
-                label="Nome do Técnico / Inspetor"
-                name="inspector_name"
-                value={formData.inspector_name}
-                onChange={(value, email) => setFormData(prev => ({ ...prev, inspector_name: value, inspector_email: email || prev.inspector_email }))}
-                placeholder="Nome completo do responsável"
-                required
-                apiEndpoint="/api/autosuggest/inspectors"
-                onAddNew={() => setShowNewUserModal(true)}
-                addNewText="Novo Inspetor"
-                showEmail={true}
-              />
-              <div>
-                <label htmlFor="inspector_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Técnico</label>
-                <input type="email" id="inspector_email" name="inspector_email" value={formData.inspector_email} onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="email@exemplo.com"
-                />
+
+            {/* Inspectors Section - Multiple with Avatars */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Users className="w-4 h-4 inline mr-1" />
+                Técnicos / Inspetores *
+              </label>
+              <div className="space-y-3">
+                {/* Inspector chips */}
+                {formData.inspectors.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.inspectors.map((inspector, index) => (
+                      <div
+                        key={index}
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-violet-100 text-violet-800 rounded-full text-sm font-medium"
+                      >
+                        <UserAvatar
+                          name={inspector.name}
+                          avatarUrl={inspector.avatar_url}
+                          size="xs"
+                        />
+                        <span>{inspector.name}</span>
+                        {formData.inspectors.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({
+                              ...prev,
+                              inspectors: prev.inspectors.filter((_, i) => i !== index),
+                              inspector_name: index === 0 ? (prev.inspectors[1]?.name || '') : prev.inspector_name,
+                              inspector_email: index === 0 ? (prev.inspectors[1]?.email || '') : prev.inspector_email
+                            }))}
+                            className="ml-1 hover:text-violet-600 transition-colors"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Add inspector - only if less than 5 */}
+                {formData.inspectors.length < 5 && (
+                  <AutoSuggestField
+                    label=""
+                    name="new_inspector"
+                    value=""
+                    onChange={(value, email) => {
+                      if (value && !formData.inspectors.some(i => i.name === value)) {
+                        setFormData(prev => ({
+                          ...prev,
+                          inspectors: [...prev.inspectors, { name: value, email: email || '', avatar_url: '' }],
+                          inspector_name: prev.inspectors.length === 0 ? value : prev.inspector_name,
+                          inspector_email: prev.inspectors.length === 0 ? (email || '') : prev.inspector_email
+                        }));
+                      }
+                    }}
+                    placeholder={formData.inspectors.length === 0 ? "Adicionar inspetor principal" : "Adicionar mais inspetores..."}
+                    apiEndpoint="/api/autosuggest/inspectors"
+                    onAddNew={() => setShowNewUserModal(true)}
+                    addNewText="Novo Inspetor"
+                    showEmail={true}
+                  />
+                )}
+                <p className="text-xs text-slate-500">
+                  Você pode adicionar até 5 inspetores. O primeiro será o inspetor principal.
+                </p>
               </div>
-              <AutoSuggestField
-                label="Responsável da Empresa"
-                name="responsible_name"
-                value={formData.responsible_name}
-                onChange={(value, email) => setFormData(prev => ({ ...prev, responsible_name: value, responsible_email: email || prev.responsible_email }))}
-                placeholder="Nome do responsável técnico"
-                apiEndpoint="/api/autosuggest/responsibles"
-                showEmail={true}
-              />
-              <div>
-                <label htmlFor="responsible_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Responsável</label>
-                <input type="email" id="responsible_email" name="responsible_email" value={formData.responsible_email} onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="responsavel@empresa.com"
+            </div>
+
+            {/* Contato de Segurança - from organization */}
+            <div className="border-t border-slate-200 pt-6">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Shield className="w-4 h-4 inline mr-1" />
+                Contato de Segurança
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AutoSuggestField
+                  label=""
+                  name="responsible_name"
+                  value={formData.responsible_name}
+                  onChange={(value, email) => setFormData(prev => ({
+                    ...prev,
+                    responsible_name: value,
+                    responsible_email: email || prev.responsible_email
+                  }))}
+                  placeholder="Nome do contato de segurança"
+                  apiEndpoint="/api/autosuggest/responsibles"
+                  showEmail={true}
                 />
+                <div>
+                  <input
+                    type="email"
+                    id="responsible_email"
+                    name="responsible_email"
+                    value={formData.responsible_email}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="email@empresa.com"
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* Schedule and Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 pt-6">
               <div>
                 <label htmlFor="scheduled_date" className="block text-sm font-semibold text-slate-700 mb-2">
                   <Calendar className="w-4 h-4 inline mr-1" />Data Agendada
                 </label>
-                <input type="date" id="scheduled_date" name="scheduled_date" value={formData.scheduled_date} onChange={handleChange}
+                <input
+                  type="date"
+                  id="scheduled_date"
+                  name="scheduled_date"
+                  value={formData.scheduled_date}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
                 />
               </div>
@@ -681,7 +769,11 @@ export default function NewInspection() {
                 <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
                   <AlertTriangle className="w-4 h-4 inline mr-1" />Prioridade
                 </label>
-                <select id="priority" name="priority" value={formData.priority} onChange={handleChange}
+                <select
+                  id="priority"
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
                 >
                   <option value="baixa">🟢 Baixa</option>
