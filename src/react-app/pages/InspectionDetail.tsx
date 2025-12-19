@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import Layout from '@/react-app/components/Layout';
 import {

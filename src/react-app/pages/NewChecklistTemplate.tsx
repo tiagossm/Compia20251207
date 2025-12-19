@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import TemplateSuggestions from '@/react-app/components/TemplateSuggestions';
 import OptionsEditor from '@/react-app/components/OptionsEditor';

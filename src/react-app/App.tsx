@@ -1,5 +1,5 @@
 import './utils/fetch-setup'; // Configure fetch to always include credentials
-import { Routes, Route, BrowserRouter as Router } from "react-router";
+import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
 import { AuthProvider } from "@/react-app/context/AuthContext";
 import { ToastProvider } from "@/react-app/hooks/useToast";
 

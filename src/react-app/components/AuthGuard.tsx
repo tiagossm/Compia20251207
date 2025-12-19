@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
-import { Navigate, useLocation } from 'react-router';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Shield, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { ExtendedMochaUser } from '../../shared/user-types';
 import DatabaseStatus from './DatabaseStatus';

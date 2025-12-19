@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import Layout from '@/react-app/components/Layout';
 import OrganizationSelector from '@/react-app/components/OrganizationSelector';
