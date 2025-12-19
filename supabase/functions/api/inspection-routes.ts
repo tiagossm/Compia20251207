@@ -236,6 +236,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
     const {
       title, description, location, inspector_name, inspector_email,
       company_name, cep, address, scheduled_date,
+      logradouro, numero, complemento, bairro, cidade, uf, sectors,
       status = 'pendente', priority = 'media', responsible_name, responsible_email,
       template_id, ai_assistant_id, action_plan_type = '5w2h',
       // Novos campos de auditoria (opcionais, enviados pelo cliente)
@@ -270,6 +271,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       INSERT INTO inspections(
       title, description, location, inspector_name, inspector_email,
       company_name, cep, address, scheduled_date,
+      logradouro, numero, complemento, bairro, cidade, uf, sectors,
       status, priority, created_by, organization_id, responsible_name, responsible_email,
       ai_assistant_id, action_plan_type,
       started_at_user_time, started_at_server_time,
@@ -277,7 +279,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       device_fingerprint, device_model, device_os,
       is_offline_sync, sync_timestamp,
       created_at, updated_at
-    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
       `).bind(
       title || null,
@@ -289,6 +291,13 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       cep || null,
       address || null,
       scheduled_date || null,
+      logradouro || null,
+      numero || null,
+      complemento || null,
+      bairro || null,
+      cidade || null,
+      uf || null,
+      sectors ? JSON.stringify(sectors) : null,
       status,
       priority,
       user.id,
@@ -468,6 +477,7 @@ SELECT * FROM inspections WHERE id = ?
     const allowedFields = [
       'title', 'description', 'location', 'inspector_name', 'inspector_email',
       'company_name', 'cep', 'address', 'scheduled_date',
+      'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'sectors',
       'completed_date', 'status', 'priority', 'action_plan', 'action_plan_type',
       'inspector_signature', 'responsible_signature', 'responsible_name', 'responsible_email',
       // Campos de auditoria que podem ser atualizados
