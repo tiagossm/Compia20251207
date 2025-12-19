@@ -118,7 +118,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         {/* Logo Area */}
         <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
           <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
-            <CompiaLogo size={48} textSize={32} />
+            <CompiaLogo size={40} textSize={28} />
           </Link>
           <button
             className="lg:hidden ml-auto text-gray-500 hover:text-primary"
@@ -180,7 +180,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 bg-white">
 
         {/* HEADER */}
-        <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton}>
+        <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton} userName={profile?.name || user?.email?.split('@')[0]}>
           {/* Notification System */}
           <NotificationSystem />
 

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Sun, Moon, Sunset } from 'lucide-react';
 import CompiaLogo from './CompiaLogo';
 import { useLocation } from 'react-router-dom';
 
@@ -8,9 +7,10 @@ interface HeaderProps {
     pageTitle?: string;
     children?: React.ReactNode;
     actionButton?: React.ReactNode;
+    userName?: string;
 }
 
-export default function Header({ onMenuClick, pageTitle, children, actionButton }: HeaderProps) {
+export default function Header({ onMenuClick, pageTitle, children, actionButton, userName }: HeaderProps) {
     const location = useLocation();
 
     // Helper to determine breadcrumb/title based on location if not provided
@@ -34,6 +34,22 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
         return 'Portal Compia';
     };
 
+    // Time-based greeting
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour >= 5 && hour < 12) {
+            return { text: 'Bom dia', Icon: Sun, emoji: '☀️' };
+        } else if (hour >= 12 && hour < 18) {
+            return { text: 'Boa tarde', Icon: Sunset, emoji: '🌤️' };
+        } else {
+            return { text: 'Boa noite', Icon: Moon, emoji: '🌙' };
+        }
+    };
+
+    const greeting = getGreeting();
+    const firstName = userName?.split(' ')[0] || '';
+    const isHome = location.pathname === '/';
+
     return (
         <header className="bg-white border-b border-slate-200 h-16 px-4 flex items-center justify-between sticky top-0 z-30">
             {/* MOBILE: Menu + Logo */}
@@ -49,14 +65,19 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
                 </div>
             </div>
 
-            {/* DESKTOP: Breadcrumbs/Title ONLY (Logo/Brand hidden) */}
-            {location.pathname !== '/' && (
-                <div className="hidden md:flex items-center gap-4">
+            {/* DESKTOP: Title or Greeting */}
+            <div className="hidden md:flex items-center gap-4">
+                {isHome && firstName ? (
+                    <h1 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+                        <span>{greeting.emoji}</span>
+                        {greeting.text}, {firstName}!
+                    </h1>
+                ) : (
                     <h1 className="text-2xl font-bold text-slate-800">
                         {getPageTitle()}
                     </h1>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-3">

@@ -123,9 +123,8 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Premium Welcome Hero */}
+        {/* Stats Bar with Quick Actions */}
         <WelcomeHero
-          userName={extendedUser?.profile?.name || user?.email?.split('@')[0] || 'Usuário'}
           stats={stats}
           completionRate={getCompletionRate()}
           showOrgSelector={extendedUser?.profile?.role === 'system_admin' || extendedUser?.profile?.role === 'sys_admin'}
@@ -134,7 +133,7 @@ export default function Dashboard() {
               selectedOrgId={selectedOrgId}
               onOrganizationChange={setSelectedOrgId}
               showAllOption={true}
-              className="bg-white/10 border-white/20 text-white [&>option]:text-slate-800"
+              className="bg-white border-gray-200 text-slate-700"
             />
           }
         />
