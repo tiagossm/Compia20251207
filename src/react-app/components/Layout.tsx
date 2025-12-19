@@ -117,8 +117,8 @@ export default function Layout({ children, actionButton }: LayoutProps) {
       >
         {/* Logo Area */}
         <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <CompiaLogo size={38} textSize={26} />
+          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
+            <CompiaLogo size={48} textSize={32} />
           </Link>
           <button
             className="lg:hidden ml-auto text-gray-500 hover:text-primary"
