@@ -55,8 +55,15 @@ export default function NewInspection() {
     title: '',
     description: '',
     location: '',
+    sectors: [] as string[], // Multiple sectors/locations
     company_name: '',
     cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
     address: '',
     latitude: null as number | null,
     longitude: null as number | null,
@@ -81,7 +88,7 @@ export default function NewInspection() {
   useEffect(() => {
     const validation: Record<number, boolean> = {};
     validation[1] = !!(formData.title.trim());
-    validation[2] = !!(formData.company_name.trim() && formData.location.trim());
+    validation[2] = !!(formData.company_name.trim() && (formData.sectors.length > 0 || formData.location.trim()));
     validation[3] = !!(formData.inspector_name.trim());
     validation[4] = true;
     setStepValidation(validation);
@@ -158,8 +165,29 @@ export default function NewInspection() {
     setLoading(true);
 
     try {
+      // Build location from sectors array
+      const finalLocation = formData.sectors.length > 0
+        ? formData.sectors.join(', ')
+        : formData.location.trim();
+
+      // Build complete address if not already set
+      let finalAddress = formData.address;
+      if (!finalAddress && formData.logradouro) {
+        const parts = [
+          formData.logradouro,
+          formData.numero && `nº ${formData.numero}`,
+          formData.complemento,
+          formData.bairro,
+          formData.cidade && formData.uf && `${formData.cidade}/${formData.uf}`,
+          formData.cep && `CEP: ${formData.cep}`
+        ].filter(Boolean);
+        finalAddress = parts.join(', ');
+      }
+
       const inspectionData = {
         ...formData,
+        location: finalLocation,
+        address: finalAddress,
         organization_id: selectedOrgId
       };
 
@@ -209,7 +237,15 @@ export default function NewInspection() {
         const response = await fetchWithAuth(`/api/cep/${cep}`);
         if (response.ok) {
           const data = await response.json();
-          setFormData(prev => ({ ...prev, address: data.address }));
+          setFormData(prev => ({
+            ...prev,
+            logradouro: data.logradouro || '',
+            bairro: data.bairro || '',
+            cidade: data.localidade || '',
+            uf: data.uf || '',
+            complemento: data.complemento || prev.complemento,
+            address: data.address || ''
+          }));
         }
       } catch (error) {
         console.error('Erro ao buscar CEP:', error);
@@ -361,73 +397,221 @@ export default function NewInspection() {
                 <p className="text-slate-500">Informações da empresa e endereço</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <AutoSuggestField
-                  label="Nome da Empresa"
-                  name="company_name"
-                  value={formData.company_name}
-                  onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
-                  placeholder="Ex: ABC Indústria Ltda"
-                  required
-                  apiEndpoint="/api/autosuggest/companies"
-                  onAddNew={() => setShowNewOrgModal(true)}
-                  addNewText="Nova Empresa"
-                />
-              </div>
+
+            {/* Company Name */}
+            <div>
               <AutoSuggestField
-                label="Local / Setor"
-                name="location"
-                value={formData.location}
-                onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
-                placeholder="Ex: Galpão A - Setor de Produção"
+                label="Nome da Empresa"
+                name="company_name"
+                value={formData.company_name}
+                onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
+                placeholder="Ex: ABC Indústria Ltda"
                 required
-                apiEndpoint="/api/autosuggest/locations"
+                apiEndpoint="/api/autosuggest/companies"
+                onAddNew={() => setShowNewOrgModal(true)}
+                addNewText="Nova Empresa"
               />
-              <div>
-                <label htmlFor="cep" className="block text-sm font-semibold text-slate-700 mb-2">CEP</label>
-                <input
-                  type="text"
-                  id="cep"
-                  name="cep"
-                  value={formData.cep}
-                  onChange={handleCEPChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="00000-000"
-                  maxLength={8}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="address" className="block text-sm font-semibold text-slate-700">Endereço Completo</label>
+            </div>
+
+            {/* Sectors/Areas - Multiple chips */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                Setores / Áreas Inspecionadas *
+              </label>
+              <div className="space-y-3">
+                {/* Sector chips */}
+                {formData.sectors.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.sectors.map((sector, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium"
+                      >
+                        {sector}
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({
+                            ...prev,
+                            sectors: prev.sectors.filter((_, i) => i !== index)
+                          }))}
+                          className="ml-1 hover:text-emerald-600 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Add sector input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && formData.location.trim()) {
+                        e.preventDefault();
+                        if (!formData.sectors.includes(formData.location.trim())) {
+                          setFormData(prev => ({
+                            ...prev,
+                            sectors: [...prev.sectors, prev.location.trim()],
+                            location: ''
+                          }));
+                        }
+                      }
+                    }}
+                    className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 transition-all"
+                    placeholder="Digite um setor e pressione Enter (Ex: Galpão A, Produção, Almoxarifado)"
+                  />
                   <button
                     type="button"
-                    onClick={getCurrentLocation}
-                    className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                    onClick={() => {
+                      if (formData.location.trim() && !formData.sectors.includes(formData.location.trim())) {
+                        setFormData(prev => ({
+                          ...prev,
+                          sectors: [...prev.sectors, prev.location.trim()],
+                          location: ''
+                        }));
+                      }
+                    }}
+                    className="px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium"
                   >
-                    <Navigation className="w-4 h-4 mr-2" />
-                    Capturar GPS
+                    + Adicionar
                   </button>
                 </div>
-                <input
-                  type="text"
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="Endereço será preenchido automaticamente pelo CEP"
-                />
+                <p className="text-xs text-slate-500">
+                  Adicione todos os setores ou áreas que serão inspecionados
+                </p>
+              </div>
+            </div>
+
+            {/* Address Section */}
+            <div className="border-t border-slate-200 pt-6">
+              <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <Navigation className="w-4 h-4" />
+                Endereço do Local
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* CEP */}
+                <div>
+                  <label htmlFor="cep" className="block text-sm font-medium text-slate-600 mb-1">CEP</label>
+                  <input
+                    type="text"
+                    id="cep"
+                    name="cep"
+                    value={formData.cep}
+                    onChange={handleCEPChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="00000-000"
+                    maxLength={8}
+                  />
+                </div>
+
+                {/* Logradouro */}
+                <div className="md:col-span-2">
+                  <label htmlFor="logradouro" className="block text-sm font-medium text-slate-600 mb-1">Logradouro</label>
+                  <input
+                    type="text"
+                    id="logradouro"
+                    name="logradouro"
+                    value={formData.logradouro}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* Número */}
+                <div>
+                  <label htmlFor="numero" className="block text-sm font-medium text-slate-600 mb-1">Número</label>
+                  <input
+                    type="text"
+                    id="numero"
+                    name="numero"
+                    value={formData.numero}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="123 ou S/N"
+                  />
+                </div>
+
+                {/* Complemento */}
+                <div className="md:col-span-2">
+                  <label htmlFor="complemento" className="block text-sm font-medium text-slate-600 mb-1">Complemento</label>
+                  <input
+                    type="text"
+                    id="complemento"
+                    name="complemento"
+                    value={formData.complemento}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="Bloco B, Sala 5, Andar 3..."
+                  />
+                </div>
+
+                {/* Bairro */}
+                <div>
+                  <label htmlFor="bairro" className="block text-sm font-medium text-slate-600 mb-1">Bairro</label>
+                  <input
+                    type="text"
+                    id="bairro"
+                    name="bairro"
+                    value={formData.bairro}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* Cidade */}
+                <div>
+                  <label htmlFor="cidade" className="block text-sm font-medium text-slate-600 mb-1">Cidade</label>
+                  <input
+                    type="text"
+                    id="cidade"
+                    name="cidade"
+                    value={formData.cidade}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* UF */}
+                <div>
+                  <label htmlFor="uf" className="block text-sm font-medium text-slate-600 mb-1">UF</label>
+                  <input
+                    type="text"
+                    id="uf"
+                    name="uf"
+                    value={formData.uf}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="SP"
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+
+              {/* GPS Capture */}
+              <div className="mt-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={getCurrentLocation}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                >
+                  <Navigation className="w-4 h-4 mr-2" />
+                  Capturar GPS
+                </button>
+
                 {formData.latitude && formData.longitude && (
-                  <div className="flex items-center gap-3 mt-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
-                    <div className="p-2 bg-green-500 rounded-lg text-white">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-green-800">GPS Capturado com Sucesso</p>
-                      <p className="text-xs text-green-600">{formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}</p>
-                    </div>
-                    <CheckCircle className="w-5 h-5 text-green-500 ml-auto" />
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-700">
+                      GPS: {formData.latitude.toFixed(4)}, {formData.longitude.toFixed(4)}
+                    </span>
                   </div>
                 )}
               </div>
