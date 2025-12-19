@@ -236,15 +236,17 @@ export default function NewInspection() {
       try {
         const response = await fetchWithAuth(`/api/cep/${cep}`);
         if (response.ok) {
-          const data = await response.json();
+          const result = await response.json();
+          // API returns { success, data: {...}, address } - extract from data or result
+          const cepData = result.data || result;
           setFormData(prev => ({
             ...prev,
-            logradouro: data.logradouro || '',
-            bairro: data.bairro || '',
-            cidade: data.localidade || '',
-            uf: data.uf || '',
-            complemento: data.complemento || prev.complemento,
-            address: data.address || ''
+            logradouro: cepData.logradouro || '',
+            bairro: cepData.bairro || '',
+            cidade: cepData.localidade || '',
+            uf: cepData.uf || '',
+            complemento: cepData.complemento || prev.complemento,
+            address: result.address || cepData.address || ''
           }));
         }
       } catch (error) {
