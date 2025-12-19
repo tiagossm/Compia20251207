@@ -102,7 +102,7 @@ export default function Login() {
         <div className="flex flex-col items-center justify-center mb-6 text-center">
           <div className="flex items-center justify-center">
             <img
-              src="/compia-logo.png"
+              src="/compia_logo.png"
               alt="Compia Logo"
               className="w-[60px] h-[60px] object-contain"
             />
