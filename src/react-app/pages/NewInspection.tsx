@@ -716,11 +716,11 @@ export default function NewInspection() {
               </div>
             </div>
 
-            {/* Contato de Segurança - from organization */}
+            {/* Responsável no Local */}
             <div className="border-t border-slate-200 pt-6">
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 <Shield className="w-4 h-4 inline mr-1" />
-                Contato de Segurança
+                Responsável no Local
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AutoSuggestField
