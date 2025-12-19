@@ -118,7 +118,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         {/* Logo Area */}
         <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <CompiaLogo size={36} textSize={22} />
+            <CompiaLogo size={42} textSize={26} />
           </Link>
           <button
             className="lg:hidden ml-auto text-gray-500 hover:text-primary"
@@ -191,7 +191,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
               className="flex items-center gap-3 hover:bg-gray-50 p-2 pl-3 rounded-full transition-colors border border-transparent hover:border-gray-100 group"
             >
               {/* Google Avatar or Initials Fallback */}
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600 border border-gray-200 overflow-hidden shadow-sm group-hover:shadow-md transition-all">
+              <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600 border border-gray-200 overflow-hidden shadow-sm group-hover:shadow-md transition-all">
                 {extendedUser?.google_user_data?.picture ? (
                   <img
                     src={extendedUser.google_user_data.picture}

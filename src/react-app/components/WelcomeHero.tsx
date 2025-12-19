@@ -42,25 +42,23 @@ export default function WelcomeHero({
         const weekday = now.toLocaleDateString('pt-BR', { weekday: 'long' });
         const day = now.getDate();
         const month = now.toLocaleDateString('pt-BR', { month: 'long' });
-        const year = now.getFullYear();
-        return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day} de ${month} de ${year}`;
+        return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day} de ${month}`;
     };
 
     return (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-6 sm:p-8 text-white shadow-xl">
-            {/* Background decoration */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24"></div>
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 p-5 sm:p-6 text-white shadow-lg border border-slate-600/30">
+            {/* Subtle background decoration */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -mr-20 -mt-20"></div>
 
             <div className="relative z-10">
                 {/* Top Row: Greeting + Org Selector */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                     <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 mb-1">
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                             <span>{greeting.emoji}</span>
                             {greeting.text}, {firstName}!
                         </h1>
-                        <p className="text-blue-200 text-sm sm:text-base">
+                        <p className="text-slate-400 text-sm mt-0.5">
                             {formatDate()}
                         </p>
                     </div>
@@ -72,56 +70,45 @@ export default function WelcomeHero({
                     )}
                 </div>
 
-                {/* Mini Stats Row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/10">
-                        <div className="flex items-center justify-center mb-2">
-                            <ClipboardList className="w-5 h-5 text-blue-200" />
+                {/* Compact Stats Row + Action */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    {/* Mini Stats - Inline */}
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                            <ClipboardList className="w-4 h-4 text-blue-400" />
+                            <span className="text-lg font-bold">{stats?.total || 0}</span>
+                            <span className="text-xs text-slate-400">Total</span>
                         </div>
-                        <p className="text-2xl sm:text-3xl font-bold">{stats?.total || 0}</p>
-                        <p className="text-xs text-blue-200 font-medium uppercase tracking-wide">Total</p>
+
+                        <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                            <Clock className="w-4 h-4 text-amber-400" />
+                            <span className="text-lg font-bold">{stats?.pending || 0}</span>
+                            <span className="text-xs text-slate-400">Pendentes</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span className="text-lg font-bold">{stats?.completed || 0}</span>
+                            <span className="text-xs text-slate-400">Concluídas</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                            <Target className="w-4 h-4 text-violet-400" />
+                            <span className="text-lg font-bold">{completionRate}%</span>
+                            <span className="text-xs text-slate-400">Eficiência</span>
+                        </div>
                     </div>
 
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/10">
-                        <div className="flex items-center justify-center mb-2">
-                            <Clock className="w-5 h-5 text-amber-300" />
-                        </div>
-                        <p className="text-2xl sm:text-3xl font-bold">{stats?.pending || 0}</p>
-                        <p className="text-xs text-blue-200 font-medium uppercase tracking-wide">Pendentes</p>
+                    {/* Action Button */}
+                    <div className="flex gap-2 sm:ml-auto">
+                        <Link
+                            to="/inspections/new"
+                            className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md transition-all"
+                        >
+                            <PlusCircle className="w-4 h-4" />
+                            Nova Inspeção
+                        </Link>
                     </div>
-
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/10">
-                        <div className="flex items-center justify-center mb-2">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-300" />
-                        </div>
-                        <p className="text-2xl sm:text-3xl font-bold">{stats?.completed || 0}</p>
-                        <p className="text-xs text-blue-200 font-medium uppercase tracking-wide">Concluídas</p>
-                    </div>
-
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/10">
-                        <div className="flex items-center justify-center mb-2">
-                            <Target className="w-5 h-5 text-violet-300" />
-                        </div>
-                        <p className="text-2xl sm:text-3xl font-bold">{completionRate}%</p>
-                        <p className="text-xs text-blue-200 font-medium uppercase tracking-wide">Eficiência</p>
-                    </div>
-                </div>
-
-                {/* Action Button */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <Link
-                        to="/inspections/new"
-                        className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-50 transition-all transform hover:-translate-y-0.5 hover:shadow-xl"
-                    >
-                        <PlusCircle className="w-5 h-5" />
-                        Nova Inspeção
-                    </Link>
-                    <Link
-                        to="/action-plans"
-                        className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-6 py-3 rounded-xl font-semibold border border-white/20 hover:bg-white/20 transition-all"
-                    >
-                        Ver Pendências
-                    </Link>
                 </div>
             </div>
         </div>

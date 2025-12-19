@@ -51,7 +51,7 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
 
             {/* DESKTOP: Breadcrumbs/Title ONLY (Logo/Brand hidden) */}
             <div className="hidden md:flex items-center gap-4">
-                <h1 className="text-xl font-semibold text-slate-800">
+                <h1 className="text-2xl font-bold text-slate-800">
                     {getPageTitle()}
                 </h1>
             </div>
