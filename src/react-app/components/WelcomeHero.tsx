@@ -46,7 +46,7 @@ export default function WelcomeHero({
     };
 
     return (
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 p-5 sm:p-6 text-white shadow-lg border border-slate-600/30">
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 p-5 sm:p-6 text-white shadow-lg">
             {/* Subtle background decoration */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -mr-20 -mt-20"></div>
 

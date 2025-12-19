@@ -1,7 +1,7 @@
 .compia-logo-container {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
     user-select: none;
 }
 
