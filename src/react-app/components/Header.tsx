@@ -50,11 +50,13 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
             </div>
 
             {/* DESKTOP: Breadcrumbs/Title ONLY (Logo/Brand hidden) */}
-            <div className="hidden md:flex items-center gap-4">
-                <h1 className="text-2xl font-bold text-slate-800">
-                    {getPageTitle()}
-                </h1>
-            </div>
+            {location.pathname !== '/' && (
+                <div className="hidden md:flex items-center gap-4">
+                    <h1 className="text-2xl font-bold text-slate-800">
+                        {getPageTitle()}
+                    </h1>
+                </div>
+            )}
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-3">
