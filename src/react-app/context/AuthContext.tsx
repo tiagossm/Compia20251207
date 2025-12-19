@@ -4,12 +4,16 @@ import { supabase } from '../lib/supabase';
 import { ExtendedMochaUser } from '../../shared/user-types';
 import { fetchWithAuth } from '../utils/auth';
 
+// Re-export supabase for components that need direct access
+export { supabase };
+
 interface AuthContextType {
     user: ExtendedMochaUser | null;
     session: Session | null;
     isPending: boolean;
     fetchUser: () => Promise<void>;
     signOut: () => Promise<void>;
+    signInWithGoogle: () => Promise<void>;
     exchangeCodeForSessionToken: () => Promise<void>;
     redirectToLogin: () => void;
 }
@@ -35,13 +39,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const response = await fetchWithAuth('/api/auth/me');
                 if (response.ok) {
                     const userData = await response.json();
-                    setUser(userData);
+                    // Handle both direct user object and nested user.user structure
+                    const userObj = userData.user || userData;
+                    setUser(userObj);
                 } else {
                     console.warn('Failed to fetch user profile, using basic session user');
                     // Fallback to mapping Supabase user to ExtendedMochaUser structure
                     const basicUser: any = {
                         ...activeSession.user,
                         name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                        profile: {
+                            id: activeSession.user.id,
+                            email: activeSession.user.email,
+                            name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                            role: 'inspector'
+                        }
                     };
                     setUser(basicUser);
                 }
@@ -51,6 +63,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const basicUser: any = {
                     ...activeSession.user,
                     name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                    profile: {
+                        id: activeSession.user.id,
+                        email: activeSession.user.email,
+                        name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                        role: 'inspector'
+                    }
                 };
                 setUser(basicUser);
             }
@@ -86,6 +104,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
     };
 
+    // Google OAuth login
+    const signInWithGoogle = async () => {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/auth/callback`,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent',
+                }
+            }
+        });
+        if (error) {
+            console.error('Google login error:', error);
+            throw error;
+        }
+    };
+
     const exchangeCodeForSessionToken = async () => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
@@ -102,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, session, isPending, fetchUser, signOut, exchangeCodeForSessionToken, redirectToLogin }}>
+        <AuthContext.Provider value={{ user, session, isPending, fetchUser, signOut, signInWithGoogle, exchangeCodeForSessionToken, redirectToLogin }}>
             {children}
         </AuthContext.Provider>
     );

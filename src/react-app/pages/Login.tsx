@@ -9,7 +9,7 @@ export default function Login() {
   const {
     user,
     isPending,
-    redirectToLogin
+    signInWithGoogle
   } = useAuth();
 
   const location = useLocation();
@@ -32,9 +32,12 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true);
-      await redirectToLogin();
-    } catch (error) {
-      console.error('Login error:', error);
+      setError('');
+      await signInWithGoogle();
+      // Note: Page will redirect to Google OAuth, so no need to setIsLoading(false)
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'Erro ao fazer login com Google');
       setIsLoading(false);
     }
   };
