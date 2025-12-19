@@ -4,6 +4,7 @@ import Layout from '@/react-app/components/Layout';
 import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import DashboardCharts from '@/react-app/components/DashboardCharts';
 import StatsCard from '@/react-app/components/StatsCard';
+import WelcomeHero from '@/react-app/components/WelcomeHero';
 import { ExtendedMochaUser } from '@/shared/user-types';
 import UnassignedUserBanner from '@/react-app/components/UnassignedUserBanner';
 import {
@@ -122,48 +123,21 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Welcome Banner Clean - Responsive */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 flex flex-col gap-4 shadow-sm">
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-800">
-                Olá, {extendedUser?.profile?.name || user?.email?.split('@')[0]}! 👋
-              </h2>
-              <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-100">
-                {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
-              </span>
-            </div>
-            <p className="text-slate-500 text-sm mt-1">
-              {stats && (
-                <span className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  {getCompletionRate()}% de conclusão em inspeções de hoje.
-                </span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-            {extendedUser?.profile?.role === 'system_admin' && (
-              <div className="w-full sm:w-48">
-                <OrganizationSelector
-                  selectedOrgId={selectedOrgId}
-                  onOrganizationChange={setSelectedOrgId}
-                  showAllOption={true}
-                  className="bg-white border-gray-200 text-slate-700"
-                />
-              </div>
-            )}
-            <a
-              href="/inspections/new"
-              className="bg-primary hover:bg-primary-hover text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">Nova Inspeção</span>
-              <span className="sm:hidden">Nova</span>
-            </a>
-          </div>
-        </div>
+        {/* Premium Welcome Hero */}
+        <WelcomeHero
+          userName={extendedUser?.profile?.name || user?.email?.split('@')[0] || 'Usuário'}
+          stats={stats}
+          completionRate={getCompletionRate()}
+          showOrgSelector={extendedUser?.profile?.role === 'system_admin' || extendedUser?.profile?.role === 'sys_admin'}
+          orgSelectorSlot={
+            <OrganizationSelector
+              selectedOrgId={selectedOrgId}
+              onOrganizationChange={setSelectedOrgId}
+              showAllOption={true}
+              className="bg-white/10 border-white/20 text-white [&>option]:text-slate-800"
+            />
+          }
+        />
 
         {/* Stats Cards - Clean White */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
