@@ -19,7 +19,7 @@ export default function CompiaLogo({ size = 40, textSize = 24, className = '' }:
         <div className={`compia-logo-container ${className}`} style={style}>
             <div className="compia-symbol" style={{ width: size, height: size }}>
                 <img
-                    src="/compia-logo.png"
+                    src="/compia_logo.png"
                     alt="Compia Logo"
                     style={{
                         width: '100%',
