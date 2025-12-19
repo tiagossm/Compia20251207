@@ -884,11 +884,48 @@ export default function NewInspection() {
               <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-green-500" />Resumo da Inspeção
               </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div><p className="text-slate-500">Título</p><p className="font-medium text-slate-900">{formData.title || '-'}</p></div>
                 <div><p className="text-slate-500">Empresa</p><p className="font-medium text-slate-900">{formData.company_name || '-'}</p></div>
-                <div><p className="text-slate-500">Local</p><p className="font-medium text-slate-900">{formData.location || '-'}</p></div>
-                <div><p className="text-slate-500">Técnico</p><p className="font-medium text-slate-900">{formData.inspector_name || '-'}</p></div>
+                <div>
+                  <p className="text-slate-500">Setores / Áreas</p>
+                  <p className="font-medium text-slate-900">
+                    {formData.sectors.length > 0 ? formData.sectors.join(', ') : formData.location || '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Endereço</p>
+                  <p className="font-medium text-slate-900 text-xs">
+                    {formData.logradouro
+                      ? `${formData.logradouro}${formData.numero ? `, ${formData.numero}` : ''} - ${formData.bairro || ''}, ${formData.cidade || ''}/${formData.uf || ''}`
+                      : formData.address || '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Inspetores</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {formData.inspectors.length > 0 ? (
+                      <>
+                        <div className="flex -space-x-2">
+                          {formData.inspectors.slice(0, 3).map((inspector, idx) => (
+                            <UserAvatar key={idx} name={inspector.name} avatarUrl={inspector.avatar_url} size="xs" />
+                          ))}
+                        </div>
+                        <span className="font-medium text-slate-900">
+                          {formData.inspectors.map(i => i.name.split(' ')[0]).join(', ')}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-medium text-slate-900">{formData.inspector_name || '-'}</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-500">Responsável no Local</p>
+                  <p className="font-medium text-slate-900">{formData.responsible_name || '-'}</p>
+                </div>
+                <div><p className="text-slate-500">Data Agendada</p><p className="font-medium text-slate-900">{formData.scheduled_date || 'Não agendada'}</p></div>
+                <div><p className="text-slate-500">Prioridade</p><p className="font-medium text-slate-900 capitalize">{formData.priority}</p></div>
               </div>
             </div>
           </div>
