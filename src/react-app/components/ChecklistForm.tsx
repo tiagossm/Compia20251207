@@ -8,7 +8,7 @@ import InspectionItem from './InspectionItem';
 import CameraModal from './CameraModal';
 import {
   Star, Calendar, Clock,
-  Upload, CheckCircle
+  Upload, CheckCircle, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 
 interface ChecklistFormProps {
@@ -356,13 +356,13 @@ export default function ChecklistForm({
           }
         }
         return (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {options.map(opt => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => update(opt)}
-                className={`px-4 py-2 rounded-full text-xs font-medium border transition-all ${value === opt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${value === opt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
               >
                 {opt}
               </button>
@@ -483,16 +483,18 @@ export default function ChecklistForm({
             <button
               type="button"
               onClick={() => update(true)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-green-300 hover:bg-green-50'}`}
             >
-              Conforme
+              <ThumbsUp size={14} />
+              <span>Conforme</span>
             </button>
             <button
               type="button"
               onClick={() => update(false)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${value === false ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-red-300 hover:bg-red-50'}`}
             >
-              Não Conforme
+              <ThumbsDown size={14} />
+              <span>Não Conforme</span>
             </button>
           </div>
         );
