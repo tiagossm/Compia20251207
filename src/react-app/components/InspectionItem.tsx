@@ -15,7 +15,10 @@ import {
     Trash2,
     Image,
     FileAudio,
-    Square
+    Square,
+    ThumbsUp,
+    ThumbsDown,
+    Minus
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -193,32 +196,32 @@ export default function InspectionItem({
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('compliant')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'compliant'
-                                    ? 'bg-green-100 border-green-400 text-green-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-600'
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'compliant'
+                                    ? 'bg-green-600 border-green-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-green-300 hover:bg-green-50'
                                     }`}
                             >
-                                ✓ Conforme
+                                <ThumbsUp size={12} />
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('non_compliant')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'non_compliant'
-                                    ? 'bg-red-100 border-red-400 text-red-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-600'
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'non_compliant'
+                                    ? 'bg-red-600 border-red-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-red-300 hover:bg-red-50'
                                     }`}
                             >
-                                ✗ Não Conforme
+                                <ThumbsDown size={12} />
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('not_applicable')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'not_applicable'
-                                    ? 'bg-slate-100 border-slate-400 text-slate-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'not_applicable'
+                                    ? 'bg-slate-600 border-slate-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                             >
-                                N/A
+                                <Minus size={12} />
                             </button>
                         </div>
                     </div>
