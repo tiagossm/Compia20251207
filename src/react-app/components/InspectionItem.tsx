@@ -18,7 +18,8 @@ import {
     Square,
     ThumbsUp,
     ThumbsDown,
-    Minus
+    Minus,
+    ChevronDown
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -47,6 +48,7 @@ interface InspectionItemProps {
     onAiAnalysisRequest: (selectedMediaIds: number[]) => void;
     onAiActionPlanRequest: (selectedMediaIds: number[]) => void;
     onManualActionSave?: (actionData: ManualActionData) => void;
+    actionPlan?: any;
     isAiAnalyzing?: boolean;
     isCreatingAction?: boolean;
     isRecording?: boolean;
@@ -72,6 +74,7 @@ export default function InspectionItem({
     onAiAnalysisRequest,
     onAiActionPlanRequest,
     onManualActionSave,
+    actionPlan,
     isAiAnalyzing = false,
     isCreatingAction = false,
     isRecording = false,
@@ -87,6 +90,7 @@ export default function InspectionItem({
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
+    const [showActionPlanExpanded, setShowActionPlanExpanded] = useState(false);
 
     const [manualAction, setManualAction] = useState<ManualActionData>({
         title: '',
@@ -290,10 +294,10 @@ export default function InspectionItem({
                                         {playingAudioId === m.id ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
                                     </button>
                                     <audio ref={el => { if (m.id) audioRefs.current[m.id] = el; }} src={m.file_url} onEnded={() => m.id && handleAudioEnded(m.id)} className="hidden" />
-                                    
+
                                     {/* Filename */}
                                     <span className="flex-1 truncate text-xs text-slate-600">{m.file_name || 'Áudio'}</span>
-                                    
+
                                     {/* AI Selection */}
                                     <button
                                         onClick={() => m.id && toggleAiMedia(m.id)}
@@ -302,11 +306,11 @@ export default function InspectionItem({
                                     >
                                         {selectedAiMedia.includes(m.id!) ? <CheckCircle size={14} /> : <Sparkles size={12} />}
                                     </button>
-                                    
+
                                     {/* Delete */}
                                     {onMediaDelete && canDeleteMedia(m) && (
-                                        <button 
-                                            onClick={() => m.id && onMediaDelete(m.id)} 
+                                        <button
+                                            onClick={() => m.id && onMediaDelete(m.id)}
                                             className="w-7 h-7 rounded flex items-center justify-center bg-red-50 text-red-500 border border-red-200 hover:bg-red-100"
                                         >
                                             <Trash2 size={14} />
@@ -462,6 +466,90 @@ export default function InspectionItem({
                             <button onClick={() => onAiAnalysisRequest(selectedAiMedia)} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800 flex items-center justify-center gap-1">
                                 <Sparkles size={12} /> Analisar com IA
                             </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Action Plan Inline Display */}
+            {actionPlan && (
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                    <button
+                        onClick={() => setShowActionPlanExpanded(!showActionPlanExpanded)}
+                        className="flex items-center gap-2 w-full text-left text-xs text-slate-600 hover:text-slate-800"
+                    >
+                        <CheckCircle size={14} className="text-green-500" />
+                        <span className="font-medium">Plano de Ação 5W2H</span>
+                        <ChevronDown size={14} className={`ml-auto transition-transform ${showActionPlanExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showActionPlanExpanded && (
+                        <div className="mt-2 bg-slate-50 rounded-lg p-3 text-xs space-y-2 border border-slate-200">
+                            {actionPlan.title && (
+                                <div className="font-medium text-slate-800 border-b pb-1 mb-2">{actionPlan.title}</div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                                {actionPlan.what_description && (
+                                    <div>
+                                        <span className="text-red-500 font-semibold">O quê:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.what_description}</span>
+                                    </div>
+                                )}
+                                {actionPlan.why_description && (
+                                    <div>
+                                        <span className="text-orange-500 font-semibold">Por quê:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.why_description}</span>
+                                    </div>
+                                )}
+                                {actionPlan.where_description && (
+                                    <div>
+                                        <span className="text-yellow-600 font-semibold">Onde:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.where_description}</span>
+                                    </div>
+                                )}
+                                {actionPlan.when_deadline && (
+                                    <div>
+                                        <span className="text-green-500 font-semibold">Quando:</span>
+                                        <span className="ml-1 text-slate-600">{new Date(actionPlan.when_deadline).toLocaleDateString('pt-BR')}</span>
+                                    </div>
+                                )}
+                                {actionPlan.who_responsible && (
+                                    <div>
+                                        <span className="text-blue-500 font-semibold">Quem:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.who_responsible}</span>
+                                    </div>
+                                )}
+                                {actionPlan.how_description && (
+                                    <div>
+                                        <span className="text-purple-500 font-semibold">Como:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.how_description}</span>
+                                    </div>
+                                )}
+                                {actionPlan.how_much_cost && (
+                                    <div>
+                                        <span className="text-pink-500 font-semibold">Quanto:</span>
+                                        <span className="ml-1 text-slate-600">{actionPlan.how_much_cost}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${actionPlan.priority === 'alta' ? 'bg-red-100 text-red-700' :
+                                    actionPlan.priority === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-green-100 text-green-700'
+                                    }`}>
+                                    {actionPlan.priority?.toUpperCase() || 'MÉDIA'}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] ${actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                    actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                        'bg-green-100 text-green-600'
+                                    }`}>
+                                    {actionPlan.status === 'pending' ? 'Pendente' :
+                                        actionPlan.status === 'in_progress' ? 'Em Andamento' :
+                                            actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status}
+                                </span>
+                            </div>
                         </div>
                     )}
                 </div>

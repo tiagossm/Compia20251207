@@ -40,6 +40,7 @@ export default function ChecklistForm({
   const [generatingResponse, setGeneratingResponse] = useState<Record<number, boolean>>({});
   const [itemsAnalysis, setItemsAnalysis] = useState<Record<number, string>>({});
   const [creatingAction, setCreatingAction] = useState<Record<number, boolean>>({});
+  const [itemsActionPlan, setItemsActionPlan] = useState<Record<number, any>>({});
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Media Upload State
@@ -254,7 +255,10 @@ export default function ChecklistForm({
 
       if (response.ok) {
         const data = await response.json();
-        alert(`✅ Plano de Ação 5W2H criado com sucesso! ID: ${data.action_item?.id || 'N/A'}`);
+        // Store action plan for inline display
+        if (data.action_item) {
+          setItemsActionPlan(prev => ({ ...prev, [fieldId]: data.action_item }));
+        }
       } else {
         const err = await response.json().catch(() => ({}));
         console.error("AI Action Plan failed", err);
@@ -553,13 +557,14 @@ export default function ChecklistForm({
               complianceEnabled={field.compliance_enabled !== false}
               complianceMode={field.compliance_mode || 'auto'}
               complianceStatus={complianceStatuses[field.id] as any}
-              onComplianceChange={showComplianceSelector ? (status) => updateComplianceStatus(field.id!, status) : undefined}
-              onCommentChange={(val) => updateComment(field.id!, val)}
-              onMediaUpload={(type, source) => handleMediaRequest(field.id!, type, source)}
-              onMediaDelete={(mediaId) => handleMediaDelete(field.id!, mediaId)}
-              onAiAnalysisRequest={(ids) => handleAiAnalysisRequest(field.id!, ids)}
-              onAiActionPlanRequest={(ids) => handleAiActionPlanRequest(field.id!, ids)}
-              onManualActionSave={(data) => handleManualActionSave(field.id!, data)}
+              onComplianceChange={showComplianceSelector ? (status: string) => updateComplianceStatus(field.id!, status) : undefined}
+              onCommentChange={(val: string) => updateComment(field.id!, val)}
+              onMediaUpload={(type: 'image' | 'audio' | 'video' | 'file', source?: 'camera' | 'upload') => handleMediaRequest(field.id!, type, source)}
+              onMediaDelete={(mediaId: number) => handleMediaDelete(field.id!, mediaId)}
+              onAiAnalysisRequest={(ids: number[]) => handleAiAnalysisRequest(field.id!, ids)}
+              onAiActionPlanRequest={(ids: number[]) => handleAiActionPlanRequest(field.id!, ids)}
+              onManualActionSave={(data: { title: string; priority: string; what_description?: string }) => handleManualActionSave(field.id!, data)}
+              actionPlan={itemsActionPlan[field.id] || null}
               isAiAnalyzing={generatingResponse[field.id]}
               isCreatingAction={creatingAction[field.id]}
               isRecording={recording === 'audio' && activeMediaFieldId.current === field.id}
