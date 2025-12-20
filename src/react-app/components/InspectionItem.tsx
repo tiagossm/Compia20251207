@@ -161,7 +161,7 @@ export default function InspectionItem({
     const docMedia = media.filter(m => m.media_type === 'document' || (m.media_type as string) === 'file');
 
     // Check if media has valid ID for deletion
-    const canDeleteMedia = (m: InspectionMediaType) => m.id && m.id > 0 && m.id < 1000000000000;
+    const canDeleteMedia = (m: InspectionMediaType) => m.id != null && m.id > 0;
 
     return (
         <div className="py-3 px-2 border-b border-slate-100 last:border-0">
@@ -243,33 +243,34 @@ export default function InspectionItem({
                 <div className="mb-2 space-y-1">
                     {/* Images */}
                     {imageMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-2">
                             {imageMedia.map((m, idx) => (
-                                <div key={m.id} className="relative group">
+                                <div key={m.id} className="relative">
+                                    {/* Image thumbnail */}
                                     <div
-                                        className={`w-10 h-10 rounded border cursor-pointer overflow-hidden
-                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500 ring-1 ring-blue-400' : 'border-slate-200'}`}
+                                        className={`w-12 h-12 rounded-lg border-2 cursor-pointer overflow-hidden shadow-sm
+                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500' : 'border-slate-200'}`}
                                         onClick={() => setViewingImage({ url: m.file_url, index: idx })}
                                     >
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
                                     </div>
-                                    {/* AI Selection Checkbox */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); m.id && toggleAiMedia(m.id); }}
-                                        className={`absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border
-                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-400 border-slate-300'}`}
-                                    >
-                                        {selectedAiMedia.includes(m.id!) ? '✓' : 'IA'}
-                                    </button>
-                                    {/* Delete Button */}
+                                    {/* Delete Button - always visible */}
                                     {onMediaDelete && canDeleteMedia(m) && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
-                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600"
                                         >
-                                            <X size={10} />
+                                            <X size={12} />
                                         </button>
                                     )}
+                                    {/* AI Selection - checkbox style */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); m.id && toggleAiMedia(m.id); }}
+                                        className={`absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded flex items-center justify-center shadow-sm border
+                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-400 border-slate-300 hover:border-blue-400'}`}
+                                    >
+                                        {selectedAiMedia.includes(m.id!) ? <CheckCircle size={12} /> : <Sparkles size={10} />}
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -277,27 +278,38 @@ export default function InspectionItem({
 
                     {/* Audio */}
                     {audioMedia.length > 0 && (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                             {audioMedia.map((m) => (
-                                <div key={m.id} className={`flex items-center gap-2 p-1.5 rounded border text-xs
-                                    ${selectedAiMedia.includes(m.id!) ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-200'}`}>
+                                <div key={m.id} className={`flex items-center gap-2 p-2 rounded-lg border bg-white shadow-sm
+                                    ${selectedAiMedia.includes(m.id!) ? 'border-blue-400' : 'border-slate-200'}`}>
+                                    {/* Play/Pause button */}
                                     <button
                                         onClick={() => m.id && toggleAudio(m.id)}
-                                        className="w-6 h-6 rounded-full bg-slate-600 text-white flex items-center justify-center"
+                                        className="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-slate-800 flex-shrink-0"
                                     >
-                                        {playingAudioId === m.id ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
+                                        {playingAudioId === m.id ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
                                     </button>
                                     <audio ref={el => { if (m.id) audioRefs.current[m.id] = el; }} src={m.file_url} onEnded={() => m.id && handleAudioEnded(m.id)} className="hidden" />
-                                    <span className="flex-1 truncate text-slate-600">{m.file_name || 'Áudio'}</span>
+                                    
+                                    {/* Filename */}
+                                    <span className="flex-1 truncate text-xs text-slate-600">{m.file_name || 'Áudio'}</span>
+                                    
+                                    {/* AI Selection */}
                                     <button
                                         onClick={() => m.id && toggleAiMedia(m.id)}
-                                        className={`px-1.5 py-0.5 rounded text-[10px] ${selectedAiMedia.includes(m.id!) ? 'bg-slate-600 text-white' : 'bg-slate-200 text-slate-600'}`}
+                                        className={`w-7 h-7 rounded flex items-center justify-center border
+                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-blue-400'}`}
                                     >
-                                        {selectedAiMedia.includes(m.id!) ? '✓' : 'Sel'}
+                                        {selectedAiMedia.includes(m.id!) ? <CheckCircle size={14} /> : <Sparkles size={12} />}
                                     </button>
+                                    
+                                    {/* Delete */}
                                     {onMediaDelete && canDeleteMedia(m) && (
-                                        <button onClick={() => m.id && onMediaDelete(m.id)} className="text-slate-400 hover:text-red-500">
-                                            <Trash2 size={12} />
+                                        <button 
+                                            onClick={() => m.id && onMediaDelete(m.id)} 
+                                            className="w-7 h-7 rounded flex items-center justify-center bg-red-50 text-red-500 border border-red-200 hover:bg-red-100"
+                                        >
+                                            <Trash2 size={14} />
                                         </button>
                                     )}
                                 </div>
