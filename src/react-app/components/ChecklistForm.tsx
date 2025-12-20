@@ -118,7 +118,12 @@ export default function ChecklistForm({
     } else if (type === 'audio') {
       if (source === 'camera') {
         if (recording === 'audio') {
-          stopRecording();
+          // Stop recording and upload the blob
+          const blob = await stopRecording();
+          if (blob && fieldId) {
+            const audioFile = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+            await uploadFile(audioFile, fieldId, 'audio');
+          }
         } else {
           activeMediaFieldId.current = fieldId;
           await startAudioRecording();
