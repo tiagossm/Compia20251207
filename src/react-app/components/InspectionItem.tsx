@@ -83,6 +83,7 @@ export default function InspectionItem({
     const [showActionForm, setShowActionForm] = useState(false);
     const [actionMode, setActionMode] = useState<'manual' | 'ai'>('manual');
     const [selectedAiMedia, setSelectedAiMedia] = useState<number[]>([]);
+    const [viewingImage, setViewingImage] = useState<{ url: string; index: number } | null>(null);
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
@@ -243,24 +244,28 @@ export default function InspectionItem({
                     {/* Images */}
                     {imageMedia.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                            {imageMedia.map((m) => (
+                            {imageMedia.map((m, idx) => (
                                 <div key={m.id} className="relative group">
                                     <div
                                         className={`w-10 h-10 rounded border cursor-pointer overflow-hidden
-                                            ${selectedAiMedia.includes(m.id!) ? 'border-slate-600 ring-1 ring-slate-400' : 'border-slate-200'}`}
-                                        onClick={() => m.id && toggleAiMedia(m.id)}
+                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500 ring-1 ring-blue-400' : 'border-slate-200'}`}
+                                        onClick={() => setViewingImage({ url: m.file_url, index: idx })}
                                     >
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
-                                        {selectedAiMedia.includes(m.id!) && (
-                                            <div className="absolute inset-0 bg-slate-900/30 flex items-center justify-center">
-                                                <CheckCircle size={12} className="text-white" />
-                                            </div>
-                                        )}
                                     </div>
+                                    {/* AI Selection Checkbox */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); m.id && toggleAiMedia(m.id); }}
+                                        className={`absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border
+                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-400 border-slate-300'}`}
+                                    >
+                                        {selectedAiMedia.includes(m.id!) ? '✓' : 'IA'}
+                                    </button>
+                                    {/* Delete Button */}
                                     {onMediaDelete && canDeleteMedia(m) && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
-                                            className="absolute -top-1 -right-1 w-4 h-4 bg-slate-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <X size={10} />
                                         </button>
@@ -437,12 +442,66 @@ export default function InspectionItem({
                         <div className="bg-white rounded p-1.5 text-xs text-slate-700 whitespace-pre-line border border-slate-100">{item.aiAnalysis}</div>
                     ) : (
                         <div>
-                            <p className="text-[10px] text-slate-500 mb-1">{selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s) selecionada(s)` : 'Clique nas mídias para selecionar'}</p>
-                            <button onClick={() => onAiAnalysisRequest(selectedAiMedia)} disabled={selectedAiMedia.length === 0} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded disabled:opacity-50 flex items-center justify-center gap-1">
-                                <Sparkles size={12} /> Analisar
+                            <p className="text-[10px] text-slate-500 mb-1">
+                                {selectedAiMedia.length > 0
+                                    ? `${selectedAiMedia.length} mídia(s) selecionada(s)`
+                                    : 'Analisa a resposta (selecione mídias para incluí-las)'}
+                            </p>
+                            <button onClick={() => onAiAnalysisRequest(selectedAiMedia)} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800 flex items-center justify-center gap-1">
+                                <Sparkles size={12} /> Analisar com IA
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Image Viewer Modal */}
+            {viewingImage && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewingImage(null)}>
+                    <button
+                        onClick={() => setViewingImage(null)}
+                        className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                    >
+                        <X size={24} />
+                    </button>
+
+                    {/* Navigation */}
+                    {imageMedia.length > 1 && (
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const prev = viewingImage.index === 0 ? imageMedia.length - 1 : viewingImage.index - 1;
+                                    setViewingImage({ url: imageMedia[prev].file_url, index: prev });
+                                }}
+                                className="absolute left-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                            >
+                                ←
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const next = viewingImage.index === imageMedia.length - 1 ? 0 : viewingImage.index + 1;
+                                    setViewingImage({ url: imageMedia[next].file_url, index: next });
+                                }}
+                                className="absolute right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                            >
+                                →
+                            </button>
+                        </>
+                    )}
+
+                    <img
+                        src={viewingImage.url}
+                        className="max-w-[90vw] max-h-[90vh] object-contain"
+                        alt=""
+                        onClick={(e) => e.stopPropagation()}
+                    />
+
+                    {/* Counter */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+                        {viewingImage.index + 1} / {imageMedia.length}
+                    </div>
                 </div>
             )}
         </div>
