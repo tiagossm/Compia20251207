@@ -35,7 +35,7 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
             formData.append('inspection_item_id', String(fieldId));
             formData.append('media_type', type);
 
-            const response = await fetchWithAuth('/api/media/upload', {
+            const response = await fetchWithAuth(`/api/media/${inspectionId}/media/upload`, {
                 method: 'POST',
                 body: formData,
                 headers: {} // Let browser set Content-Type for FormData
