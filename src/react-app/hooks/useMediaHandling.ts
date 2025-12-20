@@ -29,16 +29,28 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
 
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('inspection_id', String(inspectionId));
-            formData.append('inspection_item_id', String(fieldId));
-            formData.append('media_type', type);
+            // Convert file to base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
 
+            // Send JSON with base64 data (matching backend expectations)
             const response = await fetchWithAuth(`/api/media/${inspectionId}/media/upload`, {
                 method: 'POST',
-                body: formData,
-                headers: {} // Let browser set Content-Type for FormData
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    inspection_item_id: fieldId,
+                    media_type: type,
+                    file_name: file.name,
+                    file_data: base64,
+                    file_size: file.size,
+                    mime_type: file.type
+                })
             });
 
             if (response.ok) {
