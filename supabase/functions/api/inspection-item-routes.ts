@@ -370,7 +370,7 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
 
     try {
         const body = await c.req.json();
-        const { field_name, field_type, response_value, pre_analysis, media_data, inspection_id } = body;
+        const { field_name, field_type, response_value, comment, compliance_status, pre_analysis, media_data, inspection_id } = body;
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -418,7 +418,8 @@ CONTEXTO DA INSPEÇÃO:
 - Local/Setor: ${item.location}
 - Item Inspecionado: ${item.inspection_title} > ${field_name}
 - Resposta do Inspetor: ${response_value === false ? 'NÃO CONFORME' : response_value === true ? 'CONFORME' : response_value || 'Não informado'}
-- Status da Conformidade: ${complianceStatus}
+- Comentário/Observação do Inspetor: ${comment || 'Nenhuma observação'}
+- Status da Conformidade: ${compliance_status === 'non_compliant' ? 'NÃO CONFORME' : compliance_status === 'compliant' ? 'CONFORME' : complianceStatus}
 - Análise Prévia (Evidências): ${pre_analysis || 'Nenhuma observação prévia'}
 - Nível de Risco Identificado: ${riskLevel}
 
@@ -511,7 +512,20 @@ Responda APENAS em JSON no seguinte formato:
         return c.json({
             success: true,
             action: actionData,
-            action_item: actionItemId ? { id: actionItemId } : null
+            action_item: actionItemId ? {
+                id: actionItemId,
+                title: field_name,
+                what_description: actionData.what || '',
+                why_description: actionData.why || '',
+                where_description: actionData.where || item.location,
+                when_deadline: deadline?.toISOString().split('T')[0] || null,
+                who_responsible: actionData.who || 'A definir',
+                how_description: actionData.how || '',
+                how_much_cost: actionData.how_much || 'A orçar',
+                priority: actionData.priority || 'media',
+                status: 'pending',
+                is_ai_generated: true
+            } : null
         });
 
     } catch (error) {

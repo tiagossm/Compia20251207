@@ -242,12 +242,17 @@ export default function ChecklistForm({
         file_name: m.file_name
       }));
 
+      const field = fields.find(f => f.id === fieldId);
+
       const response = await fetchWithAuth(`/api/inspection-items/${fieldId}/create-action`, {
         method: 'POST',
         body: JSON.stringify({
           inspection_id: inspectionId,
-          field_name: fields.find(f => f.id === fieldId)?.field_name || '',
+          field_name: field?.field_name || '',
+          field_type: field?.field_type || 'text',
           response_value: responses[fieldId] || '',
+          comment: itemsComments[fieldId] || '',
+          compliance_status: complianceStatuses[fieldId] || 'unanswered',
           pre_analysis: itemsAnalysis[fieldId] || null,
           media_data: mediaData
         })
