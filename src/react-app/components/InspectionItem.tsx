@@ -233,32 +233,38 @@ export default function InspectionItem({
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('compliant')}
+                                title="Conforme"
                                 className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'compliant'
                                     ? 'bg-green-600 border-green-600 text-white font-medium'
                                     : 'border-slate-200 text-slate-500 hover:border-green-300 hover:bg-green-50'
                                     }`}
                             >
                                 <ThumbsUp size={12} />
+                                <span>C</span>
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('non_compliant')}
+                                title="Não Conforme"
                                 className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'non_compliant'
                                     ? 'bg-red-600 border-red-600 text-white font-medium'
                                     : 'border-slate-200 text-slate-500 hover:border-red-300 hover:bg-red-50'
                                     }`}
                             >
                                 <ThumbsDown size={12} />
+                                <span>NC</span>
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('not_applicable')}
+                                title="Não Aplicável"
                                 className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'not_applicable'
                                     ? 'bg-slate-600 border-slate-600 text-white font-medium'
                                     : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                             >
                                 <Minus size={12} />
+                                <span>N/A</span>
                             </button>
                         </div>
                     </div>

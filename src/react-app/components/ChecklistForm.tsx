@@ -470,26 +470,26 @@ export default function ChecklistForm({
 
       case 'date':
         return (
-          <div className="relative">
-            <Calendar className="absolute left-0 top-3 text-slate-400 w-5 h-5" />
+          <div className="relative inline-flex items-center">
+            <Calendar className="absolute left-0 text-slate-400 w-5 h-5" />
             <input
               type="date"
               value={value || ''}
               onChange={e => update(e.target.value)}
-              className="w-full border-b border-slate-200 py-3 pl-8 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent"
+              className="border-b border-slate-200 py-2 pl-8 pr-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[180px]"
             />
           </div>
         );
 
       case 'time':
         return (
-          <div className="relative">
-            <Clock className="absolute left-0 top-3 text-slate-400 w-5 h-5" />
+          <div className="relative inline-flex items-center">
+            <Clock className="absolute left-0 text-slate-400 w-5 h-5" />
             <input
               type="time"
               value={value || ''}
               onChange={e => update(e.target.value)}
-              className="w-full border-b border-slate-200 py-3 pl-8 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent"
+              className="border-b border-slate-200 py-2 pl-8 pr-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[140px]"
             />
           </div>
         );
