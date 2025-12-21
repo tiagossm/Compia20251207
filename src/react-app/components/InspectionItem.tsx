@@ -19,7 +19,10 @@ import {
     ThumbsUp,
     ThumbsDown,
     Minus,
-    ChevronDown
+    ChevronDown,
+    Edit3,
+    ExternalLink,
+    EyeOff
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -48,6 +51,8 @@ interface InspectionItemProps {
     onAiAnalysisRequest: (selectedMediaIds: number[]) => void;
     onAiActionPlanRequest: (selectedMediaIds: number[]) => void;
     onManualActionSave?: (actionData: ManualActionData) => void;
+    onActionPlanEdit?: (actionPlan: any) => void;
+    onActionPlanDelete?: (actionPlanId: number) => void;
     actionPlan?: any;
     isAiAnalyzing?: boolean;
     isCreatingAction?: boolean;
@@ -74,6 +79,8 @@ export default function InspectionItem({
     onAiAnalysisRequest,
     onAiActionPlanRequest,
     onManualActionSave,
+    onActionPlanEdit,
+    onActionPlanDelete,
     actionPlan,
     isAiAnalyzing = false,
     isCreatingAction = false,
@@ -91,6 +98,7 @@ export default function InspectionItem({
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
     const [showActionPlanExpanded, setShowActionPlanExpanded] = useState(false);
+    const [hideActionPlan, setHideActionPlan] = useState(false);
 
     const [manualAction, setManualAction] = useState<ManualActionData>({
         title: '',
@@ -471,83 +479,101 @@ export default function InspectionItem({
                 </div>
             )}
 
-            {/* Action Plan Inline Display */}
-            {actionPlan && (
+            {/* Action Plan Inline Display - Compact & Minimal */}
+            {actionPlan && !hideActionPlan && (
                 <div className="mt-2 border-t border-slate-100 pt-2">
-                    <button
-                        onClick={() => setShowActionPlanExpanded(!showActionPlanExpanded)}
-                        className="flex items-center gap-2 w-full text-left text-xs text-slate-600 hover:text-slate-800"
-                    >
-                        <CheckCircle size={14} className="text-green-500" />
-                        <span className="font-medium">Plano de Ação 5W2H</span>
-                        <ChevronDown size={14} className={`ml-auto transition-transform ${showActionPlanExpanded ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showActionPlanExpanded && (
-                        <div className="mt-2 bg-slate-50 rounded-lg p-3 text-xs space-y-2 border border-slate-200">
-                            {actionPlan.title && (
-                                <div className="font-medium text-slate-800 border-b pb-1 mb-2">{actionPlan.title}</div>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2">
-                                {actionPlan.what_description && (
-                                    <div>
-                                        <span className="text-red-500 font-semibold">O quê:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.what_description}</span>
-                                    </div>
-                                )}
-                                {actionPlan.why_description && (
-                                    <div>
-                                        <span className="text-orange-500 font-semibold">Por quê:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.why_description}</span>
-                                    </div>
-                                )}
-                                {actionPlan.where_description && (
-                                    <div>
-                                        <span className="text-yellow-600 font-semibold">Onde:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.where_description}</span>
-                                    </div>
-                                )}
-                                {actionPlan.when_deadline && (
-                                    <div>
-                                        <span className="text-green-500 font-semibold">Quando:</span>
-                                        <span className="ml-1 text-slate-600">{new Date(actionPlan.when_deadline).toLocaleDateString('pt-BR')}</span>
-                                    </div>
-                                )}
-                                {actionPlan.who_responsible && (
-                                    <div>
-                                        <span className="text-blue-500 font-semibold">Quem:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.who_responsible}</span>
-                                    </div>
-                                )}
-                                {actionPlan.how_description && (
-                                    <div>
-                                        <span className="text-purple-500 font-semibold">Como:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.how_description}</span>
-                                    </div>
-                                )}
-                                {actionPlan.how_much_cost && (
-                                    <div>
-                                        <span className="text-pink-500 font-semibold">Quanto:</span>
-                                        <span className="ml-1 text-slate-600">{actionPlan.how_much_cost}</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${actionPlan.priority === 'alta' ? 'bg-red-100 text-red-700' :
+                    {/* Header compacto */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowActionPlanExpanded(!showActionPlanExpanded)}
+                            className="flex items-center gap-1.5 flex-1 text-left text-xs text-slate-600 hover:text-slate-800"
+                        >
+                            <Zap size={12} className="text-amber-500" />
+                            <span className="font-medium truncate">{actionPlan.title || 'Plano de Ação'}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${actionPlan.priority === 'alta' || actionPlan.priority === 'critica' ? 'bg-red-100 text-red-700' :
                                     actionPlan.priority === 'media' ? 'bg-yellow-100 text-yellow-700' :
                                         'bg-green-100 text-green-700'
-                                    }`}>
-                                    {actionPlan.priority?.toUpperCase() || 'MÉDIA'}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded text-[10px] ${actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
-                                    actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                        'bg-green-100 text-green-600'
+                                }`}>
+                                {actionPlan.priority?.toUpperCase() || 'MÉDIA'}
+                            </span>
+                            <ChevronDown size={12} className={`transition-transform ${showActionPlanExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* Action buttons - always visible */}
+                        <div className="flex items-center gap-0.5">
+                            {onActionPlanEdit && (
+                                <button
+                                    onClick={() => onActionPlanEdit(actionPlan)}
+                                    className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded"
+                                    title="Editar"
+                                >
+                                    <Edit3 size={12} />
+                                </button>
+                            )}
+                            <a
+                                href={`/action-plans${actionPlan.id ? `?highlight=${actionPlan.id}` : ''}`}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                title="Ver na página de Planos"
+                            >
+                                <ExternalLink size={12} />
+                            </a>
+                            <button
+                                onClick={() => setHideActionPlan(true)}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                title="Ocultar"
+                            >
+                                <EyeOff size={12} />
+                            </button>
+                            {onActionPlanDelete && actionPlan.id && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Excluir este plano de ação?')) {
+                                            onActionPlanDelete(actionPlan.id);
+                                        }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                    title="Excluir"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Expanded content - mais compacto */}
+                    {showActionPlanExpanded && (
+                        <div className="mt-1.5 pl-4 text-[11px] space-y-1 text-slate-600">
+                            {actionPlan.what_description && (
+                                <div><span className="text-red-500 font-medium">O quê:</span> {actionPlan.what_description}</div>
+                            )}
+                            {(actionPlan.why_reason || actionPlan.why_description) && (
+                                <div><span className="text-orange-500 font-medium">Por quê:</span> {actionPlan.why_reason || actionPlan.why_description}</div>
+                            )}
+                            {(actionPlan.where_location || actionPlan.where_description) && (
+                                <div><span className="text-yellow-600 font-medium">Onde:</span> {actionPlan.where_location || actionPlan.where_description}</div>
+                            )}
+                            {actionPlan.when_deadline && (
+                                <div><span className="text-green-600 font-medium">Quando:</span> {new Date(actionPlan.when_deadline).toLocaleDateString('pt-BR')}</div>
+                            )}
+                            {actionPlan.who_responsible && (
+                                <div><span className="text-blue-500 font-medium">Quem:</span> {actionPlan.who_responsible}</div>
+                            )}
+                            {(actionPlan.how_method || actionPlan.how_description) && (
+                                <div><span className="text-purple-500 font-medium">Como:</span> {actionPlan.how_method || actionPlan.how_description}</div>
+                            )}
+                            {actionPlan.how_much_cost && (
+                                <div><span className="text-pink-500 font-medium">Quanto:</span> {actionPlan.how_much_cost}</div>
+                            )}
+
+                            {/* Status badge */}
+                            <div className="pt-1 flex items-center gap-2">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                            'bg-green-100 text-green-600'
                                     }`}>
                                     {actionPlan.status === 'pending' ? 'Pendente' :
                                         actionPlan.status === 'in_progress' ? 'Em Andamento' :
-                                            actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status}
+                                            actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status || 'Pendente'}
                                 </span>
                             </div>
                         </div>
