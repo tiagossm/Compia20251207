@@ -1181,7 +1181,7 @@ export default function InspectionDetail() {
 
                       if (Object.keys(responseUpdates).length === 0) return;
 
-                      const response = await fetch(`/api/inspections/${id}/template-responses`, {
+                      const response = await fetchWithAuth(`/api/inspections/${id}/template-responses`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
