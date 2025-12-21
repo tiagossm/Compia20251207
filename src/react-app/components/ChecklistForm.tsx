@@ -165,7 +165,7 @@ export default function ChecklistForm({
 
   const handleMediaDelete = async (fieldId: number, mediaId: number) => {
     try {
-      const response = await fetchWithAuth(`/api/media/${mediaId}`, {
+      const response = await fetchWithAuth(`/api/media/${inspectionId}/media/${mediaId}`, {
         method: 'DELETE'
       });
 
