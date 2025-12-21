@@ -9,8 +9,6 @@ import {
     X,
     FileText,
     Bot,
-    Play,
-    Pause,
     Trash2,
     Image,
     FileAudio,
@@ -97,7 +95,6 @@ export default function InspectionItem({
     const [actionMode, setActionMode] = useState<'manual' | 'ai'>('manual');
     const [selectedAiMedia,] = useState<number[]>([]);
     const [viewingImage, setViewingImage] = useState<{ url: string; index: number } | null>(null);
-    const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
     const [showActionPlanExpanded, setShowActionPlanExpanded] = useState(false);
@@ -127,7 +124,6 @@ export default function InspectionItem({
         what_description: ''
     });
 
-    const audioRefs = useRef<{ [key: number]: HTMLAudioElement | null }>({});
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const adjustTextareaHeight = () => {
@@ -187,23 +183,6 @@ export default function InspectionItem({
             setManualAction({ title: '', priority: 'media', what_description: '' });
             setShowActionForm(false);
         }
-    };
-
-    const toggleAudio = (mediaId: number) => {
-        const audio = audioRefs.current[mediaId];
-        if (!audio) return;
-        if (playingAudioId === mediaId) {
-            audio.pause();
-            setPlayingAudioId(null);
-        } else {
-            Object.values(audioRefs.current).forEach(a => a?.pause());
-            audio.play();
-            setPlayingAudioId(mediaId);
-        }
-    };
-
-    const handleAudioEnded = (mediaId: number) => {
-        if (playingAudioId === mediaId) setPlayingAudioId(null);
     };
 
     const handleToggleAi = () => {
@@ -313,44 +292,37 @@ export default function InspectionItem({
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
                                     </div>
                                     {/* Delete Button - always visible */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete?.(m.id); }}
-                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Excluir"
-                                    >
-                                        <X size={10} />
-                                    </button>
+                                    {onMediaDelete && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); if (m.id) onMediaDelete(m.id); }}
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600"
+                                            title="Excluir"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Audio - Compact inline */}
+                    {/* Audio - Native player */}
                     {audioMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 items-center">
-                            <span className="text-[9px] text-slate-400 font-medium">🎤 {audioMedia.length}</span>
+                        <div className="flex flex-wrap gap-2">
                             {audioMedia.map((m) => (
-                                <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 rounded border bg-white border-slate-200 hover:border-slate-300">
-                                    {/* Play/Pause */}
-                                    <button
-                                        onClick={() => m.id && toggleAudio(m.id)}
-                                        className="w-6 h-6 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-slate-800 flex-shrink-0"
-                                    >
-                                        {playingAudioId === m.id ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
-                                    </button>
-                                    <audio ref={el => { if (m.id) audioRefs.current[m.id] = el; }} src={m.file_url} onEnded={() => m.id && handleAudioEnded(m.id)} className="hidden" />
-
-                                    {/* Filename - truncated */}
-                                    <span className="truncate text-[10px] text-slate-600 max-w-[100px]">{m.file_name || 'Áudio'}</span>
-
-                                    {/* Delete */}
-                                    <button
-                                        onClick={() => m.id && onMediaDelete?.(m.id)}
-                                        className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
+                                <div key={m.id} className="relative flex items-center gap-2 px-2 py-1.5 rounded-lg border bg-white border-slate-200 min-w-[180px]">
+                                    {/* Delete button */}
+                                    {onMediaDelete && (
+                                        <button
+                                            onClick={() => { if (m.id) onMediaDelete(m.id); }}
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                                            title="Excluir"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    )}
+                                    <Mic size={14} className="text-slate-400 flex-shrink-0" />
+                                    <audio controls src={m.file_url} className="h-7 w-full" style={{ maxWidth: '150px' }} />
                                 </div>
                             ))}
                         </div>
@@ -383,13 +355,15 @@ export default function InspectionItem({
                                     </button>
 
                                     {/* Delete */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete?.(m.id); }}
-                                        className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
+                                    {onMediaDelete && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); if (m.id) onMediaDelete(m.id); }}
+                                            className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
