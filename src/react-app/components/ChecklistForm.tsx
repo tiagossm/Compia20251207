@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChecklistField, FieldResponse } from '@/shared/checklist-types';
 import { calculateAutoCompliance } from '@/shared/compliance-utils';
 import { useMediaHandling } from '@/react-app/hooks/useMediaHandling';
@@ -8,7 +8,7 @@ import InspectionItem from './InspectionItem';
 import CameraModal from './CameraModal';
 import {
   Star, Calendar, Clock,
-  Upload, CheckCircle, ThumbsUp, ThumbsDown
+  Upload, CheckCircle, ThumbsUp, ThumbsDown, Save, Loader2
 } from 'lucide-react';
 
 interface ChecklistFormProps {
@@ -18,7 +18,7 @@ interface ChecklistFormProps {
   readonly?: boolean;
   inspectionId?: number;
   inspectionItems?: any[];
-  onAutoSave?: (responses: Record<number, any>, comments: Record<number, string>, complianceStatuses?: Record<number, any>) => void;
+  onAutoSave?: (responses: Record<number, any>, comments: Record<number, string>, complianceStatuses?: Record<number, any>) => Promise<void> | void;
   onSaveSuccess?: () => void;
   showComplianceSelector?: boolean;
 }
@@ -43,10 +43,50 @@ export default function ChecklistForm({
   const [itemsActionPlan, setItemsActionPlan] = useState<Record<number, any>>({});
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
+  // Auto-save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Media Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeMediaFieldId = useRef<number | null>(null);
   const activeMediaType = useRef<string>('image');
+
+  // Debounced auto-save function
+  const triggerAutoSave = useCallback((newResponses: Record<number, any>, newComments: Record<number, string>, newStatuses: Record<number, any>) => {
+    if (!onAutoSave || !autoSaveEnabled) return;
+
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce: wait 500ms before saving
+    saveTimeoutRef.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      try {
+        await onAutoSave(newResponses, newComments, newStatuses);
+        setSaveStatus('saved');
+        setLastSaveTime(new Date());
+        // Reset to idle after 3 seconds
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        setSaveStatus('idle');
+      }
+    }, 500);
+  }, [onAutoSave, autoSaveEnabled]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const updateResponse = (fieldId: number, value: any) => {
     const field = fields.find(f => f.id === fieldId);
@@ -60,14 +100,14 @@ export default function ChecklistForm({
         if (autoStatus) {
           setComplianceStatuses(prevStatus => {
             const nextStatus = { ...prevStatus, [fieldId]: autoStatus };
-            if (onAutoSave) onAutoSave(next, itemsComments, nextStatus);
+            triggerAutoSave(next, itemsComments, nextStatus);
             return nextStatus;
           });
           return next;
         }
       }
 
-      if (onAutoSave) onAutoSave(next, itemsComments, complianceStatuses);
+      triggerAutoSave(next, itemsComments, complianceStatuses);
       return next;
     });
   };
@@ -75,7 +115,7 @@ export default function ChecklistForm({
   const updateComment = (fieldId: number, comment: string) => {
     setItemsComments(prev => {
       const next = { ...prev, [fieldId]: comment };
-      if (onAutoSave) onAutoSave(responses, next, complianceStatuses);
+      triggerAutoSave(responses, next, complianceStatuses);
       return next;
     });
   };
@@ -83,7 +123,7 @@ export default function ChecklistForm({
   const updateComplianceStatus = (fieldId: number, status: string) => {
     setComplianceStatuses(prev => {
       const next = { ...prev, [fieldId]: status };
-      if (onAutoSave) onAutoSave(responses, itemsComments, next);
+      triggerAutoSave(responses, itemsComments, next);
       return next;
     });
   };
@@ -529,6 +569,40 @@ export default function ChecklistForm({
 
   return (
     <>
+      {/* Auto-save toggle bar */}
+      <div className="flex items-center justify-between mb-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoSaveEnabled}
+            onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm text-slate-600">Auto-salvar</span>
+        </label>
+
+        {/* Save status indicator */}
+        <div className="flex items-center gap-1.5 text-xs">
+          {saveStatus === 'saving' && (
+            <>
+              <Loader2 size={14} className="animate-spin text-blue-500" />
+              <span className="text-blue-500">Salvando...</span>
+            </>
+          )}
+          {saveStatus === 'saved' && lastSaveTime && (
+            <>
+              <Save size={14} className="text-green-500" />
+              <span className="text-green-600">
+                Salvo às {lastSaveTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </>
+          )}
+          {saveStatus === 'idle' && !autoSaveEnabled && (
+            <span className="text-slate-400">Auto-save desativado</span>
+          )}
+        </div>
+      </div>
+
       {/* Hidden File Input for Media Actions */}
       <input
         type="file"
