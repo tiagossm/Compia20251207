@@ -1974,6 +1974,19 @@ inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (
       return c.json({ error: "Inspeção não encontrada" }, 404);
     }
 
+    // Validate inspection_item_id exists if provided
+    let validItemId = null;
+    if (inspection_item_id) {
+      const itemExists = await env.DB.prepare(`
+        SELECT id FROM inspection_items WHERE id = ? AND inspection_id = ?
+      `).bind(inspection_item_id, inspectionId).first();
+
+      if (itemExists) {
+        validItemId = inspection_item_id;
+      }
+      // If item doesn't exist, we'll use null instead of failing with FK error
+    }
+
     const file_url = file_data;
     const now = new Date().toISOString();
 
@@ -1985,7 +1998,7 @@ inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (
       RETURNING id
     `).bind(
       inspectionId,
-      inspection_item_id || null,
+      validItemId,
       media_type,
       file_name,
       file_url,
