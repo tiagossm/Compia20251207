@@ -659,88 +659,142 @@ export default function InspectionItem({
                         </div>
                     </div>
 
-                    {/* Expanded content - editável */}
+                    {/* Expanded content - All editable, neutral colors */}
                     {showActionPlanExpanded && (
-                        <div className="mt-1.5 pl-4 text-[11px] space-y-1.5 text-slate-600">
+                        <div className="mt-2 pl-3 text-[11px] space-y-2 text-slate-600 border-l-2 border-slate-200">
+                            {/* Reference to question */}
+                            <div className="text-[10px] text-slate-400 italic">
+                                Ref: {index !== undefined ? `#${index + 1} - ` : ''}{item.description}
+                            </div>
+
                             {/* Status indicator */}
                             {actionPlan.status === 'suggested' && (
-                                <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded text-[10px]">
+                                <div className="flex items-center gap-1 text-slate-500 bg-slate-50 px-2 py-1 rounded text-[10px]">
                                     <Zap size={10} />
-                                    <span>Sugestão da IA - defina os campos abaixo</span>
+                                    <span>Sugestão IA - edite os campos conforme necessário</span>
                                 </div>
                             )}
 
-                            {actionPlan.what_description && (
-                                <div><span className="text-red-500 font-medium">O quê:</span> {actionPlan.what_description}</div>
-                            )}
-                            {(actionPlan.why_reason || actionPlan.why_description) && (
-                                <div><span className="text-orange-500 font-medium">Por quê:</span> {actionPlan.why_reason || actionPlan.why_description}</div>
-                            )}
-                            {(actionPlan.where_location || actionPlan.where_description) && (
-                                <div><span className="text-yellow-600 font-medium">Onde:</span> {actionPlan.where_location || actionPlan.where_description}</div>
-                            )}
+                            {/* Editable: What */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">O quê:</label>
+                                <textarea
+                                    defaultValue={actionPlan.what_description || editedFields.what_description || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, what_description: e.target.value }))}
+                                    placeholder="Descreva a ação necessária..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Editable: Why */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">Por quê:</label>
+                                <textarea
+                                    defaultValue={actionPlan.why_reason || actionPlan.why_description || editedFields.why_reason || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, why_reason: e.target.value }))}
+                                    placeholder="Justificativa da ação..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Editable: Where (read-only, from location) */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Onde:</label>
+                                <span className="text-slate-600">{actionPlan.where_location || actionPlan.where_description || 'Não especificado'}</span>
+                            </div>
 
                             {/* Editable: When */}
-                            <div className="flex items-center gap-1">
-                                <span className="text-green-600 font-medium">Quando:</span>
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quando:</label>
                                 <input
                                     type="date"
                                     defaultValue={actionPlan.when_deadline || editedFields.when_deadline || ''}
                                     onChange={(e) => setEditedFields(prev => ({ ...prev, when_deadline: e.target.value }))}
-                                    className="px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-green-500 outline-none"
+                                    className="px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
                                 />
                             </div>
 
                             {/* Editable: Who */}
-                            <div className="flex items-center gap-1">
-                                <span className="text-blue-500 font-medium">Quem:</span>
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quem:</label>
                                 <input
                                     type="text"
-                                    defaultValue={actionPlan.who_responsible || editedFields.who_responsible || 'A definir'}
+                                    defaultValue={actionPlan.who_responsible || editedFields.who_responsible || ''}
                                     onChange={(e) => setEditedFields(prev => ({ ...prev, who_responsible: e.target.value }))}
-                                    placeholder="Responsável"
-                                    className="flex-1 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                    placeholder="Responsável pela ação"
+                                    className="flex-1 px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
                                 />
                             </div>
 
-                            {(actionPlan.how_method || actionPlan.how_description) && (
-                                <div><span className="text-purple-500 font-medium">Como:</span> {actionPlan.how_method || actionPlan.how_description}</div>
-                            )}
+                            {/* Editable: How */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">Como:</label>
+                                <textarea
+                                    defaultValue={actionPlan.how_method || actionPlan.how_description || editedFields.how_method || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, how_method: e.target.value }))}
+                                    placeholder="Método de execução..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
 
                             {/* Editable: How much */}
-                            <div className="flex items-center gap-1">
-                                <span className="text-pink-500 font-medium">Quanto:</span>
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quanto:</label>
                                 <input
                                     type="text"
-                                    defaultValue={actionPlan.how_much_cost || editedFields.how_much_cost || 'A orçar'}
+                                    defaultValue={actionPlan.how_much_cost || editedFields.how_much_cost || ''}
                                     onChange={(e) => setEditedFields(prev => ({ ...prev, how_much_cost: e.target.value }))}
                                     placeholder="Custo estimado"
-                                    className="w-32 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-pink-500 outline-none"
+                                    className="w-32 px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
                                 />
+                            </div>
+
+                            {/* Editable: Priority */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Prioridade:</label>
+                                <select
+                                    defaultValue={actionPlan.priority || editedFields.priority || 'media'}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, priority: e.target.value }))}
+                                    className="px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
+                                >
+                                    <option value="baixa">Baixa</option>
+                                    <option value="media">Média</option>
+                                    <option value="alta">Alta</option>
+                                    <option value="critica">Crítica</option>
+                                </select>
                             </div>
 
                             {/* Save button when fields edited */}
                             {Object.keys(editedFields).length > 0 && (
-                                <div className="pt-1">
+                                <div className="pt-2 flex gap-2">
                                     <button
                                         onClick={() => {
                                             // TODO: Implement save API call
                                             console.log('Save edited fields:', editedFields);
                                             setEditedFields({});
                                         }}
-                                        className="px-2 py-0.5 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700"
+                                        className="px-3 py-1 bg-slate-700 text-white text-[10px] rounded hover:bg-slate-800"
                                     >
                                         Salvar alterações
+                                    </button>
+                                    <button
+                                        onClick={() => setEditedFields({})}
+                                        className="px-3 py-1 border border-slate-300 text-slate-600 text-[10px] rounded hover:bg-slate-50"
+                                    >
+                                        Cancelar
                                     </button>
                                 </div>
                             )}
 
                             {/* Status badge */}
                             <div className="pt-1 flex items-center gap-2">
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'suggested' ? 'bg-amber-100 text-amber-700' :
-                                    actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
-                                        actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                            'bg-green-100 text-green-600'
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'suggested' ? 'bg-slate-100 text-slate-600' :
+                                        actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                            actionPlan.status === 'in_progress' ? 'bg-slate-200 text-slate-700' :
+                                                'bg-slate-300 text-slate-800'
                                     }`}>
                                     {actionPlan.status === 'suggested' ? '⚡ Sugestão' :
                                         actionPlan.status === 'pending' ? 'Pendente' :
