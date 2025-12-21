@@ -593,6 +593,79 @@ inspectionRoutes.post("/:id/finalize", demoAuthMiddleware, async (c) => {
   }
 });
 
+// Reopen inspection (with audit trail)
+inspectionRoutes.post("/:id/reopen", demoAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "User not found" }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { justification } = body;
+
+    if (!justification || justification.trim() === '') {
+      return c.json({ error: "Justificativa é obrigatória para reabrir a inspeção" }, 400);
+    }
+
+    // Get current inspection state
+    const inspection = await env.DB.prepare(`
+      SELECT id, status, inspector_signature, responsible_signature, completed_date
+      FROM inspections WHERE id = ?
+    `).bind(inspectionId).first() as any;
+
+    if (!inspection) {
+      return c.json({ error: "Inspeção não encontrada" }, 404);
+    }
+
+    if (inspection.status !== 'concluida' && inspection.status !== 'completed') {
+      return c.json({ error: "Apenas inspeções finalizadas podem ser reabertas" }, 400);
+    }
+
+    // Archive current state in history
+    await env.DB.prepare(`
+      INSERT INTO inspection_reopening_history (
+        inspection_id, reopened_by, justification, 
+        previous_status, previous_inspector_signature, 
+        previous_responsible_signature, previous_completed_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      inspectionId,
+      user.id,
+      justification.trim(),
+      inspection.status,
+      inspection.inspector_signature,
+      inspection.responsible_signature,
+      inspection.completed_date
+    ).run();
+
+    // Update inspection: clear signatures and set status to in_progress
+    await env.DB.prepare(`
+      UPDATE inspections 
+      SET status = 'em_andamento',
+          inspector_signature = NULL,
+          responsible_signature = NULL,
+          completed_date = NULL,
+          updated_at = NOW()
+      WHERE id = ?
+    `).bind(inspectionId).run();
+
+    console.log(`[REOPEN] Inspeção ${inspectionId} reaberta por ${user.email}. Justificativa: ${justification.substring(0, 50)}...`);
+
+    return c.json({
+      success: true,
+      message: "Inspeção reaberta com sucesso"
+    });
+
+  } catch (error) {
+    console.error('Error reopening inspection:', error);
+    return c.json({ error: "Falha ao reabrir inspeção" }, 500);
+  }
+});
+
 // PATCH endpoint for individual response auto-save
 inspectionRoutes.patch("/:id/responses/:itemId", demoAuthMiddleware, async (c) => {
   const env = c.env;

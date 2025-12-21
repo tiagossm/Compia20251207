@@ -25,7 +25,8 @@ import {
   Eye,
   Share2,
   Sparkles,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { InspectionType, InspectionItemType, InspectionMediaType } from '@/shared/types';
 import { FieldResponse } from '@/shared/checklist-types';
@@ -55,6 +56,9 @@ export default function InspectionDetail() {
   const [showSummary, setShowSummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showPDFGenerator, setShowPDFGenerator] = useState(false);
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [reopenJustification, setReopenJustification] = useState('');
+  const [isReopening, setIsReopening] = useState(false);
   const [signatures, setSignatures] = useState<{ inspector?: string; responsible?: string }>({});
   const [responses, setResponses] = useState<Record<number, any>>({});
   const [newItem, setNewItem] = useState({
@@ -533,6 +537,41 @@ export default function InspectionDetail() {
     }
   };
 
+  const handleReopenInspection = async () => {
+    if (!reopenJustification.trim()) {
+      warning('Justificativa obrigatória', 'Por favor, informe o motivo para reabrir a inspeção.');
+      return;
+    }
+
+    setIsReopening(true);
+    try {
+      const response = await fetchWithAuth(`/api/inspections/${id}/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          justification: reopenJustification.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao reabrir inspeção');
+      }
+
+      success('Inspeção reaberta', 'A inspeção foi reaberta e está pronta para edição. Novas assinaturas serão necessárias para finalizar.');
+      setShowReopenModal(false);
+      setReopenJustification('');
+
+      // Reload inspection data
+      await fetchInspectionDetails();
+    } catch (err) {
+      console.error('Erro ao reabrir inspeção:', err);
+      error('Erro ao reabrir', err instanceof Error ? err.message : 'Não foi possível reabrir a inspeção.');
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
 
 
   const handleMediaUploaded = (newMedia: InspectionMediaType) => {
@@ -743,6 +782,14 @@ export default function InspectionDetail() {
             </div>
             {inspection.status === 'concluida' ? (
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowReopenModal(true)}
+                  className="flex items-center gap-1 px-3 py-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors text-sm font-medium"
+                  title="Reabrir inspeção para edição"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span className="hidden sm:inline">Reabrir</span>
+                </button>
                 <button
                   onClick={() => setShowPDFGenerator(true)}
                   className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -1559,6 +1606,77 @@ export default function InspectionDetail() {
             </div>
           )
         }
+
+        {/* Reopen Inspection Modal */}
+        {showReopenModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <RotateCcw className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h2 className="font-heading text-lg font-semibold text-slate-900">
+                      Reabrir Inspeção
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Esta ação será registrada para auditoria
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    <strong>Atenção:</strong> Ao reabrir a inspeção, as assinaturas atuais serão arquivadas e novas assinaturas serão necessárias para finalizar novamente.
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Justificativa para reabertura *
+                  </label>
+                  <textarea
+                    value={reopenJustification}
+                    onChange={(e) => setReopenJustification(e.target.value)}
+                    placeholder="Informe o motivo para reabrir esta inspeção..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setShowReopenModal(false);
+                      setReopenJustification('');
+                    }}
+                    className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleReopenInspection}
+                    disabled={!reopenJustification.trim() || isReopening}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isReopening ? (
+                      <>
+                        <LoadingSpinner size="sm" />
+                        Reabrindo...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-4 h-4" />
+                        Reabrir Inspeção
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Share Modal */}
         <InspectionShare
