@@ -105,6 +105,23 @@ export default function InspectionItem({
     const [hideActionPlan, setHideActionPlan] = useState(false);
     const [editedFields, setEditedFields] = useState<Partial<any>>({});
 
+    // Synchronized priority state
+    const [currentPriority, setCurrentPriority] = useState(actionPlan?.priority || 'media');
+
+    // Context flags for 5W2H AI generation
+    const [contextFlags, setContextFlags] = useState({
+        useResponse: true,
+        useObservation: true,
+        useAiAnalysis: false
+    });
+
+    // Sync priority when actionPlan changes
+    useEffect(() => {
+        if (actionPlan?.priority) {
+            setCurrentPriority(editedFields.priority || actionPlan.priority);
+        }
+    }, [actionPlan?.priority, editedFields.priority]);
+
     const [manualAction, setManualAction] = useState<ManualActionData>({
         title: '',
         priority: 'media',
@@ -288,18 +305,19 @@ export default function InspectionItem({
                 className="w-full py-1 text-slate-600 text-xs placeholder:text-slate-400 border-none focus:ring-0 resize-none bg-transparent"
             />
 
-            {/* Media Previews */}
+            {/* Media Previews - Compact */}
             {media.length > 0 && (
-                <div className="mb-2 space-y-1">
+                <div className="mb-2 space-y-1.5">
                     {/* Images */}
                     {imageMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] text-slate-400 font-medium">📸 {imageMedia.length}</span>
                             {imageMedia.map((m, idx) => (
-                                <div key={m.id} className="relative">
-                                    {/* Image thumbnail */}
+                                <div key={m.id} className="relative group">
+                                    {/* Image thumbnail - 40x40 */}
                                     <div
-                                        className={`w-12 h-12 rounded-lg border-2 cursor-pointer overflow-hidden shadow-sm
-                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500' : 'border-slate-200'}`}
+                                        className={`w-10 h-10 rounded border cursor-pointer overflow-hidden shadow-sm hover:shadow-md transition-shadow
+                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-200'}`}
                                         onClick={() => setViewingImage({ url: m.file_url, index: idx })}
                                     >
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
@@ -544,18 +562,49 @@ export default function InspectionItem({
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-500 flex-1">
-                                    Usa: resposta + observação + análise IA
-                                </span>
-                                <button
-                                    onClick={() => onAiActionPlanRequest([])}
-                                    disabled={isCreatingAction}
-                                    className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-[10px] rounded disabled:opacity-50 hover:bg-blue-700"
-                                >
-                                    {isCreatingAction ? <RotateCw size={10} className="animate-spin" /> : <Bot size={10} />}
-                                    {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
-                                </button>
+                            <div className="space-y-2">
+                                {/* Context flags */}
+                                <div className="flex flex-wrap items-center gap-3 text-[10px]">
+                                    <span className="text-slate-500">Contexto:</span>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useResponse}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useResponse: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Resposta</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useObservation}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useObservation: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Observação</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useAiAnalysis}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useAiAnalysis: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Análise IA</span>
+                                    </label>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => onAiActionPlanRequest([])}
+                                        disabled={isCreatingAction}
+                                        className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-[10px] rounded disabled:opacity-50 hover:bg-blue-700"
+                                    >
+                                        {isCreatingAction ? <RotateCw size={10} className="animate-spin" /> : <Bot size={10} />}
+                                        {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -609,11 +658,11 @@ export default function InspectionItem({
                         >
                             <Zap size={12} className="text-amber-500" />
                             <span className="font-medium truncate">{actionPlan.title || 'Plano de Ação'}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${actionPlan.priority === 'alta' || actionPlan.priority === 'critica' ? 'bg-red-100 text-red-700' :
-                                actionPlan.priority === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${currentPriority === 'alta' || currentPriority === 'critica' ? 'bg-red-100 text-red-700' :
+                                currentPriority === 'media' ? 'bg-yellow-100 text-yellow-700' :
                                     'bg-green-100 text-green-700'
                                 }`}>
-                                {actionPlan.priority?.toUpperCase() || 'MÉDIA'}
+                                {currentPriority?.toUpperCase() || 'MÉDIA'}
                             </span>
                             <ChevronDown size={12} className={`transition-transform ${showActionPlanExpanded ? 'rotate-180' : ''}`} />
                         </button>
@@ -756,8 +805,11 @@ export default function InspectionItem({
                             <div className="flex items-center gap-2">
                                 <label className="text-slate-500 font-medium w-12">Prioridade:</label>
                                 <select
-                                    defaultValue={actionPlan.priority || editedFields.priority || 'media'}
-                                    onChange={(e) => setEditedFields(prev => ({ ...prev, priority: e.target.value }))}
+                                    value={currentPriority}
+                                    onChange={(e) => {
+                                        setCurrentPriority(e.target.value);
+                                        setEditedFields(prev => ({ ...prev, priority: e.target.value }));
+                                    }}
                                     className="px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
                                 >
                                     <option value="baixa">Baixa</option>
@@ -792,9 +844,9 @@ export default function InspectionItem({
                             {/* Status badge */}
                             <div className="pt-1 flex items-center gap-2">
                                 <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'suggested' ? 'bg-slate-100 text-slate-600' :
-                                        actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
-                                            actionPlan.status === 'in_progress' ? 'bg-slate-200 text-slate-700' :
-                                                'bg-slate-300 text-slate-800'
+                                    actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        actionPlan.status === 'in_progress' ? 'bg-slate-200 text-slate-700' :
+                                            'bg-slate-300 text-slate-800'
                                     }`}>
                                     {actionPlan.status === 'suggested' ? '⚡ Sugestão' :
                                         actionPlan.status === 'pending' ? 'Pendente' :
