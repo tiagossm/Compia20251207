@@ -417,42 +417,78 @@ export default function InspectionItem({
                 </div>
             </div>
 
-            {/* Action Form - Compact */}
+            {/* Action Form - Ultra Compact Inline */}
             {showActionForm && (
-                <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
-                    <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs font-medium text-slate-700">Nova Ação</span>
-                        <button onClick={() => setShowActionForm(false)} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>
+                <div className="mt-2 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                    {/* Header inline with tabs */}
+                    <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-200 bg-white">
+                        <div className="flex items-center gap-1">
+                            <Zap size={10} className="text-amber-500" />
+                            <span className="text-[10px] font-medium text-slate-600">Nova Ação</span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                            <button
+                                onClick={() => setActionMode('manual')}
+                                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${actionMode === 'manual' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >
+                                Manual
+                            </button>
+                            <button
+                                onClick={() => setActionMode('ai')}
+                                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${actionMode === 'ai' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >
+                                5W2H IA
+                            </button>
+                            <button onClick={() => setShowActionForm(false)} className="ml-1 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded">
+                                <X size={10} />
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex gap-1 mb-2">
-                        <button onClick={() => setActionMode('manual')} className={`flex-1 py-1 rounded text-xs ${actionMode === 'manual' ? 'bg-slate-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
-                            <FileText size={10} className="inline mr-0.5" /> Manual
-                        </button>
-                        <button onClick={() => setActionMode('ai')} className={`flex-1 py-1 rounded text-xs ${actionMode === 'ai' ? 'bg-slate-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
-                            <Bot size={10} className="inline mr-0.5" /> 5W2H IA
-                        </button>
-                    </div>
-                    {actionMode === 'manual' ? (
-                        <div className="space-y-1.5">
-                            <input type="text" value={manualAction.title} onChange={(e) => setManualAction(prev => ({ ...prev, title: e.target.value }))} placeholder="O que fazer?" className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs" />
-                            <div className="flex gap-1">
-                                <select value={manualAction.priority} onChange={(e) => setManualAction(prev => ({ ...prev, priority: e.target.value as any }))} className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs">
+
+                    {/* Content */}
+                    <div className="p-2">
+                        {actionMode === 'manual' ? (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text"
+                                    value={manualAction.title}
+                                    onChange={(e) => setManualAction(prev => ({ ...prev, title: e.target.value }))}
+                                    placeholder="O que fazer?"
+                                    className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
+                                <select
+                                    value={manualAction.priority}
+                                    onChange={(e) => setManualAction(prev => ({ ...prev, priority: e.target.value as any }))}
+                                    className="px-1.5 py-1 bg-white border border-slate-200 rounded text-[10px] w-16"
+                                >
                                     <option value="baixa">Baixa</option>
                                     <option value="media">Média</option>
                                     <option value="alta">Alta</option>
                                 </select>
-                                <button onClick={handleManualActionSubmit} disabled={!manualAction.title.trim()} className="px-2 py-1 bg-slate-700 text-white text-xs rounded disabled:opacity-50">Salvar</button>
+                                <button
+                                    onClick={handleManualActionSubmit}
+                                    disabled={!manualAction.title.trim()}
+                                    className="px-2 py-1 bg-slate-700 text-white text-[10px] rounded disabled:opacity-50 hover:bg-slate-800"
+                                >
+                                    Salvar
+                                </button>
                             </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <p className="text-[10px] text-slate-500 mb-1">{selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s) selecionada(s)` : 'Selecione mídias acima'}</p>
-                            <button onClick={() => onAiActionPlanRequest(selectedAiMedia)} disabled={isCreatingAction} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded disabled:opacity-50 flex items-center justify-center gap-1">
-                                {isCreatingAction ? <RotateCw size={12} className="animate-spin" /> : <Bot size={12} />}
-                                {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
-                            </button>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 flex-1">
+                                    {selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s)` : 'Selecione mídias acima'}
+                                </span>
+                                <button
+                                    onClick={() => onAiActionPlanRequest(selectedAiMedia)}
+                                    disabled={isCreatingAction}
+                                    className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-[10px] rounded disabled:opacity-50 hover:bg-blue-700"
+                                >
+                                    {isCreatingAction ? <RotateCw size={10} className="animate-spin" /> : <Bot size={10} />}
+                                    {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -491,8 +527,8 @@ export default function InspectionItem({
                             <Zap size={12} className="text-amber-500" />
                             <span className="font-medium truncate">{actionPlan.title || 'Plano de Ação'}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${actionPlan.priority === 'alta' || actionPlan.priority === 'critica' ? 'bg-red-100 text-red-700' :
-                                    actionPlan.priority === 'media' ? 'bg-yellow-100 text-yellow-700' :
-                                        'bg-green-100 text-green-700'
+                                actionPlan.priority === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
                                 }`}>
                                 {actionPlan.priority?.toUpperCase() || 'MÉDIA'}
                             </span>
@@ -568,8 +604,8 @@ export default function InspectionItem({
                             {/* Status badge */}
                             <div className="pt-1 flex items-center gap-2">
                                 <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
-                                        actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                            'bg-green-100 text-green-600'
+                                    actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                        'bg-green-100 text-green-600'
                                     }`}>
                                     {actionPlan.status === 'pending' ? 'Pendente' :
                                         actionPlan.status === 'in_progress' ? 'Em Andamento' :

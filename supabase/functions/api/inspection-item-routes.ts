@@ -380,7 +380,7 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
       WHERE ii.id = ?
     `).bind(itemId).first() as any;
 
-        // Fallback: If not found and we have inspection_id + field_name, search by those
+        // Fallback 1: If not found and we have inspection_id + field_name, search by exact match
         if (!item && inspection_id && field_name) {
             item = await env.DB.prepare(`
                 SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
@@ -390,7 +390,41 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
             `).bind(inspection_id, field_name).first() as any;
         }
 
+        // Fallback 2: Search with LIKE (partial match) for flexibility
+        if (!item && inspection_id && field_name) {
+            item = await env.DB.prepare(`
+                SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
+                FROM inspection_items ii
+                JOIN inspections i ON ii.inspection_id = i.id
+                WHERE ii.inspection_id = ? AND LOWER(ii.item_description) LIKE LOWER(?)
+                LIMIT 1
+            `).bind(inspection_id, `%${field_name}%`).first() as any;
+        }
+
+        // Fallback 3: Try to match by field order if itemId looks like a template field id
+        if (!item && inspection_id && itemId > 100) {
+            // The itemId might be a template field ID, try to find by position
+            const items = await env.DB.prepare(`
+                SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
+                FROM inspection_items ii
+                JOIN inspections i ON ii.inspection_id = i.id
+                WHERE ii.inspection_id = ?
+                ORDER BY ii.id
+            `).bind(inspection_id).all();
+
+            // Log for debugging
+            console.log(`[CREATE-ACTION] Searching for template field ${itemId} in inspection ${inspection_id}, found ${items.results?.length || 0} items`);
+
+            // If we have items, use the first one that matches field_name loosely
+            if (items.results && items.results.length > 0 && field_name) {
+                item = items.results.find((i: any) =>
+                    i.item_description?.toLowerCase().includes(field_name.toLowerCase().substring(0, 10))
+                ) || items.results[0];
+            }
+        }
+
         if (!item) {
+            console.error('[CREATE-ACTION] Item not found:', { itemId, inspection_id, field_name });
             return c.json({ error: "Item de inspeção não encontrado", details: { itemId, inspection_id, field_name } }, 404);
         }
 
@@ -477,10 +511,11 @@ Responda APENAS em JSON no seguinte formato:
         }
 
         let actionItemId = null;
+        let deadline: Date | null = null;
 
         if (actionData.requires_action) {
             const now = new Date().toISOString();
-            const deadline = new Date();
+            deadline = new Date();
             deadline.setDate(deadline.getDate() + (actionData.priority === 'critica' ? 7 : actionData.priority === 'alta' ? 14 : 30));
 
             const insertResult = await env.DB.prepare(`
