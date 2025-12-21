@@ -38,7 +38,7 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
             });
 
             // Send JSON with base64 data (matching backend expectations)
-            const response = await fetchWithAuth(`/api/media/${inspectionId}/media/upload`, {
+            const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/upload`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
