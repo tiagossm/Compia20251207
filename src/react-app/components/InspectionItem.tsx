@@ -7,7 +7,6 @@ import {
     Zap,
     RotateCw,
     X,
-    CheckCircle,
     FileText,
     Bot,
     Play,
@@ -96,7 +95,7 @@ export default function InspectionItem({
     const [isAiOpen, setIsAiOpen] = useState(false);
     const [showActionForm, setShowActionForm] = useState(false);
     const [actionMode, setActionMode] = useState<'manual' | 'ai'>('manual');
-    const [selectedAiMedia, setSelectedAiMedia] = useState<number[]>([]);
+    const [selectedAiMedia,] = useState<number[]>([]);
     const [viewingImage, setViewingImage] = useState<{ url: string; index: number } | null>(null);
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
@@ -148,12 +147,6 @@ export default function InspectionItem({
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
-
-    const toggleAiMedia = (id: number) => {
-        setSelectedAiMedia(prev =>
-            prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-        );
-    };
 
     // Helper to get document icon based on file extension
     const getDocIcon = (fileName: string) => {
@@ -226,9 +219,6 @@ export default function InspectionItem({
     const imageMedia = media.filter(m => m.media_type === 'image');
     const audioMedia = media.filter(m => m.media_type === 'audio');
     const docMedia = media.filter(m => m.media_type === 'document' || (m.media_type as string) === 'file');
-
-    // Check if media has valid ID for deletion
-    const canDeleteMedia = (m: InspectionMediaType) => m.id != null && m.id > 0;
 
     return (
         <div className="py-3 px-2 border-b border-slate-100 last:border-0">
@@ -323,116 +313,83 @@ export default function InspectionItem({
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
                                     </div>
                                     {/* Delete Button - always visible */}
-                                    {onMediaDelete && canDeleteMedia(m) && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    )}
-                                    {/* AI Selection - checkbox style */}
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); m.id && toggleAiMedia(m.id); }}
-                                        className={`absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded flex items-center justify-center shadow-sm border
-                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-400 border-slate-300 hover:border-blue-400'}`}
+                                        onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete?.(m.id); }}
+                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Excluir"
                                     >
-                                        {selectedAiMedia.includes(m.id!) ? <CheckCircle size={12} /> : <Sparkles size={10} />}
+                                        <X size={10} />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Audio */}
+                    {/* Audio - Compact inline */}
                     {audioMedia.length > 0 && (
-                        <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] text-slate-400 font-medium">🎤 {audioMedia.length}</span>
                             {audioMedia.map((m) => (
-                                <div key={m.id} className={`flex items-center gap-2 p-2 rounded-lg border bg-white shadow-sm
-                                    ${selectedAiMedia.includes(m.id!) ? 'border-blue-400' : 'border-slate-200'}`}>
-                                    {/* Play/Pause button */}
+                                <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 rounded border bg-white border-slate-200 hover:border-slate-300">
+                                    {/* Play/Pause */}
                                     <button
                                         onClick={() => m.id && toggleAudio(m.id)}
-                                        className="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-slate-800 flex-shrink-0"
+                                        className="w-6 h-6 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-slate-800 flex-shrink-0"
                                     >
-                                        {playingAudioId === m.id ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                                        {playingAudioId === m.id ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
                                     </button>
                                     <audio ref={el => { if (m.id) audioRefs.current[m.id] = el; }} src={m.file_url} onEnded={() => m.id && handleAudioEnded(m.id)} className="hidden" />
 
-                                    {/* Filename */}
-                                    <span className="flex-1 truncate text-xs text-slate-600">{m.file_name || 'Áudio'}</span>
-
-                                    {/* AI Selection */}
-                                    <button
-                                        onClick={() => m.id && toggleAiMedia(m.id)}
-                                        className={`w-7 h-7 rounded flex items-center justify-center border
-                                            ${selectedAiMedia.includes(m.id!) ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-blue-400'}`}
-                                    >
-                                        {selectedAiMedia.includes(m.id!) ? <CheckCircle size={14} /> : <Sparkles size={12} />}
-                                    </button>
+                                    {/* Filename - truncated */}
+                                    <span className="truncate text-[10px] text-slate-600 max-w-[100px]">{m.file_name || 'Áudio'}</span>
 
                                     {/* Delete */}
-                                    {onMediaDelete && canDeleteMedia(m) && (
-                                        <button
-                                            onClick={() => m.id && onMediaDelete(m.id)}
-                                            className="w-7 h-7 rounded flex items-center justify-center bg-red-50 text-red-500 border border-red-200 hover:bg-red-100"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={() => m.id && onMediaDelete?.(m.id)}
+                                        className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
+                                        title="Excluir"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Documents - MediaDownloader style */}
+                    {/* Documents - Compact inline */}
                     {docMedia.length > 0 && (
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] text-slate-400 font-medium">📄 {docMedia.length}</span>
                             {docMedia.map((m) => (
                                 <div
                                     key={m.id}
-                                    className={`group flex items-center gap-2 p-2 rounded-lg border bg-white shadow-sm transition-all
-                                        ${selectedAiMedia.includes(m.id!) ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                    className="flex items-center gap-1.5 px-2 py-1 rounded border bg-white border-slate-200 hover:border-slate-300"
                                 >
                                     {/* Icon by type */}
-                                    <div className="flex-shrink-0">
-                                        {getDocIcon(m.file_name || '')}
-                                    </div>
+                                    {getDocIcon(m.file_name || '')}
 
-                                    {/* File info */}
-                                    <div className="flex-1 min-w-0" onClick={() => m.id && toggleAiMedia(m.id)}>
-                                        <p className="text-xs font-medium text-slate-700 truncate cursor-pointer" title={m.file_name}>
-                                            {m.file_name || 'Documento'}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 capitalize">
-                                            {m.file_name?.split('.').pop()?.toUpperCase() || 'DOC'}
-                                        </p>
-                                    </div>
+                                    {/* Filename - truncated */}
+                                    <span className="truncate text-[10px] text-slate-600 max-w-[120px]" title={m.file_name}>
+                                        {m.file_name || 'Documento'}
+                                    </span>
 
-                                    {/* AI Selection indicator */}
-                                    {selectedAiMedia.includes(m.id!) && (
-                                        <CheckCircle size={14} className="text-blue-500 flex-shrink-0" />
-                                    )}
+                                    {/* Download */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); downloadFile(m.file_url, m.file_name || 'download'); }}
+                                        className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                        title="Baixar"
+                                    >
+                                        <Download size={12} />
+                                    </button>
 
-                                    {/* Actions: Download, Delete */}
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); downloadFile(m.file_url, m.file_name || 'download'); }}
-                                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                                            title="Baixar"
-                                        >
-                                            <Download size={14} />
-                                        </button>
-                                        {onMediaDelete && canDeleteMedia(m) && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
-                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
-                                                title="Excluir"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
-                                    </div>
+                                    {/* Delete */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete?.(m.id); }}
+                                        className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
+                                        title="Excluir"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
