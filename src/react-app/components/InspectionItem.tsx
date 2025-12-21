@@ -23,7 +23,10 @@ import {
     Edit3,
     ExternalLink,
     EyeOff,
-    Eye
+    Eye,
+    Download,
+    FileSpreadsheet,
+    File
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -133,6 +136,39 @@ export default function InspectionItem({
         setSelectedAiMedia(prev =>
             prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
         );
+    };
+
+    // Helper to get document icon based on file extension
+    const getDocIcon = (fileName: string) => {
+        const ext = fileName?.split('.').pop()?.toLowerCase() || '';
+        switch (ext) {
+            case 'pdf':
+                return <FileText size={14} className="text-red-500" />;
+            case 'doc':
+            case 'docx':
+                return <FileText size={14} className="text-blue-500" />;
+            case 'xls':
+            case 'xlsx':
+            case 'csv':
+                return <FileSpreadsheet size={14} className="text-green-500" />;
+            case 'ppt':
+            case 'pptx':
+                return <File size={14} className="text-orange-500" />;
+            case 'txt':
+                return <FileText size={14} className="text-slate-500" />;
+            default:
+                return <File size={14} className="text-slate-400" />;
+        }
+    };
+
+    // Download file helper
+    const downloadFile = (url: string, fileName: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleManualActionSubmit = () => {
@@ -331,22 +367,54 @@ export default function InspectionItem({
                         </div>
                     )}
 
-                    {/* Documents */}
+                    {/* Documents - MediaDownloader style */}
                     {docMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="space-y-1">
                             {docMedia.map((m) => (
-                                <div key={m.id} className={`group flex items-center gap-1 px-1.5 py-1 rounded border text-xs cursor-pointer
-                                    ${selectedAiMedia.includes(m.id!) ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-200'}`}
-                                    onClick={() => m.id && toggleAiMedia(m.id)}
+                                <div
+                                    key={m.id}
+                                    className={`group flex items-center gap-2 p-2 rounded-lg border bg-white shadow-sm transition-all
+                                        ${selectedAiMedia.includes(m.id!) ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
                                 >
-                                    <FileText size={12} className="text-slate-400" />
-                                    <span className="text-slate-600 max-w-[80px] truncate">{m.file_name || 'Doc'}</span>
-                                    {selectedAiMedia.includes(m.id!) && <CheckCircle size={10} className="text-slate-600" />}
-                                    {onMediaDelete && canDeleteMedia(m) && (
-                                        <button onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100">
-                                            <X size={10} />
-                                        </button>
+                                    {/* Icon by type */}
+                                    <div className="flex-shrink-0">
+                                        {getDocIcon(m.file_name || '')}
+                                    </div>
+
+                                    {/* File info */}
+                                    <div className="flex-1 min-w-0" onClick={() => m.id && toggleAiMedia(m.id)}>
+                                        <p className="text-xs font-medium text-slate-700 truncate cursor-pointer" title={m.file_name}>
+                                            {m.file_name || 'Documento'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 capitalize">
+                                            {m.file_name?.split('.').pop()?.toUpperCase() || 'DOC'}
+                                        </p>
+                                    </div>
+
+                                    {/* AI Selection indicator */}
+                                    {selectedAiMedia.includes(m.id!) && (
+                                        <CheckCircle size={14} className="text-blue-500 flex-shrink-0" />
                                     )}
+
+                                    {/* Actions: Download, Delete */}
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); downloadFile(m.file_url, m.file_name || 'download'); }}
+                                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                            title="Baixar"
+                                        >
+                                            <Download size={14} />
+                                        </button>
+                                        {onMediaDelete && canDeleteMedia(m) && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
+                                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
