@@ -22,7 +22,8 @@ import {
     ChevronDown,
     Edit3,
     ExternalLink,
-    EyeOff
+    EyeOff,
+    Eye
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -99,6 +100,7 @@ export default function InspectionItem({
     const [showAudioMenu, setShowAudioMenu] = useState(false);
     const [showActionPlanExpanded, setShowActionPlanExpanded] = useState(false);
     const [hideActionPlan, setHideActionPlan] = useState(false);
+    const [editedFields, setEditedFields] = useState<Partial<any>>({});
 
     const [manualAction, setManualAction] = useState<ManualActionData>({
         title: '',
@@ -476,10 +478,10 @@ export default function InspectionItem({
                         ) : (
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-slate-500 flex-1">
-                                    {selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s)` : 'Selecione mídias acima'}
+                                    Usa: resposta + observação + análise IA
                                 </span>
                                 <button
-                                    onClick={() => onAiActionPlanRequest(selectedAiMedia)}
+                                    onClick={() => onAiActionPlanRequest([])}
                                     disabled={isCreatingAction}
                                     className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-[10px] rounded disabled:opacity-50 hover:bg-blue-700"
                                 >
@@ -512,6 +514,19 @@ export default function InspectionItem({
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Show hidden action plan indicator */}
+            {actionPlan && hideActionPlan && (
+                <div className="mt-2 flex items-center gap-1">
+                    <button
+                        onClick={() => setHideActionPlan(false)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                    >
+                        <Eye size={10} />
+                        Mostrar plano de ação
+                    </button>
                 </div>
             )}
 
@@ -576,9 +591,17 @@ export default function InspectionItem({
                         </div>
                     </div>
 
-                    {/* Expanded content - mais compacto */}
+                    {/* Expanded content - editável */}
                     {showActionPlanExpanded && (
-                        <div className="mt-1.5 pl-4 text-[11px] space-y-1 text-slate-600">
+                        <div className="mt-1.5 pl-4 text-[11px] space-y-1.5 text-slate-600">
+                            {/* Status indicator */}
+                            {actionPlan.status === 'suggested' && (
+                                <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded text-[10px]">
+                                    <Zap size={10} />
+                                    <span>Sugestão da IA - defina os campos abaixo</span>
+                                </div>
+                            )}
+
                             {actionPlan.what_description && (
                                 <div><span className="text-red-500 font-medium">O quê:</span> {actionPlan.what_description}</div>
                             )}
@@ -588,28 +611,73 @@ export default function InspectionItem({
                             {(actionPlan.where_location || actionPlan.where_description) && (
                                 <div><span className="text-yellow-600 font-medium">Onde:</span> {actionPlan.where_location || actionPlan.where_description}</div>
                             )}
-                            {actionPlan.when_deadline && (
-                                <div><span className="text-green-600 font-medium">Quando:</span> {new Date(actionPlan.when_deadline).toLocaleDateString('pt-BR')}</div>
-                            )}
-                            {actionPlan.who_responsible && (
-                                <div><span className="text-blue-500 font-medium">Quem:</span> {actionPlan.who_responsible}</div>
-                            )}
+
+                            {/* Editable: When */}
+                            <div className="flex items-center gap-1">
+                                <span className="text-green-600 font-medium">Quando:</span>
+                                <input
+                                    type="date"
+                                    defaultValue={actionPlan.when_deadline || editedFields.when_deadline || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, when_deadline: e.target.value }))}
+                                    className="px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-green-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Editable: Who */}
+                            <div className="flex items-center gap-1">
+                                <span className="text-blue-500 font-medium">Quem:</span>
+                                <input
+                                    type="text"
+                                    defaultValue={actionPlan.who_responsible || editedFields.who_responsible || 'A definir'}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, who_responsible: e.target.value }))}
+                                    placeholder="Responsável"
+                                    className="flex-1 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+
                             {(actionPlan.how_method || actionPlan.how_description) && (
                                 <div><span className="text-purple-500 font-medium">Como:</span> {actionPlan.how_method || actionPlan.how_description}</div>
                             )}
-                            {actionPlan.how_much_cost && (
-                                <div><span className="text-pink-500 font-medium">Quanto:</span> {actionPlan.how_much_cost}</div>
+
+                            {/* Editable: How much */}
+                            <div className="flex items-center gap-1">
+                                <span className="text-pink-500 font-medium">Quanto:</span>
+                                <input
+                                    type="text"
+                                    defaultValue={actionPlan.how_much_cost || editedFields.how_much_cost || 'A orçar'}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, how_much_cost: e.target.value }))}
+                                    placeholder="Custo estimado"
+                                    className="w-32 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] bg-white focus:ring-1 focus:ring-pink-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Save button when fields edited */}
+                            {Object.keys(editedFields).length > 0 && (
+                                <div className="pt-1">
+                                    <button
+                                        onClick={() => {
+                                            // TODO: Implement save API call
+                                            console.log('Save edited fields:', editedFields);
+                                            setEditedFields({});
+                                        }}
+                                        className="px-2 py-0.5 bg-blue-600 text-white text-[10px] rounded hover:bg-blue-700"
+                                    >
+                                        Salvar alterações
+                                    </button>
+                                </div>
                             )}
 
                             {/* Status badge */}
                             <div className="pt-1 flex items-center gap-2">
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
-                                    actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                        'bg-green-100 text-green-600'
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'suggested' ? 'bg-amber-100 text-amber-700' :
+                                    actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        actionPlan.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                            'bg-green-100 text-green-600'
                                     }`}>
-                                    {actionPlan.status === 'pending' ? 'Pendente' :
-                                        actionPlan.status === 'in_progress' ? 'Em Andamento' :
-                                            actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status || 'Pendente'}
+                                    {actionPlan.status === 'suggested' ? '⚡ Sugestão' :
+                                        actionPlan.status === 'pending' ? 'Pendente' :
+                                            actionPlan.status === 'in_progress' ? 'Em Andamento' :
+                                                actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status || 'Pendente'}
                                 </span>
                             </div>
                         </div>

@@ -544,23 +544,31 @@ Responda APENAS em JSON no seguinte formato:
             actionItemId = insertResult?.id || null;
         }
 
+        // Always return suggestion data for inline display, even if not saved
+        const actionSuggestion = {
+            id: actionItemId || null,
+            title: field_name,
+            what_description: actionData.what || '',
+            why_description: actionData.why || '',
+            why_reason: actionData.why || '',
+            where_description: actionData.where || item.location,
+            where_location: actionData.where || item.location,
+            when_deadline: deadline?.toISOString().split('T')[0] || null,
+            who_responsible: actionData.who || 'A definir',
+            how_description: actionData.how || '',
+            how_method: actionData.how || '',
+            how_much_cost: actionData.how_much || 'A orçar',
+            priority: actionData.priority || 'media',
+            status: actionItemId ? 'pending' : 'suggested',
+            is_ai_generated: true,
+            requires_action: actionData.requires_action,
+            justification: actionData.justification || ''
+        };
+
         return c.json({
             success: true,
             action: actionData,
-            action_item: actionItemId ? {
-                id: actionItemId,
-                title: field_name,
-                what_description: actionData.what || '',
-                why_description: actionData.why || '',
-                where_description: actionData.where || item.location,
-                when_deadline: deadline?.toISOString().split('T')[0] || null,
-                who_responsible: actionData.who || 'A definir',
-                how_description: actionData.how || '',
-                how_much_cost: actionData.how_much || 'A orçar',
-                priority: actionData.priority || 'media',
-                status: 'pending',
-                is_ai_generated: true
-            } : null
+            action_item: actionSuggestion // Always return for inline display
         });
 
     } catch (error) {
