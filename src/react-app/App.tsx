@@ -2,6 +2,7 @@ import './utils/fetch-setup'; // Configure fetch to always include credentials
 import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
 import { AuthProvider } from "@/react-app/context/AuthContext";
 import { ToastProvider } from "@/react-app/hooks/useToast";
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import HomePage from "@/react-app/pages/Home";
 import Inspections from "@/react-app/pages/Inspections";
@@ -80,6 +81,7 @@ export default function App() {
             <Route path="/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
           </Routes>
         </Router>
+        <SpeedInsights />
       </ToastProvider>
     </AuthProvider>
   );
