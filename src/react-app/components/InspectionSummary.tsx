@@ -295,27 +295,61 @@ export default function InspectionSummary({
     conformanceRate: 0
   };
 
+  // Helper to normalize compliance status values
+  const normalizeComplianceStatus = (status: string | null | undefined): string => {
+    if (!status) return 'unanswered';
+    const s = status.toLowerCase().replace(/_/g, ' ').trim();
+    if (s === 'conforme' || s === 'compliant') return 'compliant';
+    if (s === 'nao conforme' || s === 'não conforme' || s === 'non compliant' || s === 'non_compliant' || s === 'nao_conforme') return 'non_compliant';
+    if (s === 'nao aplicavel' || s === 'não aplicável' || s === 'not applicable' || s === 'not_applicable' || s === 'nao_aplicavel' || s === 'n/a') return 'not_applicable';
+    if (s === 'parcialmente conforme' || s === 'parcialmente_conforme' || s === 'partial') return 'partial';
+    return 'unanswered';
+  };
+
+  // Helper to detect compliance from text responses
+  const inferComplianceFromText = (text: string | null | undefined): string | null => {
+    if (!text) return null;
+    const t = text.toString().toLowerCase().trim();
+
+    // Explicit compliance patterns
+    if (t === 'conforme' || t === 'adequado' || t === 'adequada' || t === 'bom' || t === 'boa' || t === 'sim' || t === 'yes') return 'compliant';
+    if (t === 'não conforme' || t === 'nao conforme' || t === 'inadequado' || t === 'inadequada' || t === 'inadequadas' ||
+      t === 'ruim' || t === 'crítico' || t === 'critico' || t === 'não' || t === 'nao' || t === 'no') return 'non_compliant';
+    if (t === 'não aplicável' || t === 'nao aplicavel' || t === 'n/a') return 'not_applicable';
+
+    // Pattern matching for partial text
+    if (t.includes('não conforme') || t.includes('nao conforme')) return 'non_compliant';
+    if (t.includes('conforme') && !t.includes('não')) return 'compliant';
+    if (t.includes('inadequad') || t.includes('ruim') || t.includes('ruín') || t.includes('crítico') || t.includes('critico')) return 'non_compliant';
+
+    return null; // Cannot infer
+  };
+
+  // Helper to count compliance based on status
+  const countCompliance = (status: string) => {
+    switch (status) {
+      case 'compliant':
+        stats.compliantItems++;
+        break;
+      case 'non_compliant':
+      case 'partial':
+        stats.nonCompliantItems++;
+        break;
+      case 'not_applicable':
+        stats.notApplicableItems++;
+        break;
+      default:
+        stats.unansweredItems++;
+    }
+  };
+
   // Count manual items
   items.forEach(item => {
     stats.totalItems++;
 
     // Check if item has explicit compliance_status
     if (item.compliance_status) {
-      switch (item.compliance_status) {
-        case 'compliant':
-          stats.compliantItems++;
-          break;
-        case 'non_compliant':
-          stats.nonCompliantItems++;
-          break;
-        case 'not_applicable':
-          stats.notApplicableItems++;
-          break;
-        case 'unanswered':
-        default:
-          stats.unansweredItems++;
-          break;
-      }
+      countCompliance(normalizeComplianceStatus(item.compliance_status));
     } else {
       // Fallback to legacy is_compliant logic
       if (item.is_compliant === true) {
@@ -335,62 +369,65 @@ export default function InspectionSummary({
     try {
       const fieldData = JSON.parse(item.field_responses);
 
-      // Check if item has explicit compliance_status
+      // Priority 1: Check item-level compliance_status (from database column)
       if (item.compliance_status) {
-        switch (item.compliance_status) {
-          case 'compliant':
-            stats.compliantItems++;
-            break;
-          case 'non_compliant':
-            stats.nonCompliantItems++;
-            break;
-          case 'not_applicable':
-            stats.notApplicableItems++;
-            break;
-          case 'unanswered':
-          default:
-            stats.unansweredItems++;
-            break;
-        }
-      } else {
-        // Improved logic for determining compliance from responses
-        // Use item.id (inspection_item ID) to lookup responses, as InspectionDetail now uses item.id as key
-        const response = responses[item.id];
+        countCompliance(normalizeComplianceStatus(item.compliance_status));
+        return;
+      }
 
-        if (fieldData.field_type === 'boolean') {
-          if (response === true || response === 'true') {
-            stats.compliantItems++;
-          } else if (response === false || response === 'false') {
-            stats.nonCompliantItems++;
-          } else {
-            stats.unansweredItems++;
-          }
-        } else if (fieldData.field_type === 'rating') {
-          if (response !== null && response !== undefined && response !== '') {
-            // For ratings, consider <= 2 as non-compliant, >= 4 as compliant, 3 as needs review
-            const rating = parseInt(response);
+      // Priority 2: Check field_responses.compliance_status (from JSON)
+      if (fieldData.compliance_status) {
+        countCompliance(normalizeComplianceStatus(fieldData.compliance_status));
+        return;
+      }
+
+      // Priority 3: Use item.id to lookup responses
+      const response = responses[item.id];
+
+      // Priority 4: Auto-detect based on field type and response value
+      if (fieldData.field_type === 'boolean') {
+        if (response === true || response === 'true') {
+          stats.compliantItems++;
+        } else if (response === false || response === 'false') {
+          stats.nonCompliantItems++;
+        } else {
+          stats.unansweredItems++;
+        }
+      } else if (fieldData.field_type === 'rating') {
+        if (response !== null && response !== undefined && response !== '') {
+          const rating = parseInt(response);
+          if (!isNaN(rating)) {
             if (rating >= 4) {
               stats.compliantItems++;
-            } else if (rating <= 2) {
-              stats.nonCompliantItems++;
-            } else if (rating === 3) {
-              // Rating of 3 is considered "needs attention" - count as non-compliant for safety
-              stats.nonCompliantItems++;
             } else {
-              stats.unansweredItems++;
+              stats.nonCompliantItems++;
             }
           } else {
             stats.unansweredItems++;
           }
         } else {
-          // For other field types, we can't automatically determine compliance
-          // This should be explicitly set by the user in the new system
-          if (response !== null && response !== undefined && response !== '') {
-            // Default to unanswered since we can't infer compliance
-            stats.unansweredItems++;
+          stats.unansweredItems++;
+        }
+      } else if (fieldData.field_type === 'select' || fieldData.field_type === 'text') {
+        // Try to infer compliance from the text response
+        const responseValue = response || fieldData.response_value;
+        if (responseValue) {
+          const inferred = inferComplianceFromText(responseValue);
+          if (inferred) {
+            countCompliance(inferred);
           } else {
+            // Has response but can't infer compliance - count as unanswered for compliance purposes
             stats.unansweredItems++;
           }
+        } else {
+          stats.unansweredItems++;
+        }
+      } else {
+        // For date, time, etc - these are informational, count as not applicable
+        if (response !== null && response !== undefined && response !== '') {
+          stats.notApplicableItems++;
+        } else {
+          stats.unansweredItems++;
         }
       }
     } catch (error) {
