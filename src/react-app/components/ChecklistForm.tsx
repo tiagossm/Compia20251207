@@ -7,8 +7,7 @@ import InspectionList from './InspectionList';
 import InspectionItem from './InspectionItem';
 import CameraModal from './CameraModal';
 import {
-  Star, Calendar, Clock,
-  Upload, CheckCircle, ThumbsUp, ThumbsDown, Save, Loader2
+  Star, Upload, CheckCircle, ThumbsUp, ThumbsDown, Save, Loader2
 } from 'lucide-react';
 
 interface ChecklistFormProps {
@@ -32,6 +31,12 @@ export default function ChecklistForm({
   showComplianceSelector = true
 }: ChecklistFormProps) {
 
+  // Debug log
+  console.log('[CHECKLIST] ChecklistForm mounted', {
+    fieldsCount: fields.length,
+    hasOnAutoSave: !!onAutoSave
+  });
+
   // State
   const [responses, setResponses] = useState<Record<number, any>>(initialValues);
   const [itemsComments, setItemsComments] = useState<Record<number, string>>({});
@@ -42,6 +47,30 @@ export default function ChecklistForm({
   const [creatingAction, setCreatingAction] = useState<Record<number, boolean>>({});
   const [itemsActionPlan, setItemsActionPlan] = useState<Record<number, any>>({});
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+
+  // Initialize state from fields (comments and compliance status)
+  useEffect(() => {
+    const initComments: Record<number, string> = {};
+    const initStatuses: Record<number, string> = {};
+
+    fields.forEach(field => {
+      if (field.id) {
+        if (field.initial_comment) {
+          initComments[field.id] = field.initial_comment;
+        }
+        if (field.initial_compliance_status) {
+          initStatuses[field.id] = field.initial_compliance_status;
+        }
+      }
+    });
+
+    if (Object.keys(initComments).length > 0) {
+      setItemsComments(prev => ({ ...prev, ...initComments }));
+    }
+    if (Object.keys(initStatuses).length > 0) {
+      setComplianceStatuses(prev => ({ ...prev, ...initStatuses }));
+    }
+  }, [JSON.stringify(fields.map(f => ({ id: f.id, c: f.initial_comment, s: f.initial_compliance_status })))]); // Deep compare dependencies
 
   // Auto-save state
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
@@ -56,7 +85,16 @@ export default function ChecklistForm({
 
   // Debounced auto-save function
   const triggerAutoSave = useCallback((newResponses: Record<number, any>, newComments: Record<number, string>, newStatuses: Record<number, any>) => {
-    if (!onAutoSave || !autoSaveEnabled) return;
+    console.log('[CHECKLIST] triggerAutoSave called', {
+      hasOnAutoSave: !!onAutoSave,
+      autoSaveEnabled,
+      responsesCount: Object.keys(newResponses).length
+    });
+
+    if (!onAutoSave || !autoSaveEnabled) {
+      console.log('[CHECKLIST] Auto-save skipped:', { hasOnAutoSave: !!onAutoSave, autoSaveEnabled });
+      return;
+    }
 
     // Clear previous timeout
     if (saveTimeoutRef.current) {
@@ -65,15 +103,17 @@ export default function ChecklistForm({
 
     // Debounce: wait 500ms before saving
     saveTimeoutRef.current = setTimeout(async () => {
+      console.log('[CHECKLIST] Executing auto-save...');
       setSaveStatus('saving');
       try {
         await onAutoSave(newResponses, newComments, newStatuses);
+        console.log('[CHECKLIST] Auto-save success!');
         setSaveStatus('saved');
         setLastSaveTime(new Date());
         // Reset to idle after 3 seconds
         setTimeout(() => setSaveStatus('idle'), 3000);
       } catch (error) {
-        console.error('Auto-save failed:', error);
+        console.error('[CHECKLIST] Auto-save failed:', error);
         setSaveStatus('idle');
       }
     }, 500);
@@ -89,6 +129,7 @@ export default function ChecklistForm({
   }, []);
 
   const updateResponse = (fieldId: number, value: any) => {
+    console.log('[CHECKLIST] updateResponse called', { fieldId, value });
     const field = fields.find(f => f.id === fieldId);
 
     setResponses(prev => {
@@ -470,28 +511,22 @@ export default function ChecklistForm({
 
       case 'date':
         return (
-          <div className="relative inline-flex items-center">
-            <Calendar className="absolute left-0 text-slate-400 w-5 h-5" />
-            <input
-              type="date"
-              value={value || ''}
-              onChange={e => update(e.target.value)}
-              className="border-b border-slate-200 py-2 pl-8 pr-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[180px]"
-            />
-          </div>
+          <input
+            type="date"
+            value={value || ''}
+            onChange={e => update(e.target.value)}
+            className="border-b border-slate-200 py-2 px-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[160px] cursor-pointer"
+          />
         );
 
       case 'time':
         return (
-          <div className="relative inline-flex items-center">
-            <Clock className="absolute left-0 text-slate-400 w-5 h-5" />
-            <input
-              type="time"
-              value={value || ''}
-              onChange={e => update(e.target.value)}
-              className="border-b border-slate-200 py-2 pl-8 pr-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[140px]"
-            />
-          </div>
+          <input
+            type="time"
+            value={value || ''}
+            onChange={e => update(e.target.value)}
+            className="border-b border-slate-200 py-2 px-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[120px] cursor-pointer"
+          />
         );
 
       case 'rating':
@@ -581,7 +616,7 @@ export default function ChecklistForm({
           <span className="text-sm text-slate-600">Auto-salvar</span>
         </label>
 
-        {/* Save status indicator */}
+        {/* Save status indicator - always show last save time */}
         <div className="flex items-center gap-1.5 text-xs">
           {saveStatus === 'saving' && (
             <>
@@ -597,8 +632,19 @@ export default function ChecklistForm({
               </span>
             </>
           )}
-          {saveStatus === 'idle' && !autoSaveEnabled && (
-            <span className="text-slate-400">Auto-save desativado</span>
+          {saveStatus === 'idle' && lastSaveTime && autoSaveEnabled && (
+            <>
+              <Save size={14} className="text-slate-400" />
+              <span className="text-slate-500">
+                Última alteração: {lastSaveTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </>
+          )}
+          {saveStatus === 'idle' && !lastSaveTime && autoSaveEnabled && (
+            <span className="text-slate-400">Nenhuma alteração</span>
+          )}
+          {!autoSaveEnabled && (
+            <span className="text-amber-500">Auto-save desativado</span>
           )}
         </div>
       </div>

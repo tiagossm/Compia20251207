@@ -61,7 +61,7 @@ export default function InspectionSummary({
       if (inspection?.id) {
         try {
           // First, try to get existing share links
-          const shareResponse = await fetch(`/api/inspections/${inspection.id}/shares`);
+          const shareResponse = await fetch(`/api/share/${inspection.id}/shares`);
           let shareToken = null;
 
           if (shareResponse.ok) {
@@ -74,7 +74,7 @@ export default function InspectionSummary({
 
           // If no active share exists, create one
           if (!shareToken) {
-            const createShareResponse = await fetch(`/api/inspections/${inspection.id}/share`, {
+            const createShareResponse = await fetch(`/api/share/${inspection.id}/share`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

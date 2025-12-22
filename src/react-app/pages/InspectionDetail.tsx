@@ -20,10 +20,7 @@ import {
   FileText,
   Image as ImageIcon,
   Target,
-  PenTool,
   FileCheck,
-  Eye,
-  Share2,
   Sparkles,
   Trash2,
   RotateCcw
@@ -37,6 +34,7 @@ import InspectionSummary from '@/react-app/components/InspectionSummary';
 import InspectionShare from '@/react-app/components/InspectionShare';
 import PDFGenerator from '@/react-app/components/PDFGenerator';
 import LoadingSpinner from '@/react-app/components/LoadingSpinner';
+import FloatingActionBar from '@/react-app/components/FloatingActionBar';
 import { useToast } from '@/react-app/hooks/useToast';
 
 export default function InspectionDetail() {
@@ -237,12 +235,7 @@ export default function InspectionDetail() {
               }
 
               // Always set the field value, even if null (for proper form rendering)
-              acc[fieldData.field_id] = parsedValue;
-
-              // Load existing comments
-              if (fieldData.comment) {
-                (acc as Record<string, any>)[`comment_${fieldData.field_id}`] = fieldData.comment;
-              }
+              acc[item.id] = parsedValue;
 
             } catch (error) {
               console.error('[TEMPLATE-RESPONSE] Error parsing field response:', error, 'item:', item);
@@ -512,6 +505,10 @@ export default function InspectionDetail() {
 
       console.log('Inspection finalized successfully');
       success('Inspeção finalizada', 'Inspeção foi finalizada com sucesso! As assinaturas foram salvas.');
+
+      // Update local state immediately to reflect completed status
+      setInspection(prev => prev ? { ...prev, status: 'concluida', completed_date: new Date().toISOString() } : null);
+
       setShowSignatures(false);
       setShowSummary(true);
 
@@ -780,56 +777,6 @@ export default function InspectionDetail() {
                 {getStatusLabel(inspection.status)}
               </span>
             </div>
-            {inspection.status === 'concluida' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowReopenModal(true)}
-                  className="flex items-center gap-1 px-3 py-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors text-sm font-medium"
-                  title="Reabrir inspeção para edição"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span className="hidden sm:inline">Reabrir</span>
-                </button>
-                <button
-                  onClick={() => setShowPDFGenerator(true)}
-                  className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Gerar PDF"
-                >
-                  <FileText className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowSummary(true)}
-                  className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Ver Resumo"
-                >
-                  <Eye className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="p-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Compartilhar"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="p-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Compartilhar"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowSignatures(true)}
-                  className="flex items-center px-4 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-all shadow-sm"
-                >
-                  <PenTool className="w-4 h-4 mr-2" />
-                  Finalizar Inspeção
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1168,10 +1115,13 @@ export default function InspectionDetail() {
               </h3>
               <div className="bg-slate-50 rounded-lg p-4 mb-4">
                 <ChecklistForm
+                  key={`${inspection.id}-${inspection.status}`}
                   fields={templateItems.map((item, index) => {
                     const fieldData = JSON.parse(item.field_responses);
                     return {
-                      id: fieldData.field_id,
+                      // Use item.id (inspection_item.id) as the field ID for proper backend mapping
+                      id: parseInt(item.id),
+                      field_id: fieldData.field_id, // Keep original field_id for reference
                       // Prioritize item_description from DB column over JSON which might be stale/corrupt
                       field_name: item.item_description || fieldData.field_name,
                       field_type: fieldData.field_type,
@@ -1181,7 +1131,11 @@ export default function InspectionDetail() {
                       template_id: item.template_id,
                       compliance_enabled: fieldData.compliance_enabled ?? true,
                       compliance_mode: fieldData.compliance_mode ?? 'auto',
-                      compliance_config: fieldData.compliance_config
+                      compliance_config: fieldData.compliance_config,
+                      // Pass initial values
+                      initial_value: fieldData.response_value,
+                      initial_comment: fieldData.comment,
+                      initial_compliance_status: fieldData.compliance_status
                     };
                   })}
                   onSubmit={handleFormSubmit}
@@ -1190,43 +1144,55 @@ export default function InspectionDetail() {
                   inspectionId={parseInt(id!)}
                   inspectionItems={templateItems}
                   showComplianceSelector={inspection?.compliance_enabled !== false}
-                  onAutoSave={async (formResponses: Record<string, any>, comments: Record<string, any>) => {
+                  onAutoSave={async (formResponses: Record<string, any>, comments: Record<string, any>, complianceStatuses?: Record<string, any>) => {
                     // Prevent multiple simultaneous auto-save calls
                     if (isSubmitting) return;
 
                     try {
-                      // Don't update local state during auto-save to prevent field disappearing
-                      // The ChecklistForm component will handle its own state
+                      console.log('[AUTO-SAVE] Saving...', {
+                        responsesCount: Object.keys(formResponses).length,
+                        templateItemsCount: templateItems.length,
+                        statusesCount: complianceStatuses ? Object.keys(complianceStatuses).length : 0
+                      });
 
-                      // Prepare responses for database - map responses to inspection items
+                      // formResponses now keyed by item.id (inspection_item.id)
+                      // Build update payload directly
                       const responseUpdates: Record<string, any> = {};
 
-                      Object.entries(formResponses).forEach(([fieldId, value]) => {
-                        const field = templateItems.find(item => {
+                      // Process responses and statuses
+                      Object.keys({ ...formResponses, ...comments, ...(complianceStatuses || {}) }).forEach((itemId) => {
+                        // Find the template item by its id
+                        const item = templateItems.find(ti => String(ti.id) === itemId || ti.id === parseInt(itemId));
+
+                        if (item) {
                           try {
                             const fieldData = JSON.parse(item.field_responses);
-                            return fieldData.field_id === parseInt(fieldId);
-                          } catch {
-                            return false;
-                          }
-                        });
+                            if (formResponses[itemId] !== undefined) {
+                              fieldData.response_value = formResponses[itemId];
+                            }
+                            if (comments[itemId] !== undefined) {
+                              fieldData.comment = comments[itemId];
+                            }
+                            if (complianceStatuses && complianceStatuses[itemId] !== undefined) {
+                              fieldData.compliance_status = complianceStatuses[itemId];
 
-                        if (field?.id) {
-                          const comment = comments[parseInt(fieldId)] || '';
+                              // Also update item.compliance_status at the top level if needed by backend,
+                              // but for now storing in JSON
+                            }
 
-                          // Update the field_responses with the new value and comment
-                          try {
-                            const fieldData = JSON.parse(field.field_responses);
-                            fieldData.response_value = value;
-                            fieldData.comment = comment;
-                            responseUpdates[field.id] = fieldData;
-                          } catch (error) {
-                            console.error('[AUTO-SAVE] Error updating field data:', error);
+                            responseUpdates[item.id] = fieldData;
+                          } catch (e) {
+                            console.error('[AUTO-SAVE] Error parsing field_responses:', e);
                           }
                         }
                       });
 
-                      if (Object.keys(responseUpdates).length === 0) return;
+                      console.log('[AUTO-SAVE] Updates to send:', Object.keys(responseUpdates).length);
+
+                      if (Object.keys(responseUpdates).length === 0) {
+                        console.log('[AUTO-SAVE] No updates to send');
+                        return;
+                      }
 
                       const response = await fetchWithAuth(`/api/inspections/${id}/template-responses`, {
                         method: 'POST',
@@ -1237,20 +1203,20 @@ export default function InspectionDetail() {
                       });
 
                       if (!response.ok) {
-                        console.error('[AUTO-SAVE] Failed to save responses:', response.status);
+                        console.error('[AUTO-SAVE] Failed:', response.status);
                         const errorData = await response.text();
-                        console.error('[AUTO-SAVE] Error details:', errorData);
+                        console.error('[AUTO-SAVE] Error:', errorData);
                       } else {
+                        console.log('[AUTO-SAVE] Success!');
                         // Update local responses state after successful save
-                        setResponses(prevResponses => ({
-                          ...prevResponses,
+                        setResponses(prev => ({
+                          ...prev,
                           ...formResponses
                         }));
                       }
 
                     } catch (error) {
-                      console.error('[AUTO-SAVE] Error during auto-save:', error);
-                      // Don't show error to user for auto-save failures
+                      console.error('[AUTO-SAVE] Error:', error);
                     }
                   }}
                 />
@@ -1701,6 +1667,21 @@ export default function InspectionDetail() {
           parentOrganizationLogoUrl={undefined}
           organizationName={inspection.company_name || 'Organização'}
           parentOrganizationName="Matriz"
+        />
+
+        {/* Floating Action Bar */}
+        <FloatingActionBar
+          status={inspection.status}
+          onSave={() => {
+            // Trigger manual save if needed
+            console.log('Manual save triggered');
+          }}
+          onFinalize={() => setShowSignatures(true)}
+          onReopen={() => setShowReopenModal(true)}
+          onGeneratePDF={() => setShowPDFGenerator(true)}
+          onShare={() => setShowShareModal(true)}
+          onViewSummary={() => setShowSummary(true)}
+          isSaving={isSubmitting}
         />
       </div >
     </Layout >
