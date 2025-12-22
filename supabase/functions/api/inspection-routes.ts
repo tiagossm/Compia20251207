@@ -815,10 +815,11 @@ inspectionRoutes.post("/:id/template-responses", demoAuthMiddleware, async (c) =
       }
 
       // Convert compliance status to boolean for legacy column
+      // Accept both EN (compliant, non_compliant) and PT-BR (conforme, nao_conforme) values
       let isCompliantBool: boolean | null = null;
-      if (complianceStatus === 'conforme') {
+      if (complianceStatus === 'conforme' || complianceStatus === 'compliant') {
         isCompliantBool = true;
-      } else if (complianceStatus === 'nao_conforme') {
+      } else if (complianceStatus === 'nao_conforme' || complianceStatus === 'non_compliant') {
         isCompliantBool = false;
       }
 
