@@ -187,7 +187,7 @@ export default function ChecklistForm({
   };
 
   // --- Media Logic ---
-  const { uploadFile, startAudioRecording, stopRecording, recording } = useMediaHandling({
+  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime } = useMediaHandling({
     inspectionId: inspectionId || 0,
     onMediaUploaded: (media) => {
       const fieldId = activeMediaFieldId.current;
@@ -717,8 +717,8 @@ export default function ChecklistForm({
               actionPlan={itemsActionPlan[field.id] || null}
               isAiAnalyzing={generatingResponse[field.id]}
               isCreatingAction={creatingAction[field.id]}
-              isRecording={isCameraOpen === false && activeMediaFieldId.current === field.id}
-              recordingTime={0} // TODO: Implement recording timer if needed or remove
+              isRecording={isCameraOpen === false && activeMediaFieldId.current === field.id && recording === 'audio'}
+              recordingTime={recordingTime}
               index={index}
             >
               {renderInput(field)}
