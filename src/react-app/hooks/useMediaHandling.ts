@@ -110,12 +110,16 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
         }
     }, []);
 
+    const isStopping = useRef(false);
+
     const stopRecording = useCallback((): Promise<Blob | null> => {
         return new Promise((resolve) => {
-            if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+            if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive' || isStopping.current) {
                 resolve(null);
                 return;
             }
+
+            isStopping.current = true;
 
             mediaRecorderRef.current.onstop = () => {
                 const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
@@ -131,6 +135,7 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
 
                 setRecording(null);
                 setRecordingTime(0);
+                isStopping.current = false;
 
                 resolve(blob);
             };

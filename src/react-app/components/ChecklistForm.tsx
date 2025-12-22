@@ -187,7 +187,7 @@ export default function ChecklistForm({
   };
 
   // --- Media Logic ---
-  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime } = useMediaHandling({
+  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime, uploading } = useMediaHandling({
     inspectionId: inspectionId || 0,
     onMediaUploaded: (media) => {
       const fieldId = activeMediaFieldId.current;
@@ -704,6 +704,7 @@ export default function ChecklistForm({
               complianceStatus={complianceStatuses[field.id] as any}
               onComplianceChange={showComplianceSelector ? (status: any) => updateComplianceStatus(field.id!, status) : undefined}
               onCommentChange={(val: string) => updateComment(field.id!, val)}
+              isUploading={uploading}
               onMediaUpload={(type: 'image' | 'audio' | 'video' | 'file', source?: 'camera' | 'upload') => handleMediaRequest(field.id!, type, source)}
               onMediaDelete={(mediaId: number) => handleMediaDelete(field.id!, mediaId)}
 

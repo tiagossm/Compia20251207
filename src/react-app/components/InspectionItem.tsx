@@ -48,6 +48,7 @@ interface InspectionItemProps {
     complianceStatus?: ComplianceStatus;
     onComplianceChange?: (status: ComplianceStatus) => void;
     onCommentChange: (value: string) => void;
+    isUploading?: boolean;
     onMediaUpload: (type: 'image' | 'audio' | 'video' | 'file', source?: 'camera' | 'upload') => void;
     onMediaDelete?: (mediaId: number) => void;
     onAiAnalysisRequest: (selectedMediaIds: number[]) => void;
@@ -77,6 +78,7 @@ export default function InspectionItem({
     complianceStatus,
     onComplianceChange,
     onCommentChange,
+    isUploading = false,
     onMediaUpload,
     onMediaDelete,
     onAiAnalysisRequest,
@@ -406,13 +408,30 @@ export default function InspectionItem({
                     {/* Audio */}
                     <div className="relative">
                         {isRecording ? (
-                            <button onClick={() => onMediaUpload('audio', 'camera')} className="flex items-center gap-1 px-2 py-1 rounded bg-red-500 text-white text-xs">
-                                <Square size={10} />
-                                <span>{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                            <button
+                                onClick={() => onMediaUpload('audio', 'camera')}
+                                disabled={isUploading}
+                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isUploading ? 'bg-slate-300 cursor-not-allowed' : 'bg-red-500 text-white'}`}
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <RotateCw size={10} className="animate-spin" />
+                                        <span>Salvando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Square size={10} />
+                                        <span>{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                                    </>
+                                )}
                             </button>
                         ) : (
                             <>
-                                <button onClick={(e) => { e.stopPropagation(); setShowAudioMenu(!showAudioMenu); setShowPhotoMenu(false); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowAudioMenu(!showAudioMenu); setShowPhotoMenu(false); }}
+                                    disabled={isUploading}
+                                    className={`p-1.5 rounded ${isUploading ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                >
                                     <Mic size={16} />
                                 </button>
                                 {showAudioMenu && (
