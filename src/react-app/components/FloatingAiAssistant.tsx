@@ -151,7 +151,7 @@ export default function FloatingAiAssistant() {
             {/* Floating Button */}
             <button
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full shadow-2xl flex items-center justify-center text-white z-40 transition-all hover:scale-110 active:scale-95 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
+                className={`fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full shadow-2xl flex items-center justify-center text-white z-[110] transition-all hover:scale-110 active:scale-95 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
             >
                 <img src="/compia_logo.png" alt="COMPIA AI" className="w-8 h-8 object-contain brightness-0 invert" />
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -161,7 +161,7 @@ export default function FloatingAiAssistant() {
             </button>
 
             {/* Chat Modal */}
-            <div className={`fixed bottom-6 right-6 w-[95vw] sm:w-[400px] h-[550px] max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col z-50 transition-all duration-300 origin-bottom-right border border-slate-200 overflow-hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
+            <div className={`fixed bottom-24 right-6 w-[95vw] sm:w-[400px] h-[550px] max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col z-[120] transition-all duration-300 origin-bottom-right border border-slate-200 overflow-hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
 
                 {/* Header */}
                 <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 flex items-center justify-between shrink-0">
