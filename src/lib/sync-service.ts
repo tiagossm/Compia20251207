@@ -174,6 +174,88 @@ class SyncService {
             }
         }
     }
+    /**
+     * Download all data for offline use (Prefetch).
+     */
+    async syncDown(organizationId: number) {
+        if (!this.online) {
+            throw new Error('Cannot download data while offline.');
+        }
+
+        this.isSyncing = true;
+        this.notifyListeners();
+
+        try {
+            console.log('[Sync] Starting prefetch...');
+
+            // 1. Fetch Inspections
+            // Note: We depend on the global fetch being authenticated (e.g. by fetch-setup.ts or Authorization header)
+            const inspectionsRes = await fetch(`/api/inspections?organization_id=${organizationId}`);
+            if (!inspectionsRes.ok) throw new Error('Failed to fetch inspections');
+            const inspections = await inspectionsRes.json();
+
+            // 2. Fetch Templates (We need an endpoint for this, assuming /api/templates)
+            const templatesRes = await fetch(`/api/templates?organization_id=${organizationId}`);
+            if (!templatesRes.ok) throw new Error('Failed to fetch templates');
+            const templates = await templatesRes.json();
+
+            // 3. Save to Dexie
+            await db.transaction('rw', db.inspections, db.templates, async () => {
+                await db.inspections.bulkPut(inspections);
+                await db.templates.bulkPut(templates);
+            });
+
+            console.log(`[Sync] Downloaded ${inspections.length} inspections and ${templates.length} templates.`);
+
+        } catch (error) {
+            console.error('[Sync] Prefetch failed:', error);
+            throw error;
+        } finally {
+            this.isSyncing = false;
+            this.notifyListeners();
+        }
+    }
+
+    /**
+     * Download all data for offline use (Prefetch).
+     */
+    async syncDown(organizationId: number) {
+        if (!this.online) {
+            throw new Error('Cannot download data while offline.');
+        }
+
+        this.isSyncing = true;
+        this.notifyListeners();
+
+        try {
+            console.log('[Sync] Starting prefetch...');
+
+            // 1. Fetch Inspections
+            const inspectionsRes = await fetch(`/api/inspections?organization_id=${organizationId}`);
+            if (!inspectionsRes.ok) throw new Error('Failed to fetch inspections');
+            const inspections = await inspectionsRes.json();
+
+            // 2. Fetch Templates
+            const templatesRes = await fetch(`/api/templates?organization_id=${organizationId}`);
+            if (!templatesRes.ok) throw new Error('Failed to fetch templates');
+            const templates = await templatesRes.json();
+
+            // 3. Save to Dexie
+            await db.transaction('rw', db.inspections, db.templates, async () => {
+                await db.inspections.bulkPut(inspections);
+                await db.templates.bulkPut(templates);
+            });
+
+            console.log(`[Sync] Downloaded ${inspections.length} inspections and ${templates.length} templates.`);
+
+        } catch (error) {
+            console.error('[Sync] Prefetch failed:', error);
+            throw error;
+        } finally {
+            this.isSyncing = false;
+            this.notifyListeners();
+        }
+    }
 }
 
 export const syncService = new SyncService();

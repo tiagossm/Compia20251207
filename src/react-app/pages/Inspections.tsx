@@ -17,8 +17,10 @@ import {
   AlertCircle,
   Edit,
   Trash2,
-  Copy
+  Copy,
+  DownloadCloud
 } from 'lucide-react';
+import { syncService } from '@/lib/sync-service';
 import { InspectionType } from '@/shared/types';
 
 export default function Inspections() {
@@ -32,6 +34,7 @@ export default function Inspections() {
   );
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     fetchInspections();
@@ -151,6 +154,26 @@ export default function Inspections() {
     }
   };
 
+  const handleDownloadOffline = async () => {
+    if (!selectedOrgId) {
+      alert("Selecione uma organização primeiro.");
+      return;
+    }
+    const confirmDownload = window.confirm("Deseja baixar todas as inspeções e modelos desta organização para uso offline? Isso pode levar alguns instantes.");
+    if (!confirmDownload) return;
+
+    setIsDownloading(true);
+    try {
+      await syncService.syncDown(selectedOrgId);
+      alert("Download concluído com sucesso! \nVocê já pode sair para campo com o app offline. \n(Certifique-se de que o ícone 'Instalar' do app já apareceu)");
+    } catch (e: any) {
+      console.error(e);
+      alert("Erro no download: " + (e.message || "Tente novamente online."));
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleImportInspections = async (data: any[]) => {
     setCsvLoading(true);
     try {
@@ -266,8 +289,21 @@ export default function Inspections() {
             <p className="text-slate-600 mt-1 text-sm sm:text-base">
               Gerencie suas inspeções de segurança do trabalho
             </p>
-          </div>
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleDownloadOffline}
+            disabled={isDownloading}
+            className="flex items-center justify-center px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors duration-200 text-sm sm:text-base disabled:opacity-50"
+            title="Baixar para Offline"
+          >
+            <DownloadCloud className={`w-4 h-4 mr-2 ${isDownloading ? 'animate-bounce' : ''}`} />
+            <span className="hidden sm:inline">{isDownloading ? 'Baixando...' : 'Baixar Offline'}</span>
+            <span className="sm:hidden"><DownloadCloud className="w-4 h-4" /></span>
+          </button>
           <Link
+
             to="/inspections/new"
             className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm sm:text-base"
           >

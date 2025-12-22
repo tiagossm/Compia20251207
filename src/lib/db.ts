@@ -51,12 +51,21 @@ export interface LocalMedia {
 
 // --- Database Class ---
 
+export interface OfflineTemplate {
+    id: number;
+    title: string;
+    description?: string;
+    pages_json: any; // Full structure
+    organization_id: number;
+}
+
 export class CompiaDB extends Dexie {
     // Tables
     inspections!: Table<OfflineInspection, number>;
     pending_inspections!: Table<OfflineStartInspection, number>;
     mutation_queue!: Table<SyncMutation, number>;
     media_queue!: Table<LocalMedia, string>;
+    templates!: Table<OfflineTemplate, number>;
 
     constructor() {
         super('CompiaDB');
@@ -68,7 +77,8 @@ export class CompiaDB extends Dexie {
             inspections: 'id, organization_id, user_id, status',
             pending_inspections: '++id, user_id, status',
             mutation_queue: '++id, status, timestamp',
-            media_queue: 'id, inspection_id, status'
+            media_queue: 'id, inspection_id, status',
+            templates: 'id, organization_id'
         });
     }
 }
