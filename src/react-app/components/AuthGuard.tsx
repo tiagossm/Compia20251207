@@ -149,6 +149,54 @@ export default function AuthGuard({ children, requiredRole, requiredRoles }: Aut
   // Use demo user if available, otherwise use regular user
   const currentUser = demoUser || extendedUser;
 
+  // CRITICAL: Check approval status - block pending/rejected users
+  const approvalStatus = currentUser?.approval_status || currentUser?.profile?.approval_status;
+
+  if (!demoUser && (approvalStatus === 'pending' || approvalStatus === 'rejected')) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center max-w-md w-full">
+          <div className={`p-4 ${approvalStatus === 'rejected' ? 'bg-red-100' : 'bg-amber-100'} rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center`}>
+            {approvalStatus === 'rejected' ? (
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            ) : (
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+            )}
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">
+            {approvalStatus === 'rejected' ? 'Acesso Negado' : 'Aguardando Aprovação'}
+          </h2>
+          <p className="text-slate-600 mb-4">
+            {approvalStatus === 'rejected'
+              ? 'Sua solicitação de acesso foi recusada pelo administrador.'
+              : 'Sua conta foi criada com sucesso e está aguardando aprovação do administrador do sistema.'}
+          </p>
+          <div className="bg-slate-50 rounded-lg p-4 text-left text-sm text-slate-600 mb-4">
+            <p className="font-medium text-slate-800 mb-2">Próximos passos:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Aguarde a análise do seu cadastro</li>
+              <li>Você receberá um e-mail quando aprovado</li>
+              <li>Após aprovação, faça login novamente</li>
+            </ol>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Email: {currentUser?.email}
+          </p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('demo-auth');
+              localStorage.removeItem('demo-user');
+              window.location.href = '/login';
+            }}
+            className="w-full bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium"
+          >
+            Voltar ao Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Check role-based access
   const hasRequiredRole = () => {
     // For demo users, always grant access
