@@ -19,11 +19,7 @@ import {
   MessageSquare,
   Brain,
   PenTool,
-  Share2,
-  Mail,
-  MessageCircle,
   X,
-  FileDown,
   QrCode,
   Smartphone,
   Globe,
@@ -103,7 +99,7 @@ export default function InspectionSummary({
 
     generateQRCode();
   }, [inspection?.id]);
-  const [showShareDropdown, setShowShareDropdown] = useState(false);
+  // Removed showShareDropdown - now using FloatingActionBar
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [showPDFGenerator, setShowPDFGenerator] = useState(false);
   const [includeActionPlan, setIncludeActionPlan] = useState(false);
@@ -536,57 +532,7 @@ _Relatório gerado pelo Sistema Compia_
             </h1>
             <p className="text-slate-600 mt-1">{inspection.title}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowPDFGenerator(true)}
-                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                Gerar PDF
-              </button>
-              <button
-                onClick={() => setShowPrintOptions(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimir
-              </button>
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setShowShareDropdown(!showShareDropdown)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                Compartilhar
-              </button>
-              {showShareDropdown && (
-                <div className="absolute top-full mt-2 right-0 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-48">
-                  <button
-                    onClick={() => {
-                      handleShareByEmail();
-                      setShowShareDropdown(false);
-                    }}
-                    className="flex items-center w-full px-4 py-3 text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <Mail className="w-4 h-4 mr-3" />
-                    Compartilhar por E-mail
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleShareByWhatsApp();
-                      setShowShareDropdown(false);
-                    }}
-                    className="flex items-center w-full px-4 py-3 text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-3" />
-                    Compartilhar por WhatsApp
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Action buttons removed - using FloatingActionBar instead */}
         </div>
 
         {/* Print Header - Only visible when printing */}

@@ -814,13 +814,21 @@ inspectionRoutes.post("/:id/template-responses", demoAuthMiddleware, async (c) =
         }
       }
 
-      // Update inspection item with enhanced data preservation
+      // Convert compliance status to boolean for legacy column
+      let isCompliantBool: boolean | null = null;
+      if (complianceStatus === 'conforme') {
+        isCompliantBool = true;
+      } else if (complianceStatus === 'nao_conforme') {
+        isCompliantBool = false;
+      }
+
+      // Update inspection item with both compliance_status (text) and is_compliant (boolean for legacy)
       updateStatements.push(
         env.DB.prepare(`
           UPDATE inspection_items 
-          SET field_responses = ?, is_compliant = ?, updated_at = NOW()
+          SET field_responses = ?, is_compliant = ?, compliance_status = ?, updated_at = NOW()
           WHERE id = ? AND inspection_id = ?
-  `).bind(fieldResponsesJson, complianceStatus, itemIdNum, inspectionId).run()
+  `).bind(fieldResponsesJson, isCompliantBool, complianceStatus, itemIdNum, inspectionId).run()
       );
     }
 
