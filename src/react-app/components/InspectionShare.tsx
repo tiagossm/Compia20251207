@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { 
-  Share2, 
-  QrCode, 
-  Copy, 
-  Eye, 
-  Edit, 
+import {
+  Share2,
+  QrCode,
+  Copy,
+  Eye,
+  Edit,
   Calendar,
   Users,
   Link as LinkIcon,
@@ -52,7 +52,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
   const fetchShares = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/inspections/${inspectionId}/shares`);
+      const response = await fetch(`/api/share/${inspectionId}/shares`);
       if (response.ok) {
         const data = await response.json();
         setShares(data.shares || []);
@@ -67,7 +67,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
   const createShare = async () => {
     setCreating(true);
     try {
-      const response = await fetch(`/api/inspections/${inspectionId}/share`, {
+      const response = await fetch(`/api/share/${inspectionId}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -128,7 +128,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
 
   const downloadQRCode = () => {
     if (!qrCode) return;
-    
+
     const link = document.createElement('a');
     link.download = `qr-code-${inspectionTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
     link.href = qrCode;
@@ -152,7 +152,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{zIndex: 9998}}>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 9998 }}>
         <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -182,7 +182,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
                   <h3 className="font-semibold text-slate-900 mb-4">
                     Criar Novo Compartilhamento
                   </h3>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -264,7 +264,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
                 <h3 className="font-semibold text-slate-900">
                   Links Compartilhados ({shares.length})
                 </h3>
-                
+
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -348,7 +348,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
 
       {/* QR Code Modal */}
       {showQRModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{zIndex: 9999}}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-heading text-lg font-bold text-slate-900">
@@ -366,7 +366,7 @@ export default function InspectionShare({ inspectionId, inspectionTitle, isOpen,
               <div className="inline-block p-4 bg-white border-2 border-slate-200 rounded-lg">
                 <img src={qrCode} alt="QR Code" className="w-48 h-48" />
               </div>
-              
+
               <div className="p-3 bg-slate-50 rounded-lg">
                 <p className="text-sm text-slate-600 break-all">
                   {shareUrl}

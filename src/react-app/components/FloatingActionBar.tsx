@@ -139,7 +139,7 @@ export default function FloatingActionBar({
     return (
         <>
             {/* Floating Bar */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
+            <div className="fixed bottom-0 left-0 right-0 z-[100] pb-safe">
                 <div className="bg-white/95 backdrop-blur-sm border-t border-slate-200 shadow-lg">
                     <div className="max-w-4xl mx-auto px-3 py-2 sm:px-4 sm:py-3">
                         <div className="flex items-center justify-center gap-2 sm:gap-3">
