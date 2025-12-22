@@ -765,6 +765,7 @@ export default function InspectionDetail() {
         {showShareModal && (
           <InspectionShare
             inspectionId={parseInt(id || '0')}
+            inspectionTitle={inspection.title}
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
           />
