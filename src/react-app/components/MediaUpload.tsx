@@ -129,7 +129,7 @@ export default function MediaUpload({
         reader.readAsDataURL(file);
       });
 
-      const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/upload`, {
+      const response = await fetchWithAuth(`/api/media/${inspectionId}/media/upload`, {
         method: 'POST',
         body: JSON.stringify({
           inspection_id: inspectionId,
@@ -317,7 +317,7 @@ export default function MediaUpload({
     if (!confirm('Tem certeza que deseja excluir esta mídia?')) return;
 
     try {
-      const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/${mediaId}`, {
+      const response = await fetchWithAuth(`/api/media/${inspectionId}/media/${mediaId}`, {
         method: 'DELETE',
       });
 
@@ -356,7 +356,7 @@ export default function MediaUpload({
 
     for (const mediaId of selectedMedia) {
       try {
-        const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/${mediaId}`, {
+        const response = await fetchWithAuth(`/api/media/${inspectionId}/media/${mediaId}`, {
           method: 'DELETE',
         });
         if (response.ok) {
@@ -463,8 +463,8 @@ export default function MediaUpload({
                   if (isSelectionMode) setSelectedMedia([]);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${isSelectionMode
-                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                    : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
                   }`}
               >
                 <CheckSquare className="w-4 h-4" />
@@ -589,8 +589,8 @@ export default function MediaUpload({
               <div
                 key={media.id || `media-${index}`}
                 className={`relative bg-slate-50 rounded-lg p-3 border group transition-all ${isSelectionMode && selectedMedia.includes(media.id!)
-                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                    : 'border-slate-200'
+                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                  : 'border-slate-200'
                   }`}
                 onClick={isSelectionMode ? () => toggleMediaSelection(media.id!) : undefined}
               >
@@ -598,8 +598,8 @@ export default function MediaUpload({
                   <div className="flex items-center gap-2 text-slate-600">
                     {isSelectionMode && (
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedMedia.includes(media.id!)
-                          ? 'bg-blue-500 border-blue-500'
-                          : 'border-slate-400 bg-white'
+                        ? 'bg-blue-500 border-blue-500'
+                        : 'border-slate-400 bg-white'
                         }`}>
                         {selectedMedia.includes(media.id!) && (
                           <CheckSquare className="w-3 h-3 text-white" />
