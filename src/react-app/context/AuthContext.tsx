@@ -42,6 +42,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Handle both direct user object and nested user.user structure
                     const userObj = userData.user || userData;
                     setUser(userObj);
+                } else if (response.status === 403) {
+                    // User exists but pending approval or rejected
+                    const errorData = await response.json().catch(() => ({}));
+                    console.warn('[AuthContext] User pending approval:', errorData);
+
+                    // Set minimal user with pending status so app can show appropriate UI
+                    const pendingUser: any = {
+                        id: activeSession.user.id,
+                        email: activeSession.user.email,
+                        name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                        approval_status: errorData.approval_status || 'pending',
+                        profile: {
+                            id: activeSession.user.id,
+                            email: activeSession.user.email,
+                            name: activeSession.user.user_metadata?.name || activeSession.user.email,
+                            role: 'pending',
+                            approval_status: errorData.approval_status || 'pending'
+                        }
+                    };
+                    setUser(pendingUser);
                 } else {
                     console.warn('Failed to fetch user profile, using basic session user');
                     // Fallback to mapping Supabase user to ExtendedMochaUser structure
