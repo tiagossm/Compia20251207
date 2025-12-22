@@ -409,54 +409,7 @@ export default function InspectionSummary({
     setShowPrintOptions(false);
   };
 
-  // Share functions
-  const handleShareByEmail = () => {
-    const subject = encodeURIComponent(`Relatório de Inspeção - ${inspection.title}`);
-    const body = encodeURIComponent(`
-Olá,
-
-Segue o relatório da inspeção realizada:
-
-Título: ${inspection.title}
-Local: ${inspection.location}
-Inspetor: ${inspection.inspector_name}
-Data: ${inspection.scheduled_date ? new Date(inspection.scheduled_date).toLocaleDateString('pt-BR') : 'N/A'}
-
-Estatísticas:
-- Total de Itens: ${stats.totalItems}
-- Conformes: ${stats.compliantItems}
-- Não Conformes: ${stats.nonCompliantItems}
-- Taxa de Conformidade: ${stats.conformanceRate}%
-
-Atenciosamente,
-Sistema de Inspeções Compia
-    `);
-
-    const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
-    window.open(mailtoUrl, '_blank');
-  };
-
-  const handleShareByWhatsApp = () => {
-    const message = encodeURIComponent(`
-📋 *Relatório de Inspeção*
-
-*Título:* ${inspection.title}
-*Local:* ${inspection.location}
-*Inspetor:* ${inspection.inspector_name}
-*Data:* ${inspection.scheduled_date ? new Date(inspection.scheduled_date).toLocaleDateString('pt-BR') : 'N/A'}
-
-📊 *Estatísticas:*
-• Total de Itens: ${stats.totalItems}
-• Conformes: ${stats.compliantItems} ✅
-• Não Conformes: ${stats.nonCompliantItems} ❌
-• Taxa de Conformidade: ${stats.conformanceRate}%
-
-_Relatório gerado pelo Sistema Compia_
-    `);
-
-    const whatsappUrl = `https://wa.me/?text=${message}`;
-    window.open(whatsappUrl, '_blank');
-  };
+  // Share functions removed - now using FloatingActionBar
 
   return (
     <div className="space-y-8">
