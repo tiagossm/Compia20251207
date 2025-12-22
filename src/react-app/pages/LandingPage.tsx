@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  CheckCircle, 
-  Shield, 
-  Zap, 
-  BarChart3, 
+import {
+  CheckCircle,
+  Shield,
+  Zap,
+  BarChart3,
   ArrowRight,
   Star,
   Quote,
@@ -42,16 +42,16 @@ const Counter: React.FC<CounterProps> = ({ target, duration = 2000, prefix = '',
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-      
+
       setCount(Math.floor(progress * target));
-      
+
       if (progress < 1) {
         animationFrame = requestAnimationFrame(animate);
       }
     };
 
     animationFrame = requestAnimationFrame(animate);
-    
+
     return () => cancelAnimationFrame(animationFrame);
   }, [target, duration]);
 
@@ -69,7 +69,7 @@ const testimonials = [
   {
     quote: "Reduzimos 70% do tempo para gerar relatórios técnicos de NR-12.",
     author: "Ana Santos",
-    role: "Téc. de Segurança", 
+    role: "Téc. de Segurança",
     company: "Construtora Nacional",
     avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b814?w=150&h=150&fit=crop&crop=face"
   },
@@ -90,7 +90,7 @@ const useCases = [
     color: "from-blue-500 to-cyan-500"
   },
   {
-    title: "NR-35 – Trabalho em Altura", 
+    title: "NR-35 – Trabalho em Altura",
     description: "AR, PT, verificações de EPIs/EPCs.",
     icon: <Building className="w-8 h-8" />,
     color: "from-purple-500 to-pink-500"
@@ -146,14 +146,15 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <img 
-                src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/logo_preto_ico_azulclaro.svg" 
-                alt="COMPIA Logo" 
+              <img
+                src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/logo_preto_ico_azulclaro.svg"
+                alt="COMPIA Logo"
                 className="h-28 w-28"
                 style={{ height: '113px', width: '113px' }}
+                fetchPriority="high"
               />
             </div>
-            
+
             {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
               <button onClick={() => scrollToSection('produto')} className="text-gray-700 hover:text-blue-600 transition-colors">Produto</button>
@@ -168,7 +169,7 @@ export default function LandingPage() {
             </div>
 
             {/* Mobile Menu Button */}
-            <button 
+            <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="md:hidden p-2"
             >
@@ -202,11 +203,11 @@ export default function LandingPage() {
                 Inspeções inteligentes<br />
                 para <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-600">qualquer área</span>
               </h1>
-              
+
               <p className="text-xl md:text-2xl text-gray-700 mb-4 max-w-4xl mx-auto">
                 Digitalize, padronize e analise inspeções e checklists em minutos — com colaboração em tempo real, <strong>Assistentes IA por NR</strong> e insights automáticos.
               </p>
-              
+
               <p className="text-lg text-gray-600 mb-8 max-w-4xl mx-auto">
                 <strong>Inteligência Artificial em Segurança do Trabalho</strong>: analise conformidade com NRs e gere planos de ação automaticamente — sem perder a versatilidade para Qualidade, Meio Ambiente e Operações.
               </p>
@@ -265,7 +266,7 @@ export default function LandingPage() {
                 description: "Laudos, AET (NR-17), análises e documentação técnica gerados por assistentes virtuais."
               }
             ].map((benefit, index) => (
-              <div 
+              <div
                 key={index}
                 className="text-center p-6 rounded-xl bg-gray-50 hover:bg-white hover:shadow-lg transition-all duration-300 transform hover:-translate-y-2 group"
               >
@@ -277,7 +278,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          
+
           <div className="text-center mt-12">
             <a href="/login" className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-300 transform hover:scale-105">
               Experimente agora
@@ -298,7 +299,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8 relative">
             {/* Connection line */}
             <div className="hidden md:block absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-200 via-blue-400 to-blue-200 -translate-y-1/2"></div>
-            
+
             {[
               {
                 step: "1",
@@ -307,19 +308,19 @@ export default function LandingPage() {
                 icon: <CheckCircle className="w-8 h-8" />
               },
               {
-                step: "2", 
+                step: "2",
                 title: "Analise com IA",
                 description: "Assistentes especializados verificam conformidade, identificam riscos e sugerem correções por NR.",
                 icon: <Brain className="w-8 h-8" />
               },
               {
                 step: "3",
-                title: "Aja & acompanhe", 
+                title: "Aja & acompanhe",
                 description: "Planos 5W2H automáticos, alertas de prazo e dashboards de indicadores de segurança.",
                 icon: <BarChart3 className="w-8 h-8" />
               }
             ].map((step, index) => (
-              <div 
+              <div
                 key={index}
                 className="relative text-center p-8 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2"
               >
@@ -328,7 +329,7 @@ export default function LandingPage() {
                     {step.step}
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
                   <div className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-lg mb-4">
                     {step.icon}
@@ -353,22 +354,22 @@ export default function LandingPage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {useCases.map((useCase, index) => (
-              <div 
+              <div
                 key={index}
                 className="group cursor-pointer"
               >
                 <div className="relative overflow-hidden rounded-xl bg-white border border-gray-200 hover:border-transparent hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2">
                   <div className={`absolute inset-0 bg-gradient-to-br ${useCase.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
-                  
+
                   <div className="p-6">
                     <div className={`inline-flex items-center justify-center p-3 rounded-lg bg-gradient-to-br ${useCase.color} text-white mb-4 group-hover:scale-110 transition-transform duration-300`}>
                       {useCase.icon}
                     </div>
-                    
+
                     <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                       {useCase.title}
                     </h3>
-                    
+
                     <p className="text-gray-600 text-sm">{useCase.description}</p>
                   </div>
                 </div>
@@ -389,9 +390,9 @@ export default function LandingPage() {
       <section className="py-16 bg-gradient-to-br from-blue-600 to-cyan-700 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="mb-8">
-            <img 
-              src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/icone-azul-marinho.svg" 
-              alt="COMPIA AI Icon" 
+            <img
+              src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/icone-azul-marinho.svg"
+              alt="COMPIA AI Icon"
               className="w-16 h-16 mx-auto mb-6 animate-pulse"
             />
             <h2 className="text-3xl md:text-4xl font-bold mb-4">IA que entende de SST</h2>
@@ -426,7 +427,7 @@ export default function LandingPage() {
               "Gestão de não conformidades: rastreamento completo até a resolução",
               "Integrações/APIs: exportações CSV/PDF, webhooks e conexão com BI/ERP"
             ].map((feature, index) => (
-              <div 
+              <div
                 key={index}
                 className="flex items-start space-x-3 p-4 bg-white rounded-lg hover:shadow-md transition-all duration-300"
               >
@@ -484,16 +485,17 @@ export default function LandingPage() {
           <div className="relative max-w-4xl mx-auto">
             <div className="bg-white rounded-xl shadow-lg p-8 md:p-12">
               <Quote className="w-12 h-12 text-blue-600 mb-6" />
-              
+
               <blockquote className="text-xl md:text-2xl text-gray-700 mb-8 italic">
                 "{testimonials[currentTestimonial].quote}"
               </blockquote>
-              
+
               <div className="flex items-center">
-                <img 
+                <img
                   src={testimonials[currentTestimonial].avatar}
                   alt={testimonials[currentTestimonial].author}
                   className="w-16 h-16 rounded-full mr-4"
+                  loading="lazy"
                 />
                 <div>
                   <div className="font-semibold text-gray-900">{testimonials[currentTestimonial].author}</div>
@@ -509,9 +511,8 @@ export default function LandingPage() {
                 <button
                   key={index}
                   onClick={() => setCurrentTestimonial(index)}
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                    index === currentTestimonial ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentTestimonial ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
                 />
               ))}
             </div>
@@ -591,13 +592,12 @@ export default function LandingPage() {
                 features: ["Tudo do Empresa", "Customizações", "Integrações API", "Suporte dedicado", "Treinamento especializado"]
               }
             ].map((plan, index) => (
-              <div 
+              <div
                 key={index}
-                className={`relative p-8 rounded-xl ${
-                  plan.featured 
-                    ? 'bg-blue-600 text-white shadow-xl scale-105' 
+                className={`relative p-8 rounded-xl ${plan.featured
+                    ? 'bg-blue-600 text-white shadow-xl scale-105'
                     : 'bg-white border border-gray-200'
-                }`}
+                  }`}
               >
                 {plan.featured && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
@@ -606,14 +606,14 @@ export default function LandingPage() {
                     </span>
                   </div>
                 )}
-                
+
                 <h3 className={`text-2xl font-bold mb-2 ${plan.featured ? 'text-white' : 'text-gray-900'}`}>
                   {plan.name}
                 </h3>
                 <p className={`mb-6 ${plan.featured ? 'text-blue-100' : 'text-gray-600'}`}>
                   {plan.description}
                 </p>
-                
+
                 <ul className="space-y-3 mb-8">
                   {plan.features.map((feature, idx) => (
                     <li key={idx} className="flex items-center">
@@ -622,12 +622,11 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                
-                <button className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 ${
-                  plan.featured
+
+                <button className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 ${plan.featured
                     ? 'bg-white text-blue-600 hover:bg-gray-100'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}>
+                  }`}>
                   {index === 2 ? 'Falar com vendas' : 'Começar teste grátis'}
                 </button>
               </div>
@@ -694,7 +693,7 @@ export default function LandingPage() {
           <p className="text-xl text-blue-100 mb-8">
             Menos papel. Mais técnica. <strong>Conformidade garantida.</strong>
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <a href="/login" className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 flex items-center">
               Teste grátis por 14 dias
@@ -714,9 +713,9 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="col-span-2">
               <div className="flex items-center space-x-2 mb-4">
-                <img 
-                  src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/icone-azul-marinho.svg" 
-                  alt="COMPIA Icon" 
+                <img
+                  src="https://mocha-cdn.com/01990832-c49f-733d-bfcf-59bd1aee484d/icone-azul-marinho.svg"
+                  alt="COMPIA Icon"
                   className="h-8 w-8"
                 />
                 <span className="text-xl font-bold">COMPIA</span>
@@ -730,7 +729,7 @@ export default function LandingPage() {
                 <MapPin className="w-5 h-5 text-gray-400" />
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-4">Produto</h4>
               <ul className="space-y-2 text-gray-400">
@@ -740,7 +739,7 @@ export default function LandingPage() {
                 <li><a href="#" className="hover:text-white transition-colors">Integrações</a></li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-4">Empresa</h4>
               <ul className="space-y-2 text-gray-400">
@@ -751,7 +750,7 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          
+
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
             <p>COMPIA © 2025. Todos os direitos reservados.</p>
           </div>
