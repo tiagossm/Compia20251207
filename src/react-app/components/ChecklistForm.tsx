@@ -27,9 +27,7 @@ export default function ChecklistForm({
   fields,
   onSubmit,
   initialValues = {},
-  readonly = false,
   inspectionId,
-  inspectionItems = [],
   showComplianceSelector = true,
   onAutoSave,
   onUpdateAiAnalysis
@@ -189,7 +187,7 @@ export default function ChecklistForm({
   };
 
   // --- Media Logic ---
-  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime } = useMediaHandling({
+  const { uploadFile, startAudioRecording, stopRecording, recording } = useMediaHandling({
     inspectionId: inspectionId || 0,
     onMediaUploaded: (media) => {
       const fieldId = activeMediaFieldId.current;
@@ -743,6 +741,8 @@ export default function ChecklistForm({
 
             // Clean strings for filename
             const clean = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "_") : 'Item';
+
+            const getCategoryForField = (f: any) => f.category || 'Geral';
 
             const category = clean(getCategoryForField(field));
             const itemName = clean(field?.field_name || '');

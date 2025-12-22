@@ -9,6 +9,7 @@ import {
     X,
     FileText,
     Bot,
+    RefreshCw,
     Trash2,
     Image,
     FileAudio,
