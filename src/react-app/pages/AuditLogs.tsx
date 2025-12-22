@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/react-app/context/AuthContext';
-import { fetchWithAuth } from '@/shared/fetchWithAuth';
+import { fetchWithAuth } from '@/react-app/utils/auth';
 import {
     Shield,
     Search,
