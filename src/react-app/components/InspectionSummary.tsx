@@ -358,7 +358,8 @@ export default function InspectionSummary({
         }
       } else {
         // Improved logic for determining compliance from responses
-        const response = responses[fieldData.field_id];
+        // Use item.id (inspection_item ID) to lookup responses, as InspectionDetail now uses item.id as key
+        const response = responses[item.id];
 
         if (fieldData.field_type === 'boolean') {
           if (response === true || response === 'true') {
@@ -739,8 +740,8 @@ _Relatório gerado pelo Sistema Compia_
                 try {
                   const fieldData = JSON.parse(item.field_responses);
                   const itemMedia = getItemMedia(item.id);
-                  const response = responses[fieldData.field_id];
-                  const comment = (responses as Record<string, any>)[`comment_${fieldData.field_id}`];
+                  const response = responses[item.id];
+                  const comment = (responses as Record<string, any>)[`comment_${item.id}`];
 
                   return (
                     <div key={item.id} className="border border-slate-200 rounded-lg p-4 space-y-4 print:border-gray-400 print:page-break-inside-avoid">
