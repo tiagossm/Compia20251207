@@ -84,12 +84,32 @@ export default function ChecklistTemplates() {
   const [itemToMove, setItemToMove] = useState<{ type: 'folder' | 'template', id: string | number, name: string } | null>(null);
   const [moveLoading, setMoveLoading] = useState(false);
 
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; id: number | null; name: string }>({
+  // Delete confirmation (supports both templates and folders)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    id: number | string | null;
+    name: string;
+    type: 'template' | 'folder';
+  }>({
     isOpen: false,
     id: null,
-    name: ''
+    name: '',
+    type: 'template'
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Rename folder modal state
+  const [renameModal, setRenameModal] = useState<{
+    isOpen: boolean;
+    folderId: string | null;
+    currentName: string;
+  }>({ isOpen: false, folderId: null, currentName: '' });
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+
+  // TODO: Selection mode for batch operations (future implementation)
+  // const [isSelectionMode, setIsSelectionMode] = useState(false);
+  // const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   // Share Modal State
   const [shareModal, setShareModal] = useState<{
@@ -143,11 +163,22 @@ export default function ChecklistTemplates() {
     }
   };
 
+  // Delete template or folder
   const deleteTemplate = (template: ChecklistTemplate) => {
     setDeleteConfirmation({
       isOpen: true,
       id: template.id!,
-      name: template.name
+      name: template.name,
+      type: 'template'
+    });
+  };
+
+  const deleteFolder = (folder: ChecklistFolderWithCounts) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      id: folder.id!,
+      name: folder.name,
+      type: 'folder'
     });
   };
 
@@ -156,22 +187,60 @@ export default function ChecklistTemplates() {
 
     setDeleteLoading(true);
     try {
-      const response = await fetch(`/api/checklist/checklist-templates/${deleteConfirmation.id}`, {
+      // Use different API endpoint based on type
+      const url = deleteConfirmation.type === 'folder'
+        ? `/api/checklist/folders/${deleteConfirmation.id}`
+        : `/api/checklist/checklist-templates/${deleteConfirmation.id}`;
+
+      const response = await fetch(url, {
         method: 'DELETE'
       });
       if (response.ok) {
         await fetchData();
-        setDeleteConfirmation({ isOpen: false, id: null, name: '' });
+        setDeleteConfirmation({ isOpen: false, id: null, name: '', type: 'template' });
       } else {
         const error = await response.json();
         alert(`Erro ao excluir: ${error.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
-      console.error('Erro ao excluir template:', error);
-      alert('Erro ao excluir template');
+      console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir item');
     } finally {
       setDeleteLoading(false);
     }
+  };
+
+  // Rename folder
+  const handleRenameFolder = async () => {
+    if (!renameModal.folderId || !newFolderName.trim()) return;
+
+    setRenameLoading(true);
+    try {
+      const response = await fetch(`/api/checklist/folders/${renameModal.folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newFolderName.trim() })
+      });
+
+      if (response.ok) {
+        await fetchData();
+        setRenameModal({ isOpen: false, folderId: null, currentName: '' });
+        setNewFolderName('');
+      } else {
+        const error = await response.json();
+        alert(`Erro ao renomear: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao renomear pasta:', error);
+      alert('Erro ao renomear pasta');
+    } finally {
+      setRenameLoading(false);
+    }
+  };
+
+  const openRenameModal = (folder: ChecklistFolderWithCounts) => {
+    setRenameModal({ isOpen: true, folderId: folder.id!, currentName: folder.name });
+    setNewFolderName(folder.name);
   };
 
   const duplicateTemplate = async (template: ChecklistTemplate) => {
@@ -647,11 +716,21 @@ export default function ChecklistTemplates() {
                               onClick: () => enterFolder(folder)
                             },
                             {
+                              label: 'Renomear',
+                              icon: <FileEdit className="w-4 h-4" />,
+                              onClick: (e) => { e.stopPropagation(); openRenameModal(folder); }
+                            },
+                            {
                               label: 'Mover',
                               icon: <ArrowRightLeft className="w-4 h-4" />,
                               onClick: (e) => openMoveModal(e, 'folder', folder.id!, folder.name)
                             },
-                            // Add edit/delete if API supports it for folders
+                            {
+                              label: 'Excluir',
+                              icon: <Trash2 className="w-4 h-4 text-red-500" />,
+                              className: "text-red-600 hover:bg-red-50",
+                              onClick: (e) => { e.stopPropagation(); deleteFolder(folder); }
+                            }
                           ]}
                         />
                       </div>
@@ -1017,6 +1096,50 @@ export default function ChecklistTemplates() {
           </div>
         )
       }
+      {/* Rename Folder Modal */}
+      {renameModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-xl font-semibold text-slate-900">Renomear Pasta</h2>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Nome da pasta
+              </label>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Novo nome..."
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder()}
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameModal({ isOpen: false, folderId: null, currentName: '' });
+                  setNewFolderName('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleRenameFolder}
+                disabled={renameLoading || !newFolderName.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {renameLoading ? 'Renomeando...' : 'Renomear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </Layout >
   );
