@@ -279,19 +279,23 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c)
             mediaContext = `EVIDÊNCIAS DISPONÍVEIS: Nenhuma mídia anexada.`;
         }
 
-        const promptText = `Você é um especialista em segurança do trabalho.
+        const promptText = `Você é um Auditor de Segurança do Trabalho Sênior.
 
-CONTEXTO:
-- Local: ${item.location}
-- Empresa: ${item.company_name}
-- Inspeção: ${item.inspection_title}
-- Campo: ${field_name}
-- Categoria: ${item.category}
-- Resposta: ${response_value !== null && response_value !== undefined ? response_value : 'Não respondido'}
+CONTEXTO DA INSPEÇÃO:
+- Item: ${field_name} (Categoria: ${item.category})
+- Local/Empresa: ${item.location} / ${item.company_name}
+- Situação Relatada pelo Inspetor: ${response_value === false ? 'NÃO CONFORME' : response_value === true ? 'CONFORME' : response_value || 'Não informado'}
 ${mediaContext}
-${user_prompt ? `Foco: ${user_prompt}` : ''}
+${user_prompt ? `Pedido Específico do Usuário: ${user_prompt}` : ''}
 
-${audioTranscriptions.length > 0 ? 'IMPORTANTE: Analise CUIDADOSAMENTE as transcrições de áudio acima, pois contêm informações verbais do inspetor sobre a situação.\n\n' : ''}Forneça análise técnica breve (máximo 500 caracteres) sobre conformidade, riscos e recomendações. Use texto simples sem formatação.`;
+INSTRUÇÃO CRÍTICA SOBRE AS IMAGENS:
+1. Analise se as imagens anexadas TÊM RELAÇÃO com o item "${field_name}".
+2. Se as fotos forem irrelevantes (ex: selfies, chão, fotos escuras, ou nada a ver com o item), IGNORE-AS e avise: "As imagens fornecidas não permitem análise visual do item."
+3. NÃO ALUCINE: Não invente defeitos que não são CLARAMENTE visíveis nas fotos. Se não dá para ver, não fale que está ruim.
+4. Se a situação é "NÃO CONFORME" mas a foto não mostra nada, diga: "O inspetor marcou como não conforme, porém as evidências visuais não demonstram claramente a irregularidade."
+
+SAÍDA ESPERADA:
+Análise técnica breve (máximo 500 caracteres). Se houver riscos visíveis, cite-os. Se não houver, dê apenas recomendações gerais baseadas nas normas (NRs) aplicáveis ao item.`;
 
         let cleanAnalysis = '';
         let usedProvider = 'none';

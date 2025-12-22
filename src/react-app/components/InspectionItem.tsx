@@ -561,20 +561,29 @@ export default function InspectionItem({
                             <Sparkles size={10} /> Análise IA
                         </span>
                         {item.aiAnalysis && !editingAnalysis && onAiAnalysisUpdate && (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-100 shadow-sm">
+                                <button
+                                    onClick={() => onAiAnalysisRequest && onAiAnalysisRequest(media.map(m => m.id!))}
+                                    className="text-slate-500 hover:text-blue-600 transition-colors"
+                                    title="Gerar Novamente"
+                                >
+                                    <RefreshCw size={14} />
+                                </button>
+                                <div className="w-px h-3 bg-slate-200" />
                                 <button
                                     onClick={() => { setTempAnalysis(item.aiAnalysis || ''); setEditingAnalysis(true); }}
-                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                                    title="Editar"
+                                    className="text-slate-500 hover:text-indigo-600 transition-colors"
+                                    title="Editar Texto"
                                 >
-                                    <Edit3 size={10} />
+                                    <Edit3 size={14} />
                                 </button>
+                                <div className="w-px h-3 bg-slate-200" />
                                 <button
                                     onClick={() => { if (confirm('Excluir análise?')) onAiAnalysisUpdate(null); }}
-                                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                    title="Excluir (Permite re-analisar)"
+                                    className="text-slate-500 hover:text-red-600 transition-colors"
+                                    title="Excluir"
                                 >
-                                    <Trash2 size={10} />
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         )}
