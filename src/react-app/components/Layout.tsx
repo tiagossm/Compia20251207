@@ -154,6 +154,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
                   <>
                     <NavItem item={{ name: 'Permissões', href: '/settings/permissions', icon: Shield }} />
                     <NavItem item={{ name: 'Sinc. Dados', href: '/admin/data-sync', icon: Database }} />
+                    <NavItem item={{ name: 'Logs Auditoria', href: '/admin/audit', icon: Activity }} />
                   </>
                 )}
 

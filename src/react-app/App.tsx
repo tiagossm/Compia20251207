@@ -33,6 +33,7 @@ import SharedInspection from "@/react-app/pages/SharedInspection";
 import AcceptInvitation from "@/react-app/pages/AcceptInvitation";
 import RolePermissions from "@/react-app/pages/RolePermissions";
 import AdminDataSync from "@/react-app/pages/AdminDataSync";
+import AuditLogs from "@/react-app/pages/AuditLogs";
 import LandingPage from "@/react-app/pages/LandingPage";
 
 // Demo Banner removed
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
             <Route path="/settings/permissions" element={<AuthGuard requiredRole="system_admin"><RolePermissions /></AuthGuard>} />
             <Route path="/admin/data-sync" element={<AuthGuard requiredRole="system_admin"><AdminDataSync /></AuthGuard>} />
+            <Route path="/admin/audit" element={<AuthGuard requiredRole="system_admin"><AuditLogs /></AuthGuard>} />
 
 
             <Route path="/checklists" element={<AuthGuard><ChecklistTemplates /></AuthGuard>} />

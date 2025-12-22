@@ -35,6 +35,7 @@ import notificationsRoutes from "./notifications-routes.ts";
 import inspectionItemRoutes from "./inspection-item-routes.ts";
 import gamificationRoutes from "./gamification-routes.ts";
 import aiAssistantRoutes from "./ai-assistant-routes.ts";
+import { auditRoutes } from "./audit-routes.ts";
 
 const app = new Hono()
 
@@ -236,6 +237,7 @@ apiRoutes.route('/autosuggest', autosuggestRoutes);
 apiRoutes.route('/ai-assistant', aiAssistantRoutes);
 
 apiRoutes.route('/kanban', kanbanRoutes);
+apiRoutes.route('/audit', auditRoutes);
 
 // App principal monta o sub-app em dois lugares:
 // 1. Na raiz '/' (para chamadas diretas ou sem prefixo)
