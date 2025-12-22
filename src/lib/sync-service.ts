@@ -68,8 +68,19 @@ class SyncService {
                 .equals('pending')
                 .sortBy('id');
 
-            for (const mutation of mutations) {
-                if (!this.online) break; // Stop if we go offline during sync
+            for (const mutationItem of mutations) {
+                console.log(`[Sync] Processing queue item: ${mutationItem.id}`);
+                if (!this.online) {
+                    console.log('[Sync] Offline, stopping queue.');
+                    break;
+                }
+
+                // Refetch mutation to get latest state (in case dependency resolution updated it)
+                const mutation = await db.mutation_queue.get(mutationItem.id!);
+                if (!mutation) {
+                    console.log(`[Sync] Mutation ${mutationItem.id} not found/deleted.`);
+                    continue;
+                }
 
                 try {
                     await this.syncItem(mutation);
