@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, X, Image, Video, Mic, FileText, Pause, Camera, Eye, Download } from 'lucide-react';
+import { Upload, X, Image, Video, Mic, FileText, Pause, Camera, Eye, Download, CheckSquare, Square, Trash2 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import MediaViewer from './MediaViewer';
@@ -31,6 +31,8 @@ export default function MediaUpload({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentViewIndex, setCurrentViewIndex] = useState(0);
   const [showDownloader, setShowDownloader] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<number[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // videoRef removed - video recording disabled
@@ -311,20 +313,61 @@ export default function MediaUpload({
   };
 
   const deleteMedia = async (mediaId: number) => {
+    if (!onMediaDeleted) return;
+    if (!confirm('Tem certeza que deseja excluir esta mídia?')) return;
+
     try {
-      // Endpoint correto para deletar mídia: /api/media/:inspectionId/media/:mediaId
-      const response = await fetchWithAuth(`/api/media/${inspectionId}/media/${mediaId}`, {
+      const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/${mediaId}`, {
         method: 'DELETE',
       });
 
-      if (response.ok && onMediaDeleted) {
+      if (response.ok) {
         onMediaDeleted(mediaId);
-      } else if (!response.ok) {
-        console.error('Delete failed with status:', response.status);
+        setSelectedMedia(prev => prev.filter(id => id !== mediaId));
       }
     } catch (error) {
-      console.error('Erro ao deletar mídia:', error);
+      console.error('Error deleting media:', error);
     }
+  };
+
+  const toggleMediaSelection = (mediaId: number) => {
+    setSelectedMedia(prev => {
+      if (prev.includes(mediaId)) {
+        return prev.filter(id => id !== mediaId);
+      } else {
+        return [...prev, mediaId];
+      }
+    });
+  };
+
+  const selectAllMedia = () => {
+    const allIds = existingMedia.map(m => m.id!).filter(id => id !== undefined);
+    setSelectedMedia(allIds);
+  };
+
+  const deselectAllMedia = () => {
+    setSelectedMedia([]);
+  };
+
+  const deleteSelectedMedia = async () => {
+    if (!onMediaDeleted) return;
+    if (selectedMedia.length === 0) return;
+    if (!confirm(`Tem certeza que deseja excluir ${selectedMedia.length} mídia(s) selecionada(s)?`)) return;
+
+    for (const mediaId of selectedMedia) {
+      try {
+        const response = await fetchWithAuth(`/api/inspections/${inspectionId}/media/${mediaId}`, {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          onMediaDeleted(mediaId);
+        }
+      } catch (error) {
+        console.error('Error deleting media:', mediaId, error);
+      }
+    }
+    setSelectedMedia([]);
+    setIsSelectionMode(false);
   };
 
   const formatTime = (seconds: number) => {
@@ -407,11 +450,27 @@ export default function MediaUpload({
             )}
           </div>
 
-          {/* Right: Media count indicator */}
+          {/* Right: Media count and selection toggle */}
           {existingMedia.length > 0 && (
-            <span className="text-sm text-slate-500">
-              {existingMedia.length} {existingMedia.length === 1 ? 'mídia' : 'mídias'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-500">
+                {existingMedia.length} {existingMedia.length === 1 ? 'mídia' : 'mídias'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  if (isSelectionMode) setSelectedMedia([]);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${isSelectionMode
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                    : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
+                  }`}
+              >
+                <CheckSquare className="w-4 h-4" />
+                {isSelectionMode ? 'Sair da Seleção' : 'Selecionar'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -472,22 +531,50 @@ export default function MediaUpload({
       {/* Media Gallery */}
       {existingMedia.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium text-slate-900 flex items-center gap-2">
-              <Image className="w-6 h-6" />
-              Gerenciar Mídias ({existingMedia.length})
-            </h4>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowDownloader(!showDownloader)}
-                className="flex items-center px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Gerenciar Downloads
-              </button>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-900">Mídias enviadas</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDownloader(!showDownloader)}
+                  className="flex items-center px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <Download className="w-5 h-5 mr-2" />
+                  Gerenciar Downloads
+                </button>
+              </div>
             </div>
-          </div>
 
+            {/* Selection Actions Bar */}
+            {isSelectionMode && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={selectedMedia.length === existingMedia.length ? deselectAllMedia : selectAllMedia}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-white text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  >
+                    {selectedMedia.length === existingMedia.length ? (
+                      <><Square className="w-4 h-4" /> Desmarcar Todos</>
+                    ) : (
+                      <><CheckSquare className="w-4 h-4" /> Selecionar Todos</>
+                    )}
+                  </button>
+                </div>
+                <span className="text-sm text-blue-700">
+                  {selectedMedia.length} de {existingMedia.length} selecionado(s)
+                </span>
+                {selectedMedia.length > 0 && (
+                  <button
+                    onClick={deleteSelectedMedia}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 ml-auto"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Selecionados
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           {/* Media Downloader */}
           {showDownloader && (
             <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
@@ -499,23 +586,40 @@ export default function MediaUpload({
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {existingMedia.map((media, index) => (
-              <div key={media.id || `media-${index}`} className="relative bg-slate-50 rounded-lg p-3 border border-slate-200 group">
+              <div
+                key={media.id || `media-${index}`}
+                className={`relative bg-slate-50 rounded-lg p-3 border group transition-all ${isSelectionMode && selectedMedia.includes(media.id!)
+                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                    : 'border-slate-200'
+                  }`}
+                onClick={isSelectionMode ? () => toggleMediaSelection(media.id!) : undefined}
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-slate-600">
+                    {isSelectionMode && (
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedMedia.includes(media.id!)
+                          ? 'bg-blue-500 border-blue-500'
+                          : 'border-slate-400 bg-white'
+                        }`}>
+                        {selectedMedia.includes(media.id!) && (
+                          <CheckSquare className="w-3 h-3 text-white" />
+                        )}
+                      </div>
+                    )}
                     {getMediaIcon(media.media_type)}
                     <span className="text-xs font-medium">{media.media_type.toUpperCase()}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => openViewer(index)}
+                      onClick={(e) => { e.stopPropagation(); openViewer(index); }}
                       className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors opacity-0 group-hover:opacity-100"
                       title="Visualizar em tamanho grande"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    {onMediaDeleted && (
+                    {onMediaDeleted && !isSelectionMode && (
                       <button
-                        onClick={() => deleteMedia(media.id!)}
+                        onClick={(e) => { e.stopPropagation(); deleteMedia(media.id!); }}
                         className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
                       >
                         <X className="w-4 h-4" />
