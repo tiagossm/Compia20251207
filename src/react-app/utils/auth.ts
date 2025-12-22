@@ -42,11 +42,20 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
     // Offline Mode: Queue mutation
     try {
       const { syncService } = await import('../../lib/sync-service');
-      await syncService.enqueueMutation(url, options.method as any, options.body ? JSON.parse(options.body as string) : {});
-      console.log('[Offline] Mutation queued:', url);
+      const tempId = -Date.now(); // Temp ID for offline references
+
+      await syncService.enqueueMutation(url, options.method as any, options.body ? JSON.parse(options.body as string) : {}, tempId);
+      console.log('[Offline] Mutation queued:', url, 'TempID:', tempId);
 
       // Return valid fake response to keep UI happy
-      return new Response(JSON.stringify({ success: true, offline: true, message: 'Saved offline' }), {
+      return new Response(JSON.stringify({
+        success: true,
+        offline: true,
+        message: 'Saved offline',
+        id: tempId, // Return tempId
+        data: { id: tempId }, // Some components might look for data.id
+        ...((options.method === 'POST') ? { created_at: new Date().toISOString() } : {})
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -69,9 +78,18 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
       // Network Error (e.g. timeout, DNS) - Queue it
       console.log('[Network Error] Queueing mutation:', url);
       const { syncService } = await import('../../lib/sync-service');
-      await syncService.enqueueMutation(url, options.method as any, options.body ? JSON.parse(options.body as string) : {});
+      const tempId = -Date.now();
 
-      return new Response(JSON.stringify({ success: true, offline: true, message: 'Saved offline (Network Error)' }), {
+      await syncService.enqueueMutation(url, options.method as any, options.body ? JSON.parse(options.body as string) : {}, tempId);
+
+      return new Response(JSON.stringify({
+        success: true,
+        offline: true,
+        message: 'Saved offline (Network Error)',
+        id: tempId,
+        data: { id: tempId },
+        ...((options.method === 'POST') ? { created_at: new Date().toISOString() } : {})
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });

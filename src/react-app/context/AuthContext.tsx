@@ -42,6 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Handle both direct user object and nested user.user structure
                     const userObj = userData.user || userData;
                     setUser(userObj);
+                    // Cache for offline
+                    localStorage.setItem('cached_user_profile', JSON.stringify(userObj));
                 } else if (response.status === 403) {
                     // User exists but pending approval or rejected
                     const errorData = await response.json().catch(() => ({}));
@@ -79,7 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
             } catch (err) {
                 console.error('Error fetching user profile:', err);
-                // Fallback
+
+                // Try to load from cache first
+                const cachedProfile = localStorage.getItem('cached_user_profile');
+                if (cachedProfile) {
+                    console.log('Loaded user profile from cache');
+                    setUser(JSON.parse(cachedProfile));
+                    return;
+                }
+
+                // Fallback to basic session
                 const basicUser: any = {
                     ...activeSession.user,
                     name: activeSession.user.user_metadata?.name || activeSession.user.email,

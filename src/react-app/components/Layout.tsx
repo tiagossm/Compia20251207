@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import NotificationSystem from '@/react-app/components/NotificationSystem';
 import FloatingAiAssistant from '@/react-app/components/FloatingAiAssistant';
+import { SyncStatusIndicator } from '@/react-app/components/SyncStatusIndicator';
+import { OfflinePinModal } from '@/react-app/components/OfflinePinModal';
 
 interface LayoutProps {
   children: ReactNode;
@@ -182,6 +184,9 @@ export default function Layout({ children, actionButton }: LayoutProps) {
 
         {/* HEADER */}
         <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton}>
+          {/* Sync Status */}
+          <SyncStatusIndicator />
+
           {/* Notification System */}
           <NotificationSystem />
 
@@ -251,6 +256,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
 
       {/* Floating AI Assistant */}
       <FloatingAiAssistant />
+      <OfflinePinModal />
     </div>
   );
 }

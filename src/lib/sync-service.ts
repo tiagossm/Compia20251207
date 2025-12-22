@@ -1,31 +1,53 @@
 import { db, SyncMutation } from './db';
 
-
 class SyncService {
     private isSyncing = false;
     private online = navigator.onLine;
+    private listeners: ((status: 'idle' | 'syncing' | 'offline' | 'error') => void)[] = [];
 
     constructor() {
         window.addEventListener('online', () => {
             this.online = true;
+            this.notifyListeners();
             this.processQueue();
         });
         window.addEventListener('offline', () => {
             this.online = false;
+            this.notifyListeners();
         });
+    }
+
+    subscribe(callback: (status: 'idle' | 'syncing' | 'offline' | 'error') => void) {
+        this.listeners.push(callback);
+        callback(this.getStatus()); // Initial state
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== callback);
+        };
+    }
+
+    private notifyListeners() {
+        const status = this.getStatus();
+        this.listeners.forEach(l => l(status));
+    }
+
+    getStatus() {
+        if (!this.online) return 'offline';
+        if (this.isSyncing) return 'syncing';
+        return 'idle';
     }
 
     /**
      * Add a mutation to the queue and try to sync immediately if online.
      */
-    async enqueueMutation(url: string, method: 'POST' | 'PUT' | 'DELETE' | 'PATCH', body: any) {
+    async enqueueMutation(url: string, method: 'POST' | 'PUT' | 'DELETE' | 'PATCH', body: any, tempId?: number) {
         await db.mutation_queue.add({
             url,
             method,
             body,
             timestamp: Date.now(),
             retryCount: 0,
-            status: 'pending'
+            status: 'pending',
+            tempId
         });
         this.processQueue();
     }
@@ -37,6 +59,7 @@ class SyncService {
         if (this.isSyncing || !this.online) return;
 
         this.isSyncing = true;
+        this.notifyListeners(); // Update UI to "syncing"
 
         try {
             // Get all pending mutations sorted by ID (FIFO)
@@ -61,6 +84,7 @@ class SyncService {
             }
         } finally {
             this.isSyncing = false;
+            this.notifyListeners(); // Update UI to "idle"
         }
     }
 
@@ -68,7 +92,9 @@ class SyncService {
         // Mark as processing (optional, UI feedback)
         // await db.mutation_queue.update(mutation.id!, { status: 'processing' });
 
-        const response = await fetchWithAuth(mutation.url, {
+        // Use native fetch to avoid circular dependency with auth.ts
+        // Authorization header is usually injected by fetch-setup.ts monkey patch
+        const response = await fetch(mutation.url, {
             method: mutation.method,
             body: JSON.stringify(mutation.body),
             headers: {
@@ -84,6 +110,57 @@ class SyncService {
             }
             // For now, simple throw to keep in queue (needs better strategy later)
             throw new Error(`Request failed: ${response.statusText}`);
+        }
+
+        // --- ID Resolution Logic ---
+        if (mutation.tempId) {
+            try {
+                const data = await response.json();
+                if (data && data.id) {
+                    await this.resolveDependencies(mutation.tempId, data.id);
+                }
+            } catch (e) {
+                // Ignore
+            }
+        }
+    }
+
+    private async resolveDependencies(tempId: number, realId: number) {
+        const pending = await db.mutation_queue
+            .where('status')
+            .equals('pending')
+            .toArray();
+
+        for (const m of pending) {
+            let changed = false;
+            let newUrl = m.url;
+            let newBody = m.body;
+
+            // Replace in URL
+            if (newUrl.includes(String(tempId))) {
+                newUrl = newUrl.replace(String(tempId), String(realId));
+                changed = true;
+            }
+
+            // Replace in Body (JSON string replace for simplicity/robustness with unique tempIds)
+            try {
+                const bodyStr = JSON.stringify(newBody);
+                if (bodyStr.includes(String(tempId))) {
+                    const newBodyStr = bodyStr.replace(new RegExp(String(tempId), 'g'), String(realId));
+                    newBody = JSON.parse(newBodyStr);
+                    changed = true;
+                }
+            } catch (e) {
+                console.error('Error parsing body for ID resolution', e);
+            }
+
+            if (changed) {
+                await db.mutation_queue.update(m.id!, {
+                    url: newUrl,
+                    body: newBody
+                });
+                console.log(`[Sync] Resolved dependency: ${tempId} -> ${realId} in mutation ${m.id}`);
+            }
         }
     }
 }
