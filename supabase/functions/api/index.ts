@@ -177,7 +177,7 @@ apiRoutes.use('*', async (c, next) => {
 
 // Rotas básicas no sub-app
 apiRoutes.get('/', (c) => {
-    return c.text('COMPIA API running on Supabase Edge Functions with Postgres Wrapper! Status: Online')
+    return c.text('COMPIA API running on Supabase Edge Functions with Postgres Wrapper! Status: Online v2')
 })
 
 apiRoutes.get('/health', async (c) => {

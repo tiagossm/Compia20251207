@@ -61,6 +61,7 @@ export const ChecklistFieldSchema = z.object({
   initial_value: z.any().optional(),
   initial_comment: z.string().optional(),
   initial_compliance_status: z.string().optional(),
+  initial_ai_analysis: z.string().optional(),
 });
 
 export type ChecklistField = z.infer<typeof ChecklistFieldSchema>;

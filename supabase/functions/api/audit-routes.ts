@@ -1,24 +1,34 @@
 import { Hono } from 'hono';
 import { demoAuthMiddleware as authMiddleware } from './demo-auth-middleware.ts';
 
+
+type Env = {
+    DB: any;
+    [key: string]: any;
+};
+
 const auditRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Middleware to ensure user has access to audit logs (System Admin or Org Admin)
 const requireAuditAccess = async (c: any, next: any) => {
     const user = c.get('user');
-    const role = user?.profile?.role;
+    const role = user?.role || user?.profile?.role;
+    console.log(`[AUDIT] Auth check - User: ${user?.email}, Role: ${role}`);
+
     if (!role || !['system_admin', 'sys_admin', 'org_admin', 'organization_admin'].includes(role)) {
-        return c.json({ error: 'Acesso negado. Apenas administradores podem acessar logs de auditoria.' }, 403);
+        return c.json({ error: `Acesso negado. Role '${role}' não autorizada.` }, 403);
     }
     await next();
 };
+
+
 
 // GET /api/audit/logs - List audit logs with filters
 auditRoutes.get('/logs', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile?.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
 
     // Parse query parameters for filters
     const url = new URL(c.req.url);
@@ -39,52 +49,45 @@ auditRoutes.get('/logs', authMiddleware, requireAuditAccess, async (c) => {
         // Build dynamic query with filters
         let whereConditions: string[] = [];
         let params: any[] = [];
-        let paramIndex = 1;
+        // paramIndex removed - wrapper handles sequential ? automatically
 
         // Security: If org_admin, force filter by their organization_id
         if (['org_admin', 'organization_admin'].includes(userRole)) {
             if (!userOrgId) {
                 return c.json({ error: 'Usuário sem organização vinculada' }, 400);
             }
-            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            whereConditions.push('al.organization_id = ?');
             params.push(userOrgId);
-            paramIndex++;
         } else if (organizationIdQuery) {
             // If system admin and supplied organization_id filter
-            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            whereConditions.push('al.organization_id = ?');
             params.push(parseInt(organizationIdQuery));
-            paramIndex++;
         }
 
         if (startDate) {
-            whereConditions.push(`al.created_at >= ?${paramIndex}`);
+            whereConditions.push('al.created_at >= ?');
             params.push(startDate);
-            paramIndex++;
         }
         if (endDate) {
-            whereConditions.push(`al.created_at <= ?${paramIndex}`);
+            whereConditions.push('al.created_at <= ?');
             params.push(endDate + 'T23:59:59Z');
-            paramIndex++;
         }
         if (actionType) {
-            whereConditions.push(`al.action_type = ?${paramIndex}`);
+            whereConditions.push('al.action_type = ?');
             params.push(actionType);
-            paramIndex++;
         }
         if (targetType) {
-            whereConditions.push(`al.target_type = ?${paramIndex}`);
+            whereConditions.push('al.target_type = ?');
             params.push(targetType);
-            paramIndex++;
         }
         if (userId) {
-            whereConditions.push(`al.user_id = ?${paramIndex}`);
+            whereConditions.push('al.user_id = ?');
             params.push(userId);
-            paramIndex++;
         }
         if (search) {
-            whereConditions.push(`(al.action_description LIKE ?${paramIndex} OR al.target_id LIKE ?${paramIndex})`);
+            whereConditions.push('(al.action_description LIKE ? OR al.target_id LIKE ?)');
             params.push(`%${search}%`);
-            paramIndex++;
+            params.push(`%${search}%`);
         }
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -107,11 +110,10 @@ auditRoutes.get('/logs', authMiddleware, requireAuditAccess, async (c) => {
         al.metadata,
         al.created_at,
         u.email as user_email,
-        up.name as user_name,
-        o.trade_name as organization_name
+        u.name as user_name,
+        o.name as organization_name
       FROM activity_log al
       LEFT JOIN users u ON al.user_id = u.id
-      LEFT JOIN user_profiles up ON u.id = up.user_id
       LEFT JOIN organizations o ON al.organization_id = o.id
       ${whereClause}
       ORDER BY al.created_at DESC
@@ -139,8 +141,8 @@ auditRoutes.get('/logs', authMiddleware, requireAuditAccess, async (c) => {
 auditRoutes.get('/logs/:id', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile?.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
     const logId = parseInt(c.req.param('id'));
 
     try {
@@ -148,11 +150,10 @@ auditRoutes.get('/logs/:id', authMiddleware, requireAuditAccess, async (c) => {
       SELECT 
         al.*,
         u.email as user_email,
-        up.name as user_name,
-        o.trade_name as organization_name
+        u.name as user_name,
+        o.name as organization_name
       FROM activity_log al
       LEFT JOIN users u ON al.user_id = u.id
-      LEFT JOIN user_profiles up ON u.id = up.user_id
       LEFT JOIN organizations o ON al.organization_id = o.id
       WHERE al.id = ?
     `;
@@ -181,8 +182,8 @@ auditRoutes.get('/logs/:id', authMiddleware, requireAuditAccess, async (c) => {
 auditRoutes.get('/stats', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile?.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
 
     const url = new URL(c.req.url);
     const days = parseInt(url.searchParams.get('days') || '30');
@@ -234,14 +235,13 @@ auditRoutes.get('/stats', authMiddleware, requireAuditAccess, async (c) => {
         const topUsers = await env.DB.prepare(`
       SELECT 
         al.user_id,
-        up.name as user_name,
+        u.name as user_name,
         u.email as user_email,
         COUNT(*) as activity_count
       FROM activity_log al
       LEFT JOIN users u ON al.user_id = u.id
-      LEFT JOIN user_profiles up ON u.id = up.user_id
       WHERE al.created_at >= ? AND al.user_id IS NOT NULL ${orgFilterTop}
-      GROUP BY al.user_id
+      GROUP BY al.user_id, u.name, u.email
       ORDER BY activity_count DESC
       LIMIT 10
     `).bind(...topUsersParams).all();
@@ -285,8 +285,8 @@ auditRoutes.get('/stats', authMiddleware, requireAuditAccess, async (c) => {
 auditRoutes.get('/export', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile?.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
 
     const url = new URL(c.req.url);
     const startDate = url.searchParams.get('start_date');
@@ -295,23 +295,20 @@ auditRoutes.get('/export', authMiddleware, requireAuditAccess, async (c) => {
     try {
         let whereConditions: string[] = [];
         const params: any[] = [];
-        let paramIndex = 1;
+        // paramIndex removed
 
         if (['org_admin', 'organization_admin'].includes(userRole)) {
-            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            whereConditions.push('al.organization_id = ?');
             params.push(userOrgId);
-            paramIndex++;
         }
 
         if (startDate) {
-            whereConditions.push(`al.created_at >= ?${paramIndex}`);
+            whereConditions.push('al.created_at >= ?');
             params.push(startDate);
-            paramIndex++;
         }
         if (endDate) {
-            whereConditions.push(`al.created_at <= ?${paramIndex}`);
+            whereConditions.push('al.created_at <= ?');
             params.push(endDate + 'T23:59:59Z');
-            paramIndex++;
         }
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -321,15 +318,14 @@ auditRoutes.get('/export', authMiddleware, requireAuditAccess, async (c) => {
         al.id,
         al.created_at,
         u.email as user_email,
-        up.name as user_name,
+        u.name as user_name,
         al.action_type,
         al.action_description,
         al.target_type,
         al.target_id,
-        o.trade_name as organization_name
+        o.name as organization_name
       FROM activity_log al
       LEFT JOIN users u ON al.user_id = u.id
-      LEFT JOIN user_profiles up ON u.id = up.user_id
       LEFT JOIN organizations o ON al.organization_id = o.id
       ${whereClause}
       ORDER BY al.created_at DESC
@@ -368,8 +364,8 @@ auditRoutes.get('/export', authMiddleware, requireAuditAccess, async (c) => {
 auditRoutes.get('/action-types', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
 
     try {
         let query = 'SELECT DISTINCT action_type FROM activity_log WHERE action_type IS NOT NULL';
@@ -395,8 +391,8 @@ auditRoutes.get('/action-types', authMiddleware, requireAuditAccess, async (c) =
 auditRoutes.get('/target-types', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
     const user = c.get('user');
-    const userRole = user?.profile.role;
-    const userOrgId = user?.profile?.organization_id;
+    const userRole = user?.role || user?.profile?.role;
+    const userOrgId = user?.organization_id || user?.profile?.organization_id;
 
     try {
         let query = 'SELECT DISTINCT target_type FROM activity_log WHERE target_type IS NOT NULL';

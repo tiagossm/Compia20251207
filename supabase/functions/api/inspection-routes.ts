@@ -3,6 +3,7 @@ import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 // import database-init removido
 import { TenantContext } from "./tenant-auth-middleware.ts";
+import { logActivity } from "./audit-logger.ts";
 
 type Env = {
   DB: any;
@@ -340,6 +341,18 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       // Não bloquear a operação principal
     }
 
+    // Registrar log global de auditoria
+    await logActivity(env, {
+      userId: user.id,
+      orgId: secureOrgId,
+      actionType: 'CREATE',
+      actionDescription: `Criação de inspeção: ${title}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { title, status, priority, template_id },
+      req: c.req
+    });
+
     // If a template is selected, create inspection items based on template fields
     if (template_id) {
       const template = await env.DB.prepare("SELECT * FROM checklist_templates WHERE id = ?").bind(template_id).first() as any;
@@ -485,6 +498,18 @@ SELECT * FROM inspections WHERE id = ?
       SET ${updateFields.join(", ")}
       WHERE id = ?
   `).bind(...updateValues, inspectionId).run();
+
+    // Registrar log global de auditoria
+    await logActivity(env, {
+      userId: user.id,
+      orgId: inspection.organization_id,
+      actionType: 'UPDATE',
+      actionDescription: `Atualização de inspeção: ${inspection.title}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { changed_fields: Object.keys(changedFields) },
+      req: c.req
+    });
 
     // Registrar log de auditoria para cada campo alterado (LGPD)
     const ipAddress = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
@@ -1066,6 +1091,26 @@ SELECT * FROM inspections WHERE id = ?
       ).run();
     } catch (logError) {
       console.error('[AUDIT] Erro ao registrar log de deleção:', logError);
+    }
+
+    // Registrar log global de auditoria
+    try {
+      await env.DB.prepare(`
+          INSERT INTO activity_log (
+            user_id, organization_id, action_type, action_description, 
+            target_type, target_id, metadata, ip_address, user_agent, created_at
+          ) VALUES (?, ?, 'DELETE', ?, 'INSPECTION', ?, ?, ?, ?, NOW())
+        `).bind(
+        user.id,
+        inspection.organization_id,
+        `Exclusão de inspeção: ${inspection.title}`,
+        inspectionId,
+        JSON.stringify({ title: inspection.title, status: inspection.status }),
+        ipAddress,
+        userAgent
+      ).run();
+    } catch (logErr) {
+      console.error('Failed to log to global activity_log:', logErr);
     }
 
     // Excluir itens relacionados na ordem correta (filhos -> pais)

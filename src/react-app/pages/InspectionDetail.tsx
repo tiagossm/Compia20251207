@@ -334,6 +334,39 @@ export default function InspectionDetail() {
     }
   };
 
+  const updateItemAnalysis = async (itemId: number, analysis: string | null) => {
+    try {
+      if (analysis === null) {
+        // Delete analysis
+        await fetchWithAuth(`/api/inspection-items/${itemId}/pre-analysis`, {
+          method: 'DELETE'
+        });
+      } else {
+        // Update analysis
+        await fetchWithAuth(`/api/inspection-items/${itemId}/analysis`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis })
+        });
+      }
+
+      // Update local state without full refresh if possible, or just refresh
+      // Updating templateItems local state to reflect change
+      setTemplateItems(prev => prev.map(item =>
+        item.id === itemId || item.id === String(itemId)
+          ? { ...item, ai_pre_analysis: analysis }
+          : item
+      ));
+
+    } catch (err) {
+      console.error('Erro ao atualizar análise:', err);
+      // Use standard alert if 'error' toast wrapper is shadowed or unavailable in this scope, 
+      // but 'error' from useToast is available in component scope.
+      // Renamed argument in catch block to 'err' to avoid shadowing 'error' function from useToast
+      error('Erro', 'Não foi possível atualizar a análise.');
+    }
+  };
+
   const handleFormSubmit = async (formResponses: FieldResponse[]) => {
     setIsSubmitting(true);
     try {
@@ -1210,9 +1243,11 @@ export default function InspectionDetail() {
                       // Pass initial values
                       initial_value: fieldData.response_value,
                       initial_comment: fieldData.comment,
-                      initial_compliance_status: fieldData.compliance_status
+                      initial_compliance_status: fieldData.compliance_status,
+                      initial_ai_analysis: item.ai_pre_analysis
                     };
                   })}
+                  onUpdateAiAnalysis={updateItemAnalysis}
                   onSubmit={handleFormSubmit}
                   initialValues={responses}
                   readonly={false}

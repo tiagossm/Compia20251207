@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
+import { logActivity } from "./audit-logger.ts";
 
 type Env = {
   DB: any;
@@ -193,8 +194,22 @@ checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
       folder_id || null
     ).run();
 
+    const newTemplateId = result.meta.last_row_id;
+
+    // Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id || null,
+      actionType: 'CREATE',
+      actionDescription: `Checklist Template Created: ${name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: newTemplateId,
+      metadata: { name, category, is_public },
+      req: c.req
+    });
+
     return c.json({
-      id: result.meta.last_row_id,
+      id: newTemplateId,
       message: "Template created successfully"
     });
   } catch (error) {
@@ -311,6 +326,18 @@ checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
       WHERE id = ?
     `).bind(name, description, category, is_public, folder_id || null, templateId).run();
 
+    // Log update
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id, // Use template org
+      actionType: 'UPDATE',
+      actionDescription: `Checklist Template Updated: ${name || template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { name, category, is_public },
+      req: c.req
+    });
+
     return c.json({ message: "Template updated successfully" });
   } catch (error) {
     console.error('Error updating template:', error);
@@ -357,6 +384,18 @@ checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c)
 
     // Delete template
     await env.DB.prepare("DELETE FROM checklist_templates WHERE id = ?").bind(templateId).run();
+
+    // Log deletion
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id,
+      actionType: 'DELETE',
+      actionDescription: `Checklist Template Deleted: ${template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { name: template.name, category: template.category },
+      req: c.req
+    });
 
     return c.json({ message: "Template deleted successfully" });
   } catch (error) {
@@ -490,6 +529,18 @@ checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async 
       SET visibility = ?, is_public = ?, shared_with = ?, updated_at = NOW()
       WHERE id = ?
     `).bind(visibility, isPublic, sharedWithJson, templateId).run();
+
+    // Log sharing
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id,
+      actionType: 'SHARE',
+      actionDescription: `Checklist Template Shared: ${template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { visibility, is_public: isPublic },
+      req: c.req
+    });
 
     return c.json({ message: "Sharing settings updated successfully" });
   } catch (error) {
