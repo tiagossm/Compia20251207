@@ -3,18 +3,22 @@ import { demoAuthMiddleware as authMiddleware } from './demo-auth-middleware.ts'
 
 const auditRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
-// Middleware to ensure only system admins can access audit logs
-const requireSystemAdmin = async (c: any, next: any) => {
+// Middleware to ensure user has access to audit logs (System Admin or Org Admin)
+const requireAuditAccess = async (c: any, next: any) => {
     const user = c.get('user');
-    if (!user?.profile?.role || !['system_admin', 'sys_admin'].includes(user.profile.role)) {
-        return c.json({ error: 'Acesso negado. Apenas administradores do sistema podem acessar logs de auditoria.' }, 403);
+    const role = user?.profile?.role;
+    if (!role || !['system_admin', 'sys_admin', 'org_admin', 'organization_admin'].includes(role)) {
+        return c.json({ error: 'Acesso negado. Apenas administradores podem acessar logs de auditoria.' }, 403);
     }
     await next();
 };
 
 // GET /api/audit/logs - List audit logs with filters
-auditRoutes.get('/logs', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/logs', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
+    const user = c.get('user');
+    const userRole = user?.profile?.role;
+    const userOrgId = user?.profile?.organization_id;
 
     // Parse query parameters for filters
     const url = new URL(c.req.url);
@@ -28,7 +32,7 @@ auditRoutes.get('/logs', authMiddleware, requireSystemAdmin, async (c) => {
     const actionType = url.searchParams.get('action_type');
     const targetType = url.searchParams.get('target_type');
     const userId = url.searchParams.get('user_id');
-    const organizationId = url.searchParams.get('organization_id');
+    const organizationIdQuery = url.searchParams.get('organization_id');
     const search = url.searchParams.get('search');
 
     try {
@@ -36,6 +40,21 @@ auditRoutes.get('/logs', authMiddleware, requireSystemAdmin, async (c) => {
         let whereConditions: string[] = [];
         let params: any[] = [];
         let paramIndex = 1;
+
+        // Security: If org_admin, force filter by their organization_id
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            if (!userOrgId) {
+                return c.json({ error: 'Usuário sem organização vinculada' }, 400);
+            }
+            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            params.push(userOrgId);
+            paramIndex++;
+        } else if (organizationIdQuery) {
+            // If system admin and supplied organization_id filter
+            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            params.push(parseInt(organizationIdQuery));
+            paramIndex++;
+        }
 
         if (startDate) {
             whereConditions.push(`al.created_at >= ?${paramIndex}`);
@@ -60,11 +79,6 @@ auditRoutes.get('/logs', authMiddleware, requireSystemAdmin, async (c) => {
         if (userId) {
             whereConditions.push(`al.user_id = ?${paramIndex}`);
             params.push(userId);
-            paramIndex++;
-        }
-        if (organizationId) {
-            whereConditions.push(`al.organization_id = ?${paramIndex}`);
-            params.push(parseInt(organizationId));
             paramIndex++;
         }
         if (search) {
@@ -122,12 +136,15 @@ auditRoutes.get('/logs', authMiddleware, requireSystemAdmin, async (c) => {
 });
 
 // GET /api/audit/logs/:id - Get single log detail
-auditRoutes.get('/logs/:id', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/logs/:id', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
+    const user = c.get('user');
+    const userRole = user?.profile?.role;
+    const userOrgId = user?.profile?.organization_id;
     const logId = parseInt(c.req.param('id'));
 
     try {
-        const log = await env.DB.prepare(`
+        let query = `
       SELECT 
         al.*,
         u.email as user_email,
@@ -138,10 +155,19 @@ auditRoutes.get('/logs/:id', authMiddleware, requireSystemAdmin, async (c) => {
       LEFT JOIN user_profiles up ON u.id = up.user_id
       LEFT JOIN organizations o ON al.organization_id = o.id
       WHERE al.id = ?
-    `).bind(logId).first();
+    `;
+
+        const params = [logId];
+
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            query += ' AND al.organization_id = ?';
+            params.push(userOrgId);
+        }
+
+        const log = await env.DB.prepare(query).bind(...params).first();
 
         if (!log) {
-            return c.json({ error: 'Log não encontrado' }, 404);
+            return c.json({ error: 'Log não encontrado ou acesso não autorizado' }, 404);
         }
 
         return c.json({ log });
@@ -152,8 +178,12 @@ auditRoutes.get('/logs/:id', authMiddleware, requireSystemAdmin, async (c) => {
 });
 
 // GET /api/audit/stats - Get audit statistics
-auditRoutes.get('/stats', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/stats', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
+    const user = c.get('user');
+    const userRole = user?.profile?.role;
+    const userOrgId = user?.profile?.organization_id;
+
     const url = new URL(c.req.url);
     const days = parseInt(url.searchParams.get('days') || '30');
 
@@ -162,30 +192,45 @@ auditRoutes.get('/stats', authMiddleware, requireSystemAdmin, async (c) => {
         startDate.setDate(startDate.getDate() - days);
         const startDateStr = startDate.toISOString();
 
+        let orgFilter = '';
+        let orgFilterTop = ''; // For queries where aliases might differ or direct modification is needed
+        let params: any[] = [startDateStr];
+
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            orgFilter = 'AND organization_id = ?';
+            orgFilterTop = 'AND al.organization_id = ?';
+            params.push(userOrgId);
+        }
+
         // Total events in period
         const totalResult = await env.DB.prepare(`
-      SELECT COUNT(*) as total FROM activity_log WHERE created_at >= ?
-    `).bind(startDateStr).first() as any;
+      SELECT COUNT(*) as total FROM activity_log WHERE created_at >= ? ${orgFilter}
+    `).bind(...params).first() as any;
 
         // Events by action type
         const byActionType = await env.DB.prepare(`
       SELECT action_type, COUNT(*) as count 
       FROM activity_log 
-      WHERE created_at >= ?
+      WHERE created_at >= ? ${orgFilter}
       GROUP BY action_type 
       ORDER BY count DESC
-    `).bind(startDateStr).all();
+    `).bind(...params).all();
 
         // Events by target type
         const byTargetType = await env.DB.prepare(`
       SELECT target_type, COUNT(*) as count 
       FROM activity_log 
-      WHERE created_at >= ? AND target_type IS NOT NULL
+      WHERE created_at >= ? AND target_type IS NOT NULL ${orgFilter}
       GROUP BY target_type 
       ORDER BY count DESC
-    `).bind(startDateStr).all();
+    `).bind(...params).all();
 
         // Top users by activity
+        const topUsersParams = [startDateStr];
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            topUsersParams.push(userOrgId);
+        }
+
         const topUsers = await env.DB.prepare(`
       SELECT 
         al.user_id,
@@ -195,11 +240,11 @@ auditRoutes.get('/stats', authMiddleware, requireSystemAdmin, async (c) => {
       FROM activity_log al
       LEFT JOIN users u ON al.user_id = u.id
       LEFT JOIN user_profiles up ON u.id = up.user_id
-      WHERE al.created_at >= ? AND al.user_id IS NOT NULL
+      WHERE al.created_at >= ? AND al.user_id IS NOT NULL ${orgFilterTop}
       GROUP BY al.user_id
       ORDER BY activity_count DESC
       LIMIT 10
-    `).bind(startDateStr).all();
+    `).bind(...topUsersParams).all();
 
         // Daily activity for chart
         const dailyActivity = await env.DB.prepare(`
@@ -207,18 +252,19 @@ auditRoutes.get('/stats', authMiddleware, requireSystemAdmin, async (c) => {
         DATE(created_at) as date,
         COUNT(*) as count
       FROM activity_log
-      WHERE created_at >= ?
+      WHERE created_at >= ? ${orgFilter}
       GROUP BY DATE(created_at)
       ORDER BY date ASC
-    `).bind(startDateStr).all();
+    `).bind(...params).all();
 
-        // Security events (login failures, permission denials, etc.)
+        // Security events
         const securityEvents = await env.DB.prepare(`
       SELECT COUNT(*) as count
       FROM activity_log
       WHERE created_at >= ? 
       AND (action_type LIKE '%FAILED%' OR action_type LIKE '%DENIED%' OR action_type LIKE '%UNAUTHORIZED%')
-    `).bind(startDateStr).first() as any;
+      ${orgFilter}
+    `).bind(...params).first() as any;
 
         return c.json({
             period: { days, start_date: startDateStr },
@@ -236,27 +282,39 @@ auditRoutes.get('/stats', authMiddleware, requireSystemAdmin, async (c) => {
 });
 
 // GET /api/audit/export - Export logs as CSV
-auditRoutes.get('/export', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/export', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
-    const url = new URL(c.req.url);
+    const user = c.get('user');
+    const userRole = user?.profile?.role;
+    const userOrgId = user?.profile?.organization_id;
 
+    const url = new URL(c.req.url);
     const startDate = url.searchParams.get('start_date');
     const endDate = url.searchParams.get('end_date');
 
     try {
-        let whereClause = '';
+        let whereConditions: string[] = [];
         const params: any[] = [];
+        let paramIndex = 1;
 
-        if (startDate && endDate) {
-            whereClause = 'WHERE al.created_at >= ? AND al.created_at <= ?';
-            params.push(startDate, endDate + 'T23:59:59Z');
-        } else if (startDate) {
-            whereClause = 'WHERE al.created_at >= ?';
-            params.push(startDate);
-        } else if (endDate) {
-            whereClause = 'WHERE al.created_at <= ?';
-            params.push(endDate + 'T23:59:59Z');
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            whereConditions.push(`al.organization_id = ?${paramIndex}`);
+            params.push(userOrgId);
+            paramIndex++;
         }
+
+        if (startDate) {
+            whereConditions.push(`al.created_at >= ?${paramIndex}`);
+            params.push(startDate);
+            paramIndex++;
+        }
+        if (endDate) {
+            whereConditions.push(`al.created_at <= ?${paramIndex}`);
+            params.push(endDate + 'T23:59:59Z');
+            paramIndex++;
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
         const logs = await env.DB.prepare(`
       SELECT 
@@ -307,13 +365,24 @@ auditRoutes.get('/export', authMiddleware, requireSystemAdmin, async (c) => {
 });
 
 // GET /api/audit/action-types - Get distinct action types for filter dropdown
-auditRoutes.get('/action-types', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/action-types', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
+    const user = c.get('user');
+    const userRole = user?.profile.role;
+    const userOrgId = user?.profile?.organization_id;
 
     try {
-        const result = await env.DB.prepare(`
-      SELECT DISTINCT action_type FROM activity_log WHERE action_type IS NOT NULL ORDER BY action_type
-    `).all();
+        let query = 'SELECT DISTINCT action_type FROM activity_log WHERE action_type IS NOT NULL';
+        const params: any[] = [];
+
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            query += ' AND organization_id = ?';
+            params.push(userOrgId);
+        }
+
+        query += ' ORDER BY action_type';
+
+        const result = await env.DB.prepare(query).bind(...params).all();
 
         return c.json({ action_types: (result.results || []).map((r: any) => r.action_type) });
     } catch (error) {
@@ -323,13 +392,24 @@ auditRoutes.get('/action-types', authMiddleware, requireSystemAdmin, async (c) =
 });
 
 // GET /api/audit/target-types - Get distinct target types for filter dropdown
-auditRoutes.get('/target-types', authMiddleware, requireSystemAdmin, async (c) => {
+auditRoutes.get('/target-types', authMiddleware, requireAuditAccess, async (c) => {
     const env = c.env;
+    const user = c.get('user');
+    const userRole = user?.profile.role;
+    const userOrgId = user?.profile?.organization_id;
 
     try {
-        const result = await env.DB.prepare(`
-      SELECT DISTINCT target_type FROM activity_log WHERE target_type IS NOT NULL ORDER BY target_type
-    `).all();
+        let query = 'SELECT DISTINCT target_type FROM activity_log WHERE target_type IS NOT NULL';
+        const params: any[] = [];
+
+        if (['org_admin', 'organization_admin'].includes(userRole)) {
+            query += ' AND organization_id = ?';
+            params.push(userOrgId);
+        }
+
+        query += ' ORDER BY target_type';
+
+        const result = await env.DB.prepare(query).bind(...params).all();
 
         return c.json({ target_types: (result.results || []).map((r: any) => r.target_type) });
     } catch (error) {
