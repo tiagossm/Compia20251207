@@ -83,11 +83,11 @@ export default function GamificationWidget() {
                 <div className="h-2 bg-black/20 rounded-full overflow-hidden">
                     <div
                         className="h-full bg-yellow-400 rounded-full transition-all duration-500"
-                        style={{ width: `${stats.progress.percentage}%` }}
+                        style={{ width: `${stats.progress?.percentage ?? 0}%` }}
                     />
                 </div>
                 <p className="text-[10px] text-right mt-1 text-white/70">
-                    Próximo nível: {stats.progress.max - stats.progress.current} XP
+                    Próximo nível: {(stats.progress?.max ?? 0) - (stats.progress?.current ?? 0)} XP
                 </p>
             </div>
 
