@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/auth';
 import { useAuth } from '@/react-app/context/AuthContext';
 import Layout from '@/react-app/components/Layout';
 // OrganizationSelector removed - organization is set automatically from user context
 import {
   Save, ArrowLeft, ArrowRight, FileCheck, MapPin, Navigation, Brain,
-  CheckCircle, ClipboardList, Building2, Users, Settings,
+  CheckCircle, ClipboardList, Building2, Users, Settings, Shield,
   Calendar, AlertTriangle, Sparkles
 } from 'lucide-react';
 import { ChecklistTemplate, ChecklistFolder } from '@/shared/checklist-types';
@@ -16,6 +16,13 @@ import SuggestionTags from '@/react-app/components/SuggestionTags';
 import NewUserModal from '@/react-app/components/NewUserModal';
 import NewOrganizationModal from '@/react-app/components/NewOrganizationModal';
 import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
+import UserAvatar from '@/react-app/components/UserAvatar';
+
+interface InspectorType {
+  name: string;
+  email: string;
+  avatar_url?: string;
+}
 
 interface WizardStep {
   id: number;
@@ -55,13 +62,27 @@ export default function NewInspection() {
     title: '',
     description: '',
     location: '',
+    sectors: [] as string[], // Multiple sectors/locations
     company_name: '',
     cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
     address: '',
     latitude: null as number | null,
     longitude: null as number | null,
-    inspector_name: extendedUser?.profile?.name || '',
+    // Inspectors - array for multiple
+    inspectors: [{
+      name: extendedUser?.profile?.name || '',
+      email: extendedUser?.email || '',
+      avatar_url: extendedUser?.google_user_data?.picture || ''
+    }] as InspectorType[],
+    inspector_name: extendedUser?.profile?.name || '', // Keep for backward compat
     inspector_email: extendedUser?.email || '',
+    // Responsible from org's security contact
     responsible_name: '',
     responsible_email: '',
     priority: 'media' as const,
@@ -69,7 +90,7 @@ export default function NewInspection() {
     template_id: '',
     action_plan_type: '5w2h' as const,
     ai_assistant_id: '',
-    compliance_enabled: true, // Habilitar análise de conformidade
+    compliance_enabled: true,
   });
 
   useEffect(() => {
@@ -81,7 +102,7 @@ export default function NewInspection() {
   useEffect(() => {
     const validation: Record<number, boolean> = {};
     validation[1] = !!(formData.title.trim());
-    validation[2] = !!(formData.company_name.trim() && formData.location.trim());
+    validation[2] = !!(formData.company_name.trim() && (formData.sectors.length > 0 || formData.location.trim()));
     validation[3] = !!(formData.inspector_name.trim());
     validation[4] = true;
     setStepValidation(validation);
@@ -158,8 +179,29 @@ export default function NewInspection() {
     setLoading(true);
 
     try {
+      // Build location from sectors array
+      const finalLocation = formData.sectors.length > 0
+        ? formData.sectors.join(', ')
+        : formData.location.trim();
+
+      // Build complete address if not already set
+      let finalAddress = formData.address;
+      if (!finalAddress && formData.logradouro) {
+        const parts = [
+          formData.logradouro,
+          formData.numero && `nº ${formData.numero}`,
+          formData.complemento,
+          formData.bairro,
+          formData.cidade && formData.uf && `${formData.cidade}/${formData.uf}`,
+          formData.cep && `CEP: ${formData.cep}`
+        ].filter(Boolean);
+        finalAddress = parts.join(', ');
+      }
+
       const inspectionData = {
         ...formData,
+        location: finalLocation,
+        address: finalAddress,
         organization_id: selectedOrgId
       };
 
@@ -208,8 +250,18 @@ export default function NewInspection() {
       try {
         const response = await fetchWithAuth(`/api/cep/${cep}`);
         if (response.ok) {
-          const data = await response.json();
-          setFormData(prev => ({ ...prev, address: data.address }));
+          const result = await response.json();
+          // API returns { success, data: {...}, address } - extract from data or result
+          const cepData = result.data || result;
+          setFormData(prev => ({
+            ...prev,
+            logradouro: cepData.logradouro || '',
+            bairro: cepData.bairro || '',
+            cidade: cepData.localidade || '',
+            uf: cepData.uf || '',
+            complemento: cepData.complemento || prev.complemento,
+            address: result.address || cepData.address || ''
+          }));
         }
       } catch (error) {
         console.error('Erro ao buscar CEP:', error);
@@ -361,73 +413,221 @@ export default function NewInspection() {
                 <p className="text-slate-500">Informações da empresa e endereço</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <AutoSuggestField
-                  label="Nome da Empresa"
-                  name="company_name"
-                  value={formData.company_name}
-                  onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
-                  placeholder="Ex: ABC Indústria Ltda"
-                  required
-                  apiEndpoint="/api/autosuggest/companies"
-                  onAddNew={() => setShowNewOrgModal(true)}
-                  addNewText="Nova Empresa"
-                />
-              </div>
+
+            {/* Company Name */}
+            <div>
               <AutoSuggestField
-                label="Local / Setor"
-                name="location"
-                value={formData.location}
-                onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
-                placeholder="Ex: Galpão A - Setor de Produção"
+                label="Nome da Empresa"
+                name="company_name"
+                value={formData.company_name}
+                onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
+                placeholder="Ex: ABC Indústria Ltda"
                 required
-                apiEndpoint="/api/autosuggest/locations"
+                apiEndpoint="/api/autosuggest/companies"
+                onAddNew={() => setShowNewOrgModal(true)}
+                addNewText="Nova Empresa"
               />
-              <div>
-                <label htmlFor="cep" className="block text-sm font-semibold text-slate-700 mb-2">CEP</label>
-                <input
-                  type="text"
-                  id="cep"
-                  name="cep"
-                  value={formData.cep}
-                  onChange={handleCEPChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="00000-000"
-                  maxLength={8}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="address" className="block text-sm font-semibold text-slate-700">Endereço Completo</label>
+            </div>
+
+            {/* Sectors/Areas - Multiple chips */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                Setores / Áreas Inspecionadas *
+              </label>
+              <div className="space-y-3">
+                {/* Sector chips */}
+                {formData.sectors.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.sectors.map((sector, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium"
+                      >
+                        {sector}
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({
+                            ...prev,
+                            sectors: prev.sectors.filter((_, i) => i !== index)
+                          }))}
+                          className="ml-1 hover:text-emerald-600 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Add sector input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && formData.location.trim()) {
+                        e.preventDefault();
+                        if (!formData.sectors.includes(formData.location.trim())) {
+                          setFormData(prev => ({
+                            ...prev,
+                            sectors: [...prev.sectors, prev.location.trim()],
+                            location: ''
+                          }));
+                        }
+                      }
+                    }}
+                    className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 transition-all"
+                    placeholder="Digite um setor e pressione Enter (Ex: Galpão A, Produção, Almoxarifado)"
+                  />
                   <button
                     type="button"
-                    onClick={getCurrentLocation}
-                    className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                    onClick={() => {
+                      if (formData.location.trim() && !formData.sectors.includes(formData.location.trim())) {
+                        setFormData(prev => ({
+                          ...prev,
+                          sectors: [...prev.sectors, prev.location.trim()],
+                          location: ''
+                        }));
+                      }
+                    }}
+                    className="px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium"
                   >
-                    <Navigation className="w-4 h-4 mr-2" />
-                    Capturar GPS
+                    + Adicionar
                   </button>
                 </div>
-                <input
-                  type="text"
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="Endereço será preenchido automaticamente pelo CEP"
-                />
+                <p className="text-xs text-slate-500">
+                  Adicione todos os setores ou áreas que serão inspecionados
+                </p>
+              </div>
+            </div>
+
+            {/* Address Section */}
+            <div className="border-t border-slate-200 pt-6">
+              <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <Navigation className="w-4 h-4" />
+                Endereço do Local
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* CEP */}
+                <div>
+                  <label htmlFor="cep" className="block text-sm font-medium text-slate-600 mb-1">CEP</label>
+                  <input
+                    type="text"
+                    id="cep"
+                    name="cep"
+                    value={formData.cep}
+                    onChange={handleCEPChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="00000-000"
+                    maxLength={8}
+                  />
+                </div>
+
+                {/* Logradouro */}
+                <div className="md:col-span-2">
+                  <label htmlFor="logradouro" className="block text-sm font-medium text-slate-600 mb-1">Logradouro</label>
+                  <input
+                    type="text"
+                    id="logradouro"
+                    name="logradouro"
+                    value={formData.logradouro}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* Número */}
+                <div>
+                  <label htmlFor="numero" className="block text-sm font-medium text-slate-600 mb-1">Número</label>
+                  <input
+                    type="text"
+                    id="numero"
+                    name="numero"
+                    value={formData.numero}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="123 ou S/N"
+                  />
+                </div>
+
+                {/* Complemento */}
+                <div className="md:col-span-2">
+                  <label htmlFor="complemento" className="block text-sm font-medium text-slate-600 mb-1">Complemento</label>
+                  <input
+                    type="text"
+                    id="complemento"
+                    name="complemento"
+                    value={formData.complemento}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="Bloco B, Sala 5, Andar 3..."
+                  />
+                </div>
+
+                {/* Bairro */}
+                <div>
+                  <label htmlFor="bairro" className="block text-sm font-medium text-slate-600 mb-1">Bairro</label>
+                  <input
+                    type="text"
+                    id="bairro"
+                    name="bairro"
+                    value={formData.bairro}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* Cidade */}
+                <div>
+                  <label htmlFor="cidade" className="block text-sm font-medium text-slate-600 mb-1">Cidade</label>
+                  <input
+                    type="text"
+                    id="cidade"
+                    name="cidade"
+                    value={formData.cidade}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="Preenchido pelo CEP"
+                  />
+                </div>
+
+                {/* UF */}
+                <div>
+                  <label htmlFor="uf" className="block text-sm font-medium text-slate-600 mb-1">UF</label>
+                  <input
+                    type="text"
+                    id="uf"
+                    name="uf"
+                    value={formData.uf}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-slate-50"
+                    placeholder="SP"
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+
+              {/* GPS Capture */}
+              <div className="mt-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={getCurrentLocation}
+                  className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                >
+                  <Navigation className="w-4 h-4 mr-2" />
+                  Capturar GPS
+                </button>
+
                 {formData.latitude && formData.longitude && (
-                  <div className="flex items-center gap-3 mt-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
-                    <div className="p-2 bg-green-500 rounded-lg text-white">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-green-800">GPS Capturado com Sucesso</p>
-                      <p className="text-xs text-green-600">{formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}</p>
-                    </div>
-                    <CheckCircle className="w-5 h-5 text-green-500 ml-auto" />
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-700">
+                      GPS: {formData.latitude.toFixed(4)}, {formData.longitude.toFixed(4)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -444,50 +644,124 @@ export default function NewInspection() {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Equipe e Agendamento</h3>
-                <p className="text-slate-500">Responsáveis e cronograma</p>
+                <p className="text-slate-500">Inspetores e cronograma</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AutoSuggestField
-                label="Nome do Técnico / Inspetor"
-                name="inspector_name"
-                value={formData.inspector_name}
-                onChange={(value, email) => setFormData(prev => ({ ...prev, inspector_name: value, inspector_email: email || prev.inspector_email }))}
-                placeholder="Nome completo do responsável"
-                required
-                apiEndpoint="/api/autosuggest/inspectors"
-                onAddNew={() => setShowNewUserModal(true)}
-                addNewText="Novo Inspetor"
-                showEmail={true}
-              />
-              <div>
-                <label htmlFor="inspector_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Técnico</label>
-                <input type="email" id="inspector_email" name="inspector_email" value={formData.inspector_email} onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="email@exemplo.com"
-                />
+
+            {/* Inspectors Section - Multiple with Avatars */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Users className="w-4 h-4 inline mr-1" />
+                Técnicos / Inspetores *
+              </label>
+              <div className="space-y-3">
+                {/* Inspector chips */}
+                {formData.inspectors.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.inspectors.map((inspector, index) => (
+                      <div
+                        key={index}
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-violet-100 text-violet-800 rounded-full text-sm font-medium"
+                      >
+                        <UserAvatar
+                          name={inspector.name}
+                          avatarUrl={inspector.avatar_url}
+                          size="xs"
+                        />
+                        <span>{inspector.name}</span>
+                        {formData.inspectors.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({
+                              ...prev,
+                              inspectors: prev.inspectors.filter((_, i) => i !== index),
+                              inspector_name: index === 0 ? (prev.inspectors[1]?.name || '') : prev.inspector_name,
+                              inspector_email: index === 0 ? (prev.inspectors[1]?.email || '') : prev.inspector_email
+                            }))}
+                            className="ml-1 hover:text-violet-600 transition-colors"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Add inspector - only if less than 5 */}
+                {formData.inspectors.length < 5 && (
+                  <AutoSuggestField
+                    label=""
+                    name="new_inspector"
+                    value=""
+                    onChange={(value, email) => {
+                      if (value && !formData.inspectors.some(i => i.name === value)) {
+                        setFormData(prev => ({
+                          ...prev,
+                          inspectors: [...prev.inspectors, { name: value, email: email || '', avatar_url: '' }],
+                          inspector_name: prev.inspectors.length === 0 ? value : prev.inspector_name,
+                          inspector_email: prev.inspectors.length === 0 ? (email || '') : prev.inspector_email
+                        }));
+                      }
+                    }}
+                    placeholder={formData.inspectors.length === 0 ? "Adicionar inspetor principal" : "Adicionar mais inspetores..."}
+                    apiEndpoint="/api/autosuggest/inspectors"
+                    onAddNew={() => setShowNewUserModal(true)}
+                    addNewText="Novo Inspetor"
+                    showEmail={true}
+                  />
+                )}
+                <p className="text-xs text-slate-500">
+                  Você pode adicionar até 5 inspetores. O primeiro será o inspetor principal.
+                </p>
               </div>
-              <AutoSuggestField
-                label="Responsável da Empresa"
-                name="responsible_name"
-                value={formData.responsible_name}
-                onChange={(value, email) => setFormData(prev => ({ ...prev, responsible_name: value, responsible_email: email || prev.responsible_email }))}
-                placeholder="Nome do responsável técnico"
-                apiEndpoint="/api/autosuggest/responsibles"
-                showEmail={true}
-              />
-              <div>
-                <label htmlFor="responsible_email" className="block text-sm font-semibold text-slate-700 mb-2">Email do Responsável</label>
-                <input type="email" id="responsible_email" name="responsible_email" value={formData.responsible_email} onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="responsavel@empresa.com"
+            </div>
+
+            {/* Responsável no Local */}
+            <div className="border-t border-slate-200 pt-6">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Shield className="w-4 h-4 inline mr-1" />
+                Responsável no Local
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AutoSuggestField
+                  label=""
+                  name="responsible_name"
+                  value={formData.responsible_name}
+                  onChange={(value, email) => setFormData(prev => ({
+                    ...prev,
+                    responsible_name: value,
+                    responsible_email: email || prev.responsible_email
+                  }))}
+                  placeholder="Nome do contato de segurança"
+                  apiEndpoint="/api/autosuggest/responsibles"
+                  showEmail={true}
                 />
+                <div>
+                  <input
+                    type="email"
+                    id="responsible_email"
+                    name="responsible_email"
+                    value={formData.responsible_email}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                    placeholder="email@empresa.com"
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* Schedule and Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 pt-6">
               <div>
                 <label htmlFor="scheduled_date" className="block text-sm font-semibold text-slate-700 mb-2">
                   <Calendar className="w-4 h-4 inline mr-1" />Data Agendada
                 </label>
-                <input type="date" id="scheduled_date" name="scheduled_date" value={formData.scheduled_date} onChange={handleChange}
+                <input
+                  type="date"
+                  id="scheduled_date"
+                  name="scheduled_date"
+                  value={formData.scheduled_date}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
                 />
               </div>
@@ -495,7 +769,11 @@ export default function NewInspection() {
                 <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
                   <AlertTriangle className="w-4 h-4 inline mr-1" />Prioridade
                 </label>
-                <select id="priority" name="priority" value={formData.priority} onChange={handleChange}
+                <select
+                  id="priority"
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
                 >
                   <option value="baixa">🟢 Baixa</option>
@@ -606,11 +884,48 @@ export default function NewInspection() {
               <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-green-500" />Resumo da Inspeção
               </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div><p className="text-slate-500">Título</p><p className="font-medium text-slate-900">{formData.title || '-'}</p></div>
                 <div><p className="text-slate-500">Empresa</p><p className="font-medium text-slate-900">{formData.company_name || '-'}</p></div>
-                <div><p className="text-slate-500">Local</p><p className="font-medium text-slate-900">{formData.location || '-'}</p></div>
-                <div><p className="text-slate-500">Técnico</p><p className="font-medium text-slate-900">{formData.inspector_name || '-'}</p></div>
+                <div>
+                  <p className="text-slate-500">Setores / Áreas</p>
+                  <p className="font-medium text-slate-900">
+                    {formData.sectors.length > 0 ? formData.sectors.join(', ') : formData.location || '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Endereço</p>
+                  <p className="font-medium text-slate-900 text-xs">
+                    {formData.logradouro
+                      ? `${formData.logradouro}${formData.numero ? `, ${formData.numero}` : ''} - ${formData.bairro || ''}, ${formData.cidade || ''}/${formData.uf || ''}`
+                      : formData.address || '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Inspetores</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {formData.inspectors.length > 0 ? (
+                      <>
+                        <div className="flex -space-x-2">
+                          {formData.inspectors.slice(0, 3).map((inspector, idx) => (
+                            <UserAvatar key={idx} name={inspector.name} avatarUrl={inspector.avatar_url} size="xs" />
+                          ))}
+                        </div>
+                        <span className="font-medium text-slate-900">
+                          {formData.inspectors.map(i => i.name.split(' ')[0]).join(', ')}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-medium text-slate-900">{formData.inspector_name || '-'}</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-500">Responsável no Local</p>
+                  <p className="font-medium text-slate-900">{formData.responsible_name || '-'}</p>
+                </div>
+                <div><p className="text-slate-500">Data Agendada</p><p className="font-medium text-slate-900">{formData.scheduled_date || 'Não agendada'}</p></div>
+                <div><p className="text-slate-500">Prioridade</p><p className="font-medium text-slate-900 capitalize">{formData.priority}</p></div>
               </div>
             </div>
           </div>

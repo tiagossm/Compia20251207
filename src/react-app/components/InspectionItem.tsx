@@ -7,15 +7,24 @@ import {
     Zap,
     RotateCw,
     X,
-    CheckCircle,
     FileText,
     Bot,
-    Play,
-    Pause,
+    RefreshCw,
     Trash2,
     Image,
     FileAudio,
-    Square
+    Square,
+    ThumbsUp,
+    ThumbsDown,
+    Minus,
+    ChevronDown,
+    Edit3,
+    ExternalLink,
+    EyeOff,
+    Eye,
+    Download,
+    FileSpreadsheet,
+    File
 } from 'lucide-react';
 import { InspectionMediaType } from '@/shared/types';
 import { ComplianceMode } from '@/shared/checklist-types';
@@ -39,11 +48,16 @@ interface InspectionItemProps {
     complianceStatus?: ComplianceStatus;
     onComplianceChange?: (status: ComplianceStatus) => void;
     onCommentChange: (value: string) => void;
+    isUploading?: boolean;
     onMediaUpload: (type: 'image' | 'audio' | 'video' | 'file', source?: 'camera' | 'upload') => void;
     onMediaDelete?: (mediaId: number) => void;
     onAiAnalysisRequest: (selectedMediaIds: number[]) => void;
+    onAiAnalysisUpdate?: (analysis: string | null) => void;
     onAiActionPlanRequest: (selectedMediaIds: number[]) => void;
     onManualActionSave?: (actionData: ManualActionData) => void;
+    onActionPlanEdit?: (actionPlan: any) => void;
+    onActionPlanDelete?: (actionPlanId: number) => void;
+    actionPlan?: any;
     isAiAnalyzing?: boolean;
     isCreatingAction?: boolean;
     isRecording?: boolean;
@@ -64,11 +78,16 @@ export default function InspectionItem({
     complianceStatus,
     onComplianceChange,
     onCommentChange,
+    isUploading = false,
     onMediaUpload,
     onMediaDelete,
     onAiAnalysisRequest,
+    onAiAnalysisUpdate,
     onAiActionPlanRequest,
     onManualActionSave,
+    onActionPlanEdit,
+    onActionPlanDelete,
+    actionPlan,
     isAiAnalyzing = false,
     isCreatingAction = false,
     isRecording = false,
@@ -79,10 +98,33 @@ export default function InspectionItem({
     const [isAiOpen, setIsAiOpen] = useState(false);
     const [showActionForm, setShowActionForm] = useState(false);
     const [actionMode, setActionMode] = useState<'manual' | 'ai'>('manual');
-    const [selectedAiMedia, setSelectedAiMedia] = useState<number[]>([]);
-    const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+    const [selectedAiMedia,] = useState<number[]>([]);
+    const [viewingImage, setViewingImage] = useState<{ url: string; index: number } | null>(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
+    const [showActionPlanExpanded, setShowActionPlanExpanded] = useState(false);
+
+    const [hideActionPlan, setHideActionPlan] = useState(false);
+    const [editedFields, setEditedFields] = useState<Partial<any>>({});
+    const [editingAnalysis, setEditingAnalysis] = useState(false);
+    const [tempAnalysis, setTempAnalysis] = useState('');
+
+    // Synchronized priority state
+    const [currentPriority, setCurrentPriority] = useState(actionPlan?.priority || 'media');
+
+    // Context flags for 5W2H AI generation
+    const [contextFlags, setContextFlags] = useState({
+        useResponse: true,
+        useObservation: true,
+        useAiAnalysis: false
+    });
+
+    // Sync priority when actionPlan changes
+    useEffect(() => {
+        if (actionPlan?.priority) {
+            setCurrentPriority(editedFields.priority || actionPlan.priority);
+        }
+    }, [actionPlan?.priority, editedFields.priority]);
 
     const [manualAction, setManualAction] = useState<ManualActionData>({
         title: '',
@@ -90,7 +132,6 @@ export default function InspectionItem({
         what_description: ''
     });
 
-    const audioRefs = useRef<{ [key: number]: HTMLAudioElement | null }>({});
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const adjustTextareaHeight = () => {
@@ -111,10 +152,37 @@ export default function InspectionItem({
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
 
-    const toggleAiMedia = (id: number) => {
-        setSelectedAiMedia(prev =>
-            prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-        );
+    // Helper to get document icon based on file extension
+    const getDocIcon = (fileName: string) => {
+        const ext = fileName?.split('.').pop()?.toLowerCase() || '';
+        switch (ext) {
+            case 'pdf':
+                return <FileText size={14} className="text-red-500" />;
+            case 'doc':
+            case 'docx':
+                return <FileText size={14} className="text-blue-500" />;
+            case 'xls':
+            case 'xlsx':
+            case 'csv':
+                return <FileSpreadsheet size={14} className="text-green-500" />;
+            case 'ppt':
+            case 'pptx':
+                return <File size={14} className="text-orange-500" />;
+            case 'txt':
+                return <FileText size={14} className="text-slate-500" />;
+            default:
+                return <File size={14} className="text-slate-400" />;
+        }
+    };
+
+    // Download file helper
+    const downloadFile = (url: string, fileName: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleManualActionSubmit = () => {
@@ -123,23 +191,6 @@ export default function InspectionItem({
             setManualAction({ title: '', priority: 'media', what_description: '' });
             setShowActionForm(false);
         }
-    };
-
-    const toggleAudio = (mediaId: number) => {
-        const audio = audioRefs.current[mediaId];
-        if (!audio) return;
-        if (playingAudioId === mediaId) {
-            audio.pause();
-            setPlayingAudioId(null);
-        } else {
-            Object.values(audioRefs.current).forEach(a => a?.pause());
-            audio.play();
-            setPlayingAudioId(mediaId);
-        }
-    };
-
-    const handleAudioEnded = (mediaId: number) => {
-        if (playingAudioId === mediaId) setPlayingAudioId(null);
     };
 
     const handleToggleAi = () => {
@@ -155,9 +206,6 @@ export default function InspectionItem({
     const imageMedia = media.filter(m => m.media_type === 'image');
     const audioMedia = media.filter(m => m.media_type === 'audio');
     const docMedia = media.filter(m => m.media_type === 'document' || (m.media_type as string) === 'file');
-
-    // Check if media has valid ID for deletion
-    const canDeleteMedia = (m: InspectionMediaType) => m.id && m.id > 0 && m.id < 1000000000000;
 
     return (
         <div className="py-3 px-2 border-b border-slate-100 last:border-0">
@@ -193,32 +241,38 @@ export default function InspectionItem({
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('compliant')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'compliant'
-                                    ? 'bg-green-100 border-green-400 text-green-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-600'
+                                title="Conforme"
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'compliant'
+                                    ? 'bg-green-600 border-green-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-green-300 hover:bg-green-50'
                                     }`}
                             >
-                                ✓ Conforme
+                                <ThumbsUp size={12} />
+                                <span>C</span>
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('non_compliant')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'non_compliant'
-                                    ? 'bg-red-100 border-red-400 text-red-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-600'
+                                title="Não Conforme"
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'non_compliant'
+                                    ? 'bg-red-600 border-red-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-red-300 hover:bg-red-50'
                                     }`}
                             >
-                                ✗ Não Conforme
+                                <ThumbsDown size={12} />
+                                <span>NC</span>
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onComplianceChange('not_applicable')}
-                                className={`px-2 py-0.5 text-xs rounded-md border transition-all ${complianceStatus === 'not_applicable'
-                                    ? 'bg-slate-100 border-slate-400 text-slate-700 font-medium'
-                                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                title="Não Aplicável"
+                                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${complianceStatus === 'not_applicable'
+                                    ? 'bg-slate-600 border-slate-600 text-white font-medium'
+                                    : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                             >
-                                N/A
+                                <Minus size={12} />
+                                <span>N/A</span>
                             </button>
                         </div>
                     </div>
@@ -234,30 +288,29 @@ export default function InspectionItem({
                 className="w-full py-1 text-slate-600 text-xs placeholder:text-slate-400 border-none focus:ring-0 resize-none bg-transparent"
             />
 
-            {/* Media Previews */}
+            {/* Media Previews - Compact */}
             {media.length > 0 && (
-                <div className="mb-2 space-y-1">
+                <div className="mb-2 space-y-1.5">
                     {/* Images */}
                     {imageMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                            {imageMedia.map((m) => (
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] text-slate-400 font-medium">📸 {imageMedia.length}</span>
+                            {imageMedia.map((m, idx) => (
                                 <div key={m.id} className="relative group">
+                                    {/* Image thumbnail - 40x40 */}
                                     <div
-                                        className={`w-10 h-10 rounded border cursor-pointer overflow-hidden
-                                            ${selectedAiMedia.includes(m.id!) ? 'border-slate-600 ring-1 ring-slate-400' : 'border-slate-200'}`}
-                                        onClick={() => m.id && toggleAiMedia(m.id)}
+                                        className={`w-10 h-10 rounded border cursor-pointer overflow-hidden shadow-sm hover:shadow-md transition-shadow
+                                            ${selectedAiMedia.includes(m.id!) ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-200'}`}
+                                        onClick={() => setViewingImage({ url: m.file_url, index: idx })}
                                     >
                                         <img src={m.file_url} className="w-full h-full object-cover" alt="" />
-                                        {selectedAiMedia.includes(m.id!) && (
-                                            <div className="absolute inset-0 bg-slate-900/30 flex items-center justify-center">
-                                                <CheckCircle size={12} className="text-white" />
-                                            </div>
-                                        )}
                                     </div>
-                                    {onMediaDelete && canDeleteMedia(m) && (
+                                    {/* Delete Button - always visible */}
+                                    {onMediaDelete && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }}
-                                            className="absolute -top-1 -right-1 w-4 h-4 bg-slate-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => { e.stopPropagation(); if (m.id) onMediaDelete(m.id); }}
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600"
+                                            title="Excluir"
                                         >
                                             <X size={10} />
                                         </button>
@@ -267,50 +320,62 @@ export default function InspectionItem({
                         </div>
                     )}
 
-                    {/* Audio */}
+                    {/* Audio - Native player */}
                     {audioMedia.length > 0 && (
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-2">
                             {audioMedia.map((m) => (
-                                <div key={m.id} className={`flex items-center gap-2 p-1.5 rounded border text-xs
-                                    ${selectedAiMedia.includes(m.id!) ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-200'}`}>
-                                    <button
-                                        onClick={() => m.id && toggleAudio(m.id)}
-                                        className="w-6 h-6 rounded-full bg-slate-600 text-white flex items-center justify-center"
-                                    >
-                                        {playingAudioId === m.id ? <Pause size={10} /> : <Play size={10} className="ml-0.5" />}
-                                    </button>
-                                    <audio ref={el => { if (m.id) audioRefs.current[m.id] = el; }} src={m.file_url} onEnded={() => m.id && handleAudioEnded(m.id)} className="hidden" />
-                                    <span className="flex-1 truncate text-slate-600">{m.file_name || 'Áudio'}</span>
-                                    <button
-                                        onClick={() => m.id && toggleAiMedia(m.id)}
-                                        className={`px-1.5 py-0.5 rounded text-[10px] ${selectedAiMedia.includes(m.id!) ? 'bg-slate-600 text-white' : 'bg-slate-200 text-slate-600'}`}
-                                    >
-                                        {selectedAiMedia.includes(m.id!) ? '✓' : 'Sel'}
-                                    </button>
-                                    {onMediaDelete && canDeleteMedia(m) && (
-                                        <button onClick={() => m.id && onMediaDelete(m.id)} className="text-slate-400 hover:text-red-500">
-                                            <Trash2 size={12} />
+                                <div key={m.id} className="relative flex items-center gap-2 px-2 py-1.5 rounded-lg border bg-white border-slate-200 min-w-[180px]">
+                                    {/* Delete button */}
+                                    {onMediaDelete && (
+                                        <button
+                                            onClick={() => { if (m.id) onMediaDelete(m.id); }}
+                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                                            title="Excluir"
+                                        >
+                                            <X size={10} />
                                         </button>
                                     )}
+                                    <Mic size={14} className="text-slate-400 flex-shrink-0" />
+                                    <audio controls src={m.file_url} className="h-7 w-full" style={{ maxWidth: '150px' }} />
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Documents */}
+                    {/* Documents - Compact inline */}
                     {docMedia.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] text-slate-400 font-medium">📄 {docMedia.length}</span>
                             {docMedia.map((m) => (
-                                <div key={m.id} className={`group flex items-center gap-1 px-1.5 py-1 rounded border text-xs cursor-pointer
-                                    ${selectedAiMedia.includes(m.id!) ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-200'}`}
-                                    onClick={() => m.id && toggleAiMedia(m.id)}
+                                <div
+                                    key={m.id}
+                                    className="flex items-center gap-1.5 px-2 py-1 rounded border bg-white border-slate-200 hover:border-slate-300"
                                 >
-                                    <FileText size={12} className="text-slate-400" />
-                                    <span className="text-slate-600 max-w-[80px] truncate">{m.file_name || 'Doc'}</span>
-                                    {selectedAiMedia.includes(m.id!) && <CheckCircle size={10} className="text-slate-600" />}
-                                    {onMediaDelete && canDeleteMedia(m) && (
-                                        <button onClick={(e) => { e.stopPropagation(); m.id && onMediaDelete(m.id); }} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100">
-                                            <X size={10} />
+                                    {/* Icon by type */}
+                                    {getDocIcon(m.file_name || '')}
+
+                                    {/* Filename - truncated */}
+                                    <span className="truncate text-[10px] text-slate-600 max-w-[120px]" title={m.file_name}>
+                                        {m.file_name || 'Documento'}
+                                    </span>
+
+                                    {/* Download */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); downloadFile(m.file_url, m.file_name || 'download'); }}
+                                        className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                        title="Baixar"
+                                    >
+                                        <Download size={12} />
+                                    </button>
+
+                                    {/* Delete */}
+                                    {onMediaDelete && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); if (m.id) onMediaDelete(m.id); }}
+                                            className="w-5 h-5 rounded flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={12} />
                                         </button>
                                     )}
                                 </div>
@@ -343,13 +408,30 @@ export default function InspectionItem({
                     {/* Audio */}
                     <div className="relative">
                         {isRecording ? (
-                            <button onClick={() => onMediaUpload('audio', 'camera')} className="flex items-center gap-1 px-2 py-1 rounded bg-red-500 text-white text-xs">
-                                <Square size={10} />
-                                <span>{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                            <button
+                                onClick={() => onMediaUpload('audio', 'camera')}
+                                disabled={isUploading}
+                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isUploading ? 'bg-slate-300 cursor-not-allowed' : 'bg-red-500 text-white'}`}
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <RotateCw size={10} className="animate-spin" />
+                                        <span>Salvando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Square size={10} />
+                                        <span>{Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}</span>
+                                    </>
+                                )}
                             </button>
                         ) : (
                             <>
-                                <button onClick={(e) => { e.stopPropagation(); setShowAudioMenu(!showAudioMenu); setShowPhotoMenu(false); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowAudioMenu(!showAudioMenu); setShowPhotoMenu(false); }}
+                                    disabled={isUploading}
+                                    className={`p-1.5 rounded ${isUploading ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                >
                                     <Mic size={16} />
                                 </button>
                                 {showAudioMenu && (
@@ -385,61 +467,453 @@ export default function InspectionItem({
                 </div>
             </div>
 
-            {/* Action Form - Compact */}
+            {/* Action Form - Ultra Compact Inline */}
             {showActionForm && (
-                <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
-                    <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs font-medium text-slate-700">Nova Ação</span>
-                        <button onClick={() => setShowActionForm(false)} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>
+                <div className="mt-2 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                    {/* Header inline with tabs */}
+                    <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-200 bg-white">
+                        <div className="flex items-center gap-1">
+                            <Zap size={10} className="text-amber-500" />
+                            <span className="text-[10px] font-medium text-slate-600">Nova Ação</span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                            <button
+                                onClick={() => setActionMode('manual')}
+                                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${actionMode === 'manual' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >
+                                Manual
+                            </button>
+                            <button
+                                onClick={() => setActionMode('ai')}
+                                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${actionMode === 'ai' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                            >
+                                5W2H IA
+                            </button>
+                            <button onClick={() => setShowActionForm(false)} className="ml-1 p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded">
+                                <X size={10} />
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex gap-1 mb-2">
-                        <button onClick={() => setActionMode('manual')} className={`flex-1 py-1 rounded text-xs ${actionMode === 'manual' ? 'bg-slate-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
-                            <FileText size={10} className="inline mr-0.5" /> Manual
-                        </button>
-                        <button onClick={() => setActionMode('ai')} className={`flex-1 py-1 rounded text-xs ${actionMode === 'ai' ? 'bg-slate-700 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
-                            <Bot size={10} className="inline mr-0.5" /> 5W2H IA
-                        </button>
-                    </div>
-                    {actionMode === 'manual' ? (
-                        <div className="space-y-1.5">
-                            <input type="text" value={manualAction.title} onChange={(e) => setManualAction(prev => ({ ...prev, title: e.target.value }))} placeholder="O que fazer?" className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-xs" />
-                            <div className="flex gap-1">
-                                <select value={manualAction.priority} onChange={(e) => setManualAction(prev => ({ ...prev, priority: e.target.value as any }))} className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs">
+
+                    {/* Content */}
+                    <div className="p-2">
+                        {actionMode === 'manual' ? (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text"
+                                    value={manualAction.title}
+                                    onChange={(e) => setManualAction(prev => ({ ...prev, title: e.target.value }))}
+                                    placeholder="O que fazer?"
+                                    className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
+                                <select
+                                    value={manualAction.priority}
+                                    onChange={(e) => setManualAction(prev => ({ ...prev, priority: e.target.value as any }))}
+                                    className="px-1.5 py-1 bg-white border border-slate-200 rounded text-[10px] w-16"
+                                >
                                     <option value="baixa">Baixa</option>
                                     <option value="media">Média</option>
                                     <option value="alta">Alta</option>
                                 </select>
-                                <button onClick={handleManualActionSubmit} disabled={!manualAction.title.trim()} className="px-2 py-1 bg-slate-700 text-white text-xs rounded disabled:opacity-50">Salvar</button>
+                                <button
+                                    onClick={handleManualActionSubmit}
+                                    disabled={!manualAction.title.trim()}
+                                    className="px-2 py-1 bg-slate-700 text-white text-[10px] rounded disabled:opacity-50 hover:bg-slate-800"
+                                >
+                                    Salvar
+                                </button>
                             </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <p className="text-[10px] text-slate-500 mb-1">{selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s) selecionada(s)` : 'Selecione mídias acima'}</p>
-                            <button onClick={() => onAiActionPlanRequest(selectedAiMedia)} disabled={isCreatingAction} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded disabled:opacity-50 flex items-center justify-center gap-1">
-                                {isCreatingAction ? <RotateCw size={12} className="animate-spin" /> : <Bot size={12} />}
-                                {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
-                            </button>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="space-y-2">
+                                {/* Context flags */}
+                                <div className="flex flex-wrap items-center gap-3 text-[10px]">
+                                    <span className="text-slate-500">Contexto:</span>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useResponse}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useResponse: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Resposta</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useObservation}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useObservation: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Observação</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={contextFlags.useAiAnalysis}
+                                            onChange={(e) => setContextFlags(prev => ({ ...prev, useAiAnalysis: e.target.checked }))}
+                                            className="w-3 h-3 rounded border-slate-300"
+                                        />
+                                        <span className="text-slate-600">Análise IA</span>
+                                    </label>
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => onAiActionPlanRequest([])}
+                                        disabled={isCreatingAction}
+                                        className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-[10px] rounded disabled:opacity-50 hover:bg-blue-700"
+                                    >
+                                        {isCreatingAction ? <RotateCw size={10} className="animate-spin" /> : <Bot size={10} />}
+                                        {isCreatingAction ? 'Gerando...' : 'Gerar 5W2H'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
             {/* AI Panel - Compact */}
             {isAiOpen && (
                 <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
-                    <span className="text-xs font-medium text-slate-700 flex items-center gap-1 mb-1.5"><Sparkles size={10} /> Análise IA</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-slate-700 flex items-center gap-1">
+                            <Sparkles size={10} /> Análise IA
+                        </span>
+                        {item.aiAnalysis && !editingAnalysis && onAiAnalysisUpdate && (
+                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-100 shadow-sm">
+                                <button
+                                    onClick={() => onAiAnalysisRequest && onAiAnalysisRequest(media.map(m => m.id!))}
+                                    className="text-slate-500 hover:text-blue-600 transition-colors"
+                                    title="Gerar Novamente"
+                                >
+                                    <RefreshCw size={14} />
+                                </button>
+                                <div className="w-px h-3 bg-slate-200" />
+                                <button
+                                    onClick={() => { setTempAnalysis(item.aiAnalysis || ''); setEditingAnalysis(true); }}
+                                    className="text-slate-500 hover:text-indigo-600 transition-colors"
+                                    title="Editar Texto"
+                                >
+                                    <Edit3 size={14} />
+                                </button>
+                                <div className="w-px h-3 bg-slate-200" />
+                                <button
+                                    onClick={() => { if (confirm('Excluir análise?')) onAiAnalysisUpdate(null); }}
+                                    className="text-slate-500 hover:text-red-600 transition-colors"
+                                    title="Excluir"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     {isAiAnalyzing ? (
                         <div className="flex items-center gap-1 py-2 text-xs text-slate-600"><RotateCw size={12} className="animate-spin" /> Analisando...</div>
+                    ) : editingAnalysis ? (
+                        <div className="space-y-2">
+                            <textarea
+                                value={tempAnalysis}
+                                onChange={(e) => setTempAnalysis(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-blue-500 outline-none resize-none bg-white"
+                                rows={4}
+                                placeholder="Edite a análise IA..."
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setEditingAnalysis(false)} className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded">Cancelar</button>
+                                <button onClick={() => { if (onAiAnalysisUpdate) onAiAnalysisUpdate(tempAnalysis); setEditingAnalysis(false); }} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Salvar</button>
+                            </div>
+                        </div>
                     ) : item.aiAnalysis ? (
                         <div className="bg-white rounded p-1.5 text-xs text-slate-700 whitespace-pre-line border border-slate-100">{item.aiAnalysis}</div>
                     ) : (
                         <div>
-                            <p className="text-[10px] text-slate-500 mb-1">{selectedAiMedia.length > 0 ? `${selectedAiMedia.length} mídia(s) selecionada(s)` : 'Clique nas mídias para selecionar'}</p>
-                            <button onClick={() => onAiAnalysisRequest(selectedAiMedia)} disabled={selectedAiMedia.length === 0} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded disabled:opacity-50 flex items-center justify-center gap-1">
-                                <Sparkles size={12} /> Analisar
+                            <p className="text-[10px] text-slate-500 mb-1">
+                                {selectedAiMedia.length > 0
+                                    ? `${selectedAiMedia.length} mídia(s) selecionada(s)`
+                                    : 'Analisa a resposta (selecione mídias para incluí-las)'}
+                            </p>
+                            <button onClick={() => onAiAnalysisRequest(selectedAiMedia)} className="w-full py-1.5 bg-slate-700 text-white text-xs rounded hover:bg-slate-800 flex items-center justify-center gap-1">
+                                <Sparkles size={12} /> Analisar com IA
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Show hidden action plan indicator */}
+            {actionPlan && hideActionPlan && (
+                <div className="mt-2 flex items-center gap-1">
+                    <button
+                        onClick={() => setHideActionPlan(false)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                    >
+                        <Eye size={10} />
+                        Mostrar plano de ação
+                    </button>
+                </div>
+            )}
+
+            {/* Action Plan Inline Display - Compact & Minimal */}
+            {actionPlan && !hideActionPlan && (
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                    {/* Header compacto */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowActionPlanExpanded(!showActionPlanExpanded)}
+                            className="flex items-center gap-1.5 flex-1 text-left text-xs text-slate-600 hover:text-slate-800"
+                        >
+                            <Zap size={12} className="text-amber-500" />
+                            <span className="font-medium truncate">{actionPlan.title || 'Plano de Ação'}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${currentPriority === 'alta' || currentPriority === 'critica' ? 'bg-red-100 text-red-700' :
+                                currentPriority === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
+                                }`}>
+                                {currentPriority?.toUpperCase() || 'MÉDIA'}
+                            </span>
+                            <ChevronDown size={12} className={`transition-transform ${showActionPlanExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* Action buttons - always visible */}
+                        <div className="flex items-center gap-0.5">
+                            {onActionPlanEdit && (
+                                <button
+                                    onClick={() => onActionPlanEdit(actionPlan)}
+                                    className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded"
+                                    title="Editar"
+                                >
+                                    <Edit3 size={12} />
+                                </button>
+                            )}
+                            <a
+                                href={`/action-plans${actionPlan.id ? `?highlight=${actionPlan.id}` : ''}`}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                title="Ver na página de Planos"
+                            >
+                                <ExternalLink size={12} />
+                            </a>
+                            <button
+                                onClick={() => setHideActionPlan(true)}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                title="Ocultar"
+                            >
+                                <EyeOff size={12} />
+                            </button>
+                            {onActionPlanDelete && actionPlan.id && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Excluir este plano de ação?')) {
+                                            onActionPlanDelete(actionPlan.id);
+                                        }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                    title="Excluir"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Expanded content - All editable, neutral colors */}
+                    {showActionPlanExpanded && (
+                        <div className="mt-2 pl-3 text-[11px] space-y-2 text-slate-600 border-l-2 border-slate-200">
+                            {/* Reference to question */}
+                            <div className="text-[10px] text-slate-400 italic">
+                                Ref: {index !== undefined ? `#${index + 1} - ` : ''}{item.description}
+                            </div>
+
+                            {/* Status indicator */}
+                            {actionPlan.status === 'suggested' && (
+                                <div className="flex items-center gap-1 text-slate-500 bg-slate-50 px-2 py-1 rounded text-[10px]">
+                                    <Zap size={10} />
+                                    <span>Sugestão IA - edite os campos conforme necessário</span>
+                                </div>
+                            )}
+
+                            {/* Editable: What */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">O quê:</label>
+                                <textarea
+                                    defaultValue={actionPlan.what_description || editedFields.what_description || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, what_description: e.target.value }))}
+                                    placeholder="Descreva a ação necessária..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Editable: Why */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">Por quê:</label>
+                                <textarea
+                                    defaultValue={actionPlan.why_reason || actionPlan.why_description || editedFields.why_reason || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, why_reason: e.target.value }))}
+                                    placeholder="Justificativa da ação..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Editable: Where (read-only, from location) */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Onde:</label>
+                                <span className="text-slate-600">{actionPlan.where_location || actionPlan.where_description || 'Não especificado'}</span>
+                            </div>
+
+                            {/* Editable: When */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quando:</label>
+                                <input
+                                    type="date"
+                                    defaultValue={actionPlan.when_deadline || editedFields.when_deadline || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, when_deadline: e.target.value }))}
+                                    className="px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
+                                />
+                            </div>
+
+                            {/* Editable: Who */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quem:</label>
+                                <input
+                                    type="text"
+                                    defaultValue={actionPlan.who_responsible || editedFields.who_responsible || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, who_responsible: e.target.value }))}
+                                    placeholder="Responsável pela ação"
+                                    className="flex-1 px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
+                                />
+                            </div>
+
+                            {/* Editable: How */}
+                            <div className="space-y-0.5">
+                                <label className="text-slate-500 font-medium">Como:</label>
+                                <textarea
+                                    defaultValue={actionPlan.how_method || actionPlan.how_description || editedFields.how_method || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, how_method: e.target.value }))}
+                                    placeholder="Método de execução..."
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Editable: How much */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Quanto:</label>
+                                <input
+                                    type="text"
+                                    defaultValue={actionPlan.how_much_cost || editedFields.how_much_cost || ''}
+                                    onChange={(e) => setEditedFields(prev => ({ ...prev, how_much_cost: e.target.value }))}
+                                    placeholder="Custo estimado"
+                                    className="w-32 px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
+                                />
+                            </div>
+
+                            {/* Editable: Priority */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-slate-500 font-medium w-12">Prioridade:</label>
+                                <select
+                                    value={currentPriority}
+                                    onChange={(e) => {
+                                        setCurrentPriority(e.target.value);
+                                        setEditedFields(prev => ({ ...prev, priority: e.target.value }));
+                                    }}
+                                    className="px-2 py-1 border border-slate-200 rounded text-[11px] bg-white focus:ring-1 focus:ring-slate-400 outline-none"
+                                >
+                                    <option value="baixa">Baixa</option>
+                                    <option value="media">Média</option>
+                                    <option value="alta">Alta</option>
+                                    <option value="critica">Crítica</option>
+                                </select>
+                            </div>
+
+                            {/* Save button when fields edited */}
+                            {Object.keys(editedFields).length > 0 && (
+                                <div className="pt-2 flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            // TODO: Implement save API call
+                                            console.log('Save edited fields:', editedFields);
+                                            setEditedFields({});
+                                        }}
+                                        className="px-3 py-1 bg-slate-700 text-white text-[10px] rounded hover:bg-slate-800"
+                                    >
+                                        Salvar alterações
+                                    </button>
+                                    <button
+                                        onClick={() => setEditedFields({})}
+                                        className="px-3 py-1 border border-slate-300 text-slate-600 text-[10px] rounded hover:bg-slate-50"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Status badge */}
+                            <div className="pt-1 flex items-center gap-2">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${actionPlan.status === 'suggested' ? 'bg-slate-100 text-slate-600' :
+                                    actionPlan.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        actionPlan.status === 'in_progress' ? 'bg-slate-200 text-slate-700' :
+                                            'bg-slate-300 text-slate-800'
+                                    }`}>
+                                    {actionPlan.status === 'suggested' ? '⚡ Sugestão' :
+                                        actionPlan.status === 'pending' ? 'Pendente' :
+                                            actionPlan.status === 'in_progress' ? 'Em Andamento' :
+                                                actionPlan.status === 'completed' ? 'Concluído' : actionPlan.status || 'Pendente'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Image Viewer Modal */}
+            {viewingImage && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewingImage(null)}>
+                    <button
+                        onClick={() => setViewingImage(null)}
+                        className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                    >
+                        <X size={24} />
+                    </button>
+
+                    {/* Navigation */}
+                    {imageMedia.length > 1 && (
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const prev = viewingImage.index === 0 ? imageMedia.length - 1 : viewingImage.index - 1;
+                                    setViewingImage({ url: imageMedia[prev].file_url, index: prev });
+                                }}
+                                className="absolute left-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                            >
+                                ←
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const next = viewingImage.index === imageMedia.length - 1 ? 0 : viewingImage.index + 1;
+                                    setViewingImage({ url: imageMedia[next].file_url, index: next });
+                                }}
+                                className="absolute right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white"
+                            >
+                                →
+                            </button>
+                        </>
+                    )}
+
+                    <img
+                        src={viewingImage.url}
+                        className="max-w-[90vw] max-h-[90vh] object-contain"
+                        alt=""
+                        onClick={(e) => e.stopPropagation()}
+                    />
+
+                    {/* Counter */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+                        {viewingImage.index + 1} / {imageMedia.length}
+                    </div>
                 </div>
             )}
         </div>

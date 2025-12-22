@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 import { requireScopes, SCOPES, createAuthErrorResponse, isSystemAdmin } from "./rbac-middleware.ts";
+import { logActivity } from "./audit-logger.ts";
 
 type Env = {
   DB: any;
@@ -175,6 +176,18 @@ checklistFoldersRoutes.post("/migrate-categories", demoAuthMiddleware, async (c)
       }),
       totalMigrated
     ).run();
+
+    // Global Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id || null,
+      actionType: 'MIGRATE',
+      actionDescription: `Checklist Categories Migrated to Folders`,
+      targetType: 'SYSTEM',
+      targetId: null,
+      metadata: { organizations_migrated: migrationDetails.length, total_templates: totalMigrated },
+      req: c.req
+    });
 
     return c.json({
       success: true,
@@ -414,6 +427,18 @@ checklistFoldersRoutes.post("/folders", demoAuthMiddleware, requireScopes(SCOPES
     await env.DB.prepare("UPDATE checklist_folders SET path = ? WHERE id = ?")
       .bind(path, folderId).run();
 
+    // Log Creation
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'CREATE',
+      actionDescription: `Checklist Folder Created: ${name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name, slug, path },
+      req: c.req
+    });
+
     return c.json({
       id: folderId,
       message: "Pasta criada com sucesso",
@@ -513,6 +538,18 @@ checklistFoldersRoutes.patch("/folders/:id", demoAuthMiddleware, requireScopes(S
 
     return c.json({ message: "Pasta atualizada com sucesso" });
 
+    // Log Update (Async)
+    logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'UPDATE',
+      actionDescription: `Checklist Folder Updated: ${name || folder.name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name, description, parent_id },
+      req: c.req
+    });
+
   } catch (error) {
     console.error('Error updating folder:', error);
     return c.json({ error: "Failed to update folder" }, 500);
@@ -605,6 +642,18 @@ checklistFoldersRoutes.delete("/folders/:id", demoAuthMiddleware, requireScopes(
     await env.DB.prepare("DELETE FROM checklist_folders WHERE id = ?").bind(folderId).run();
 
     return c.json({ message: "Pasta excluída com sucesso" });
+
+    // Log Deletion (Async)
+    logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'DELETE',
+      actionDescription: `Checklist Folder Deleted: ${folder.name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name: folder.name, strategy },
+      req: c.req
+    });
 
   } catch (error) {
     console.error('Error deleting folder:', error);

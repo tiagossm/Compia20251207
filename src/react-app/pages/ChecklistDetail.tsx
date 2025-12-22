@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import ChecklistForm from '@/react-app/components/ChecklistForm';
 import {
@@ -100,7 +100,7 @@ export default function ChecklistDetail() {
     alert('Respostas salvas com sucesso! (Implementação de exemplo)');
   };
 
-  const handleAutoSave = (responses: Record<number, any>, comments: Record<number, string>, complianceStatuses?: Record<number, any>) => {
+  const handleAutoSave = async (responses: Record<string, any>, comments: Record<string, any>, complianceStatuses?: Record<string, any>) => {
     console.log('Auto-save preview:', { responses, comments, complianceStatuses });
     // This is just for preview - no actual saving in template preview mode
   };

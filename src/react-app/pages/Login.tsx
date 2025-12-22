@@ -9,7 +9,7 @@ export default function Login() {
   const {
     user,
     isPending,
-    redirectToLogin
+    signInWithGoogle
   } = useAuth();
 
   const location = useLocation();
@@ -32,9 +32,12 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true);
-      await redirectToLogin();
-    } catch (error) {
-      console.error('Login error:', error);
+      setError('');
+      await signInWithGoogle();
+      // Note: Page will redirect to Google OAuth, so no need to setIsLoading(false)
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'Erro ao fazer login com Google');
       setIsLoading(false);
     }
   };
@@ -99,7 +102,7 @@ export default function Login() {
         <div className="flex flex-col items-center justify-center mb-6 text-center">
           <div className="flex items-center justify-center">
             <img
-              src="/compia-logo.png"
+              src="/compia_logo.png"
               alt="Compia Logo"
               className="w-[60px] h-[60px] object-contain"
             />

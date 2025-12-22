@@ -1,16 +1,12 @@
-<<<<<<< HEAD
-node_modules
+# Build
+dist/
+node_modules/
 .vercel
 .env*.local
 .dev.vars
 .wrangler
-*.sqlite
-=======
-dist/
-node_modules/
-.wrangler/
-.dev.vars
 worker-configuration.d.ts
+*.sqlite
 
 # Logs
 *.log
@@ -26,4 +22,3 @@ folder_check.txt
 # OS
 .DS_Store
 Thumbs.db
->>>>>>> 25587f5 (Backup antes da migração para Supabase - versão Cloudflare Workers)

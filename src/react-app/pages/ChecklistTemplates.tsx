@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import NewCategoryModal from '@/react-app/components/NewCategoryModal';
 import FolderTree from '@/react-app/components/FolderTree';
@@ -29,7 +29,8 @@ import {
   Upload,
   Brain,
   FileEdit,
-  X
+  X,
+  CheckSquare
 } from 'lucide-react';
 import ChecklistPreview from '@/react-app/components/ChecklistPreview';
 import { ChecklistTemplate, ChecklistField } from '@/shared/checklist-types';
@@ -84,12 +85,34 @@ export default function ChecklistTemplates() {
   const [itemToMove, setItemToMove] = useState<{ type: 'folder' | 'template', id: string | number, name: string } | null>(null);
   const [moveLoading, setMoveLoading] = useState(false);
 
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; id: number | null; name: string }>({
+  // Delete confirmation (supports both templates and folders)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    id: number | string | null;
+    name: string;
+    type: 'template' | 'folder';
+  }>({
     isOpen: false,
     id: null,
-    name: ''
+    name: '',
+    type: 'template'
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Rename folder modal state
+  const [renameModal, setRenameModal] = useState<{
+    isOpen: boolean;
+    id: string | number | null;
+    currentName: string;
+    type: 'folder' | 'template';
+  }>({ isOpen: false, id: null, currentName: '', type: 'folder' });
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+
+  // Selection mode for batch operations
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<number>>(new Set());
 
   // Share Modal State
   const [shareModal, setShareModal] = useState<{
@@ -143,11 +166,22 @@ export default function ChecklistTemplates() {
     }
   };
 
+  // Delete template or folder
   const deleteTemplate = (template: ChecklistTemplate) => {
     setDeleteConfirmation({
       isOpen: true,
       id: template.id!,
-      name: template.name
+      name: template.name,
+      type: 'template'
+    });
+  };
+
+  const deleteFolder = (folder: ChecklistFolderWithCounts) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      id: folder.id!,
+      name: folder.name,
+      type: 'folder'
     });
   };
 
@@ -156,19 +190,125 @@ export default function ChecklistTemplates() {
 
     setDeleteLoading(true);
     try {
-      const response = await fetch(`/api/checklist/checklist-templates/${deleteConfirmation.id}`, {
+      // Use different API endpoint based on type
+      const url = deleteConfirmation.type === 'folder'
+        ? `/api/checklist/folders/${deleteConfirmation.id}`
+        : `/api/checklist/checklist-templates/${deleteConfirmation.id}`;
+
+      const response = await fetch(url, {
         method: 'DELETE'
       });
       if (response.ok) {
         await fetchData();
-        setDeleteConfirmation({ isOpen: false, id: null, name: '' });
+        setDeleteConfirmation({ isOpen: false, id: null, name: '', type: 'template' });
       } else {
         const error = await response.json();
         alert(`Erro ao excluir: ${error.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
-      console.error('Erro ao excluir template:', error);
-      alert('Erro ao excluir template');
+      console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir item');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Rename folder or template
+  const handleRename = async () => {
+    if (!renameModal.id || !newItemName.trim()) return;
+
+    setRenameLoading(true);
+    try {
+      const url = renameModal.type === 'folder'
+        ? `/api/checklist/folders/${renameModal.id}`
+        : `/api/checklist/checklist-templates/${renameModal.id}`;
+
+      const response = await fetch(url, {
+        method: renameModal.type === 'folder' ? 'PATCH' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newItemName.trim() })
+      });
+
+      if (response.ok) {
+        await fetchData();
+        setRenameModal({ isOpen: false, id: null, currentName: '', type: 'folder' });
+        setNewItemName('');
+      } else {
+        const error = await response.json();
+        alert(`Erro ao renomear: ${error.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao renomear:', error);
+      alert('Erro ao renomear item');
+    } finally {
+      setRenameLoading(false);
+    }
+  };
+
+  const openRenameModal = (item: ChecklistFolderWithCounts | ChecklistTemplate, type: 'folder' | 'template') => {
+    setRenameModal({ isOpen: true, id: item.id!, currentName: item.name, type });
+    setNewItemName(item.name);
+  };
+
+  // Selection helpers
+  const toggleFolderSelection = (folderId: string) => {
+    setSelectedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleTemplateSelection = (templateId: number) => {
+    setSelectedTemplates(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(templateId)) {
+        newSet.delete(templateId);
+      } else {
+        newSet.add(templateId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedFolders(new Set(filteredFolders.map(f => f.id!)));
+    setSelectedTemplates(new Set(filteredTemplates.map(t => t.id!)));
+  };
+
+  const deselectAll = () => {
+    setSelectedFolders(new Set());
+    setSelectedTemplates(new Set());
+  };
+
+  const deleteSelectedItems = async () => {
+    const totalSelected = selectedFolders.size + selectedTemplates.size;
+    if (totalSelected === 0) return;
+
+    if (!confirm(`Tem certeza que deseja excluir ${totalSelected} item(s) selecionado(s)?`)) return;
+
+    setDeleteLoading(true);
+    try {
+      // Delete selected folders
+      for (const folderId of selectedFolders) {
+        await fetch(`/api/checklist/folders/${folderId}`, { method: 'DELETE' });
+      }
+      // Delete selected templates
+      for (const templateId of selectedTemplates) {
+        await fetch(`/api/checklist/checklist-templates/${templateId}`, { method: 'DELETE' });
+      }
+
+      await fetchData();
+      setSelectedFolders(new Set());
+      setSelectedTemplates(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Erro ao excluir itens:', error);
+      alert('Erro ao excluir alguns itens');
     } finally {
       setDeleteLoading(false);
     }
@@ -575,6 +715,23 @@ export default function ChecklistTemplates() {
                 </div>
 
                 <button
+                  onClick={() => {
+                    setIsSelectionMode(!isSelectionMode);
+                    if (isSelectionMode) deselectAll();
+                  }}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium border",
+                    isSelectionMode
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                  )}
+                  title={isSelectionMode ? "Sair do modo de seleção" : "Selecionar itens"}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  <span className="hidden md:inline">{isSelectionMode ? 'Concluir' : 'Selecionar'}</span>
+                </button>
+
+                <button
                   onClick={handleExportTemplates}
                   disabled={csvLoading}
                   className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -606,6 +763,33 @@ export default function ChecklistTemplates() {
             </div>
           </div>
 
+          {/* Batch Actions Bar */}
+          {(selectedFolders.size > 0 || selectedTemplates.size > 0) && (
+            <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex items-center justify-between transition-all animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-blue-200 flex items-center justify-center text-xs font-bold text-blue-700">
+                    {selectedFolders.size + selectedTemplates.size}
+                  </div>
+                  item(s) selecionado(s)
+                </span>
+                <button onClick={deselectAll} className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline">
+                  Limpar seleção
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={deleteSelectedItems}
+                  disabled={deleteLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium shadow-sm transition-colors"
+                >
+                  {deleteLoading ? <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">Excluir Selecionados</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Content Area */}
           <div className="flex-1 overflow-y-auto p-4">
             {loading ? (
@@ -635,8 +819,20 @@ export default function ChecklistTemplates() {
                     onClick={() => enterFolder(folder)}
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div className="p-2 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
-                        <Folder className="w-6 h-6" />
+                      <div className="flex items-center gap-3">
+                        {isSelectionMode && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedFolders.has(folder.id!)}
+                              onChange={() => toggleFolderSelection(folder.id!)}
+                              className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                          </div>
+                        )}
+                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
+                          <Folder className="w-6 h-6" />
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <ActionMenu
@@ -647,11 +843,21 @@ export default function ChecklistTemplates() {
                               onClick: () => enterFolder(folder)
                             },
                             {
+                              label: 'Renomear',
+                              icon: <FileEdit className="w-4 h-4" />,
+                              onClick: (e) => { e.stopPropagation(); openRenameModal(folder, 'folder'); }
+                            },
+                            {
                               label: 'Mover',
                               icon: <ArrowRightLeft className="w-4 h-4" />,
                               onClick: (e) => openMoveModal(e, 'folder', folder.id!, folder.name)
                             },
-                            // Add edit/delete if API supports it for folders
+                            {
+                              label: 'Excluir',
+                              icon: <Trash2 className="w-4 h-4 text-red-500" />,
+                              className: "text-red-600 hover:bg-red-50",
+                              onClick: (e) => { e.stopPropagation(); deleteFolder(folder); }
+                            }
                           ]}
                         />
                       </div>
@@ -672,8 +878,20 @@ export default function ChecklistTemplates() {
                     className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition-all flex flex-col relative min-w-0"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div className="p-2 rounded-lg bg-slate-50 text-slate-600">
-                        <FileText className="w-6 h-6" />
+                      <div className="flex items-center gap-3">
+                        {isSelectionMode && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedTemplates.has(template.id!)}
+                              onChange={() => toggleTemplateSelection(template.id!)}
+                              className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                          </div>
+                        )}
+                        <div className="p-2 rounded-lg bg-slate-50 text-slate-600">
+                          <FileText className="w-6 h-6" />
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         {template.is_public ? (
@@ -696,6 +914,11 @@ export default function ChecklistTemplates() {
                               label: 'Editar',
                               icon: <Edit className="w-4 h-4" />,
                               onClick: () => navigate(`/checklists/${template.id}/edit`)
+                            },
+                            {
+                              label: 'Renomear',
+                              icon: <FileEdit className="w-4 h-4" />,
+                              onClick: (e) => { e.stopPropagation(); openRenameModal(template, 'template'); }
                             },
                             {
                               label: 'Duplicar',
@@ -749,6 +972,15 @@ export default function ChecklistTemplates() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
                     <tr>
+                      {isSelectionMode && (
+                        <th className="px-4 py-3 w-8">
+                          <input
+                            type="checkbox"
+                            onChange={(e) => e.target.checked ? selectAll() : deselectAll()}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-3 w-8"></th>
                       <th className="px-4 py-3">Nome</th>
                       <th className="px-4 py-3">Tipo</th>
@@ -764,6 +996,16 @@ export default function ChecklistTemplates() {
                         className="hover:bg-slate-50 cursor-pointer group"
                         onClick={() => enterFolder(folder)}
                       >
+                        {isSelectionMode && (
+                          <td className="px-4 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedFolders.has(folder.id!)}
+                              onChange={() => toggleFolderSelection(folder.id!)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-slate-400">
                           <Folder className="w-5 h-5 text-blue-500 fill-blue-100" />
                         </td>
@@ -792,6 +1034,16 @@ export default function ChecklistTemplates() {
                     {/* Templates */}
                     {filteredTemplates.map((template) => (
                       <tr key={template.id} className="hover:bg-slate-50 group">
+                        {isSelectionMode && (
+                          <td className="px-4 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedTemplates.has(template.id!)}
+                              onChange={() => toggleTemplateSelection(template.id!)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-slate-400">
                           <FileText className="w-5 h-5" />
                         </td>
@@ -1017,6 +1269,53 @@ export default function ChecklistTemplates() {
           </div>
         )
       }
+      {/* Rename Folder Modal */}
+      {/* Rename Modal */}
+      {renameModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-xl font-semibold text-slate-900">
+                Renomear {renameModal.type === 'folder' ? 'Pasta' : 'Checklist'}
+              </h2>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Nome
+              </label>
+              <input
+                type="text"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Novo nome..."
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameModal({ isOpen: false, id: null, currentName: '', type: 'folder' });
+                  setNewItemName('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleRename}
+                disabled={renameLoading || !newItemName.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {renameLoading ? 'Renomeando...' : 'Renomear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </Layout >
   );

@@ -46,6 +46,25 @@ authRoutes.get("/me", async (c) => {
             return c.json({ user: null });
         }
 
+        // VERIFICAÇÃO CRÍTICA: Bloquear usuários pendentes
+        if (dbUser.approval_status === 'pending') {
+            return c.json({
+                error: "Conta em análise",
+                message: "Sua conta aguarda aprovação do administrador.",
+                code: "APPROVAL_PENDING",
+                approval_status: "pending",
+                user: null
+            }, 403);
+        } else if (dbUser.approval_status === 'rejected') {
+            return c.json({
+                error: "Conta recusada",
+                message: "Sua solicitação de cadastro foi recusada.",
+                code: "APPROVAL_REJECTED",
+                approval_status: "rejected",
+                user: null
+            }, 403);
+        }
+
         // Build profile object as expected by frontend
         const profile = {
             id: dbUser.id,
@@ -59,7 +78,8 @@ authRoutes.get("/me", async (c) => {
             managed_organization_id: dbUser.managed_organization_id,
             created_at: dbUser.created_at,
             updated_at: dbUser.updated_at,
-            profile_completed: true
+            profile_completed: true,
+            approval_status: dbUser.approval_status
         };
 
         // Helper to extract Google Data
@@ -89,6 +109,7 @@ authRoutes.get("/me", async (c) => {
                 email: dbUser.email,
                 name: dbUser.name,
                 role: dbUser.role,
+                approval_status: dbUser.approval_status,
                 profile: profile, // Frontend expects user.profile.role
                 google_user_data: googleUserData // Pass Verified Google Data
             }

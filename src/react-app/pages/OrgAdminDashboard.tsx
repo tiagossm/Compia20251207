@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import StatsCard from '@/react-app/components/StatsCard';
 import { useToast } from '@/react-app/hooks/useToast';
