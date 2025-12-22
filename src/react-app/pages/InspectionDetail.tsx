@@ -735,15 +735,89 @@ export default function InspectionDetail() {
   if (showSummary && inspection.status === 'concluida') {
     return (
       <Layout>
-        <InspectionSummary
+        <div className="pb-24"> {/* Add padding for FloatingActionBar */}
+          <InspectionSummary
+            inspection={inspection}
+            items={items}
+            templateItems={templateItems}
+            media={media}
+            responses={responses}
+            signatures={signatures}
+            actionItems={actionItems}
+          />
+        </div>
+
+        {/* FloatingActionBar also appears in summary view */}
+        <FloatingActionBar
+          status={inspection.status}
+          onSave={() => {
+            console.log('Manual save triggered');
+          }}
+          onFinalize={() => setShowSignatures(true)}
+          onReopen={() => setShowReopenModal(true)}
+          onGeneratePDF={() => setShowPDFGenerator(true)}
+          onShare={() => setShowShareModal(true)}
+          onViewSummary={() => setShowSummary(false)} // Toggle back to detail view
+          isSaving={isSubmitting}
+        />
+
+        {/* Share Modal */}
+        {showShareModal && (
+          <InspectionShare
+            inspectionId={parseInt(id || '0')}
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+          />
+        )}
+
+        {/* PDF Generator */}
+        <PDFGenerator
           inspection={inspection}
           items={items}
           templateItems={templateItems}
           media={media}
           responses={responses}
           signatures={signatures}
+          isOpen={showPDFGenerator}
+          onClose={() => setShowPDFGenerator(false)}
           actionItems={actionItems}
+          organizationLogoUrl={undefined}
+          parentOrganizationLogoUrl={undefined}
+          organizationName={inspection.company_name || 'Organização'}
+          parentOrganizationName="Matriz"
         />
+
+        {/* Reopen Modal */}
+        {showReopenModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Reabrir Inspeção</h3>
+              <p className="text-slate-600 mb-4">Informe o motivo para reabrir esta inspeção:</p>
+              <textarea
+                value={reopenJustification}
+                onChange={(e) => setReopenJustification(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                rows={3}
+                placeholder="Justificativa..."
+              />
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => setShowReopenModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReopenInspection}
+                  disabled={isReopening || !reopenJustification.trim()}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {isReopening ? 'Reabrindo...' : 'Reabrir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Layout>
     );
   }
