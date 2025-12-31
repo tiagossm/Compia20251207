@@ -593,6 +593,65 @@ checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddlewa
 
     console.log('[AI-CHECKLIST] Iniciando chamada para AI Service (Gemini/OpenAI)...');
 
+    // Limit questions to prevent timeouts
+    const limitedQuestions = Math.min(num_questions || 10, 15);
+
+    // Construct context based on detail level
+    let detailContext = "";
+    switch (detail_level) {
+      case 'basico':
+        detailContext = "Crie perguntas simples e diretas (Sim/Não). Foque no essencial.";
+        break;
+      case 'avancado':
+        detailContext = "Crie perguntas detalhadas e técnicas. Inclua campos para medições ou observações específicas onde aplicável.";
+        break;
+      case 'intermediario':
+      default:
+        detailContext = "Equilibre perguntas diretas com algumas que exijam observação.";
+    }
+
+    // Construct regulation context
+    const regulationContext = regulation && regulation !== 'Nenhuma norma específica'
+      ? `Baseie as perguntas estritamente na norma ${regulation}. Cite o item da norma se possível.`
+      : "Baseie-se nas melhores práticas de segurança do trabalho.";
+
+    // Create optimized AI prompt
+    const prompt = `Crie um checklist de segurança com ${limitedQuestions} perguntas para:
+- Setor: ${industry}
+- Local: ${location_type}
+- Nome: ${template_name}
+- Categoria: ${category}
+${specific_requirements ? `- Requisitos: ${specific_requirements}` : ''}
+- Nível de Detalhe: ${detail_level} (${detailContext})
+- Norma/Regulamentação: ${regulationContext}
+
+Retorne APENAS JSON válido nesta estrutura exata:
+{
+  "template": {
+    "name": "${template_name}",
+    "description": "Checklist de segurança para ${industry} - ${location_type}. Baseado em: ${regulation || 'Melhores práticas'}",
+    "category": "${category}",
+    "is_public": false
+  },
+  "fields": [
+    {
+      "field_name": "Pergunta sobre segurança",
+      "field_type": "boolean",
+      "is_required": true,
+      "options": "",
+      "order_index": 0
+    }
+  ]
+}
+
+IMPORTANTE:
+- Exatamente ${limitedQuestions} campos no array fields
+- Use field_type: "boolean", "text", "textarea", "select", "rating", "date" ou "file"
+- Para "select", use options: ["Conforme", "Não Conforme", "N/A"]
+- Foque em itens práticos de segurança
+- Se o nível for avançado, você pode usar "text" para observações obrigatórias em pontos críticos
+- Use "file" para solicitar evidências fotográficas quando necessário`;
+
     // Call AI Service with fallback
     const aiResult = await generateAICompletion(geminiKey, openAiKey, {
       systemPrompt: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.',
