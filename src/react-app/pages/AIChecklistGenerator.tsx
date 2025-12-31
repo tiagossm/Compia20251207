@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import ChecklistPreview from '@/react-app/components/ChecklistPreview';
 import TemplateSuggestions from '@/react-app/components/TemplateSuggestions';
+import { useAuth } from '@/react-app/context/AuthContext';
 import {
   Brain,
   ArrowLeft,
@@ -13,6 +14,7 @@ import {
 
 export default function AIChecklistGenerator() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [generating, setGenerating] = useState(false);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
@@ -188,6 +190,33 @@ export default function AIChecklistGenerator() {
 
       setGeneratedTemplate(result);
       console.log('Checklist gerado com sucesso!');
+
+      // Increment AI usage count via backend API
+      try {
+        // Get organization_id from the authenticated user context
+        const orgId = (user as any)?.organization_id || (user as any)?.profile?.organization_id;
+
+        if (orgId) {
+          // Call backend API to increment usage (avoids Supabase auth issues)
+          const incrementResponse = await fetch('/api/organizations/increment-ai-usage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organization_id: orgId })
+          });
+
+          if (incrementResponse.ok) {
+            console.log('[AI-USAGE] ✅ Usage incremented for org:', orgId);
+          } else {
+            const errorData = await incrementResponse.json().catch(() => ({}));
+            console.error('[AI-USAGE] Increment failed:', errorData);
+          }
+        } else {
+          console.warn('[AI-USAGE] No organization_id found in user context');
+        }
+      } catch (usageError) {
+        console.error('[AI-USAGE] Failed to track usage:', usageError);
+        // Don't fail the main flow
+      }
 
     } catch (error) {
       console.error('Erro detalhado:', error);

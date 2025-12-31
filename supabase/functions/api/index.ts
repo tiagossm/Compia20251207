@@ -69,6 +69,8 @@ app.use('*', async (c, next) => {
     // Inject OPENAI_API_KEY from Deno.env so routes can access it
     // @ts-ignore
     c.env.OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || ''
+    // @ts-ignore - Gemini API key for AI fallback
+    c.env.GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || ''
     // @ts-ignore
     c.env.SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
     // @ts-ignore

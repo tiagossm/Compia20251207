@@ -112,9 +112,9 @@ export default function Layout({ children, actionButton }: LayoutProps) {
       {/* --- SIDEBAR BRANCA --- */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg md:shadow-none flex flex-col transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg xl:shadow-none flex flex-col transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0
+          xl:relative xl:translate-x-0
         `}
       >
         {/* Logo Area */}
@@ -123,7 +123,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
             <CompiaLogo size={40} textSize={28} />
           </Link>
           <button
-            className="lg:hidden ml-auto text-gray-500 hover:text-primary"
+            className="xl:hidden ml-auto text-gray-500 hover:text-primary"
             onClick={() => setIsSidebarOpen(false)}
           >
             <X size={24} />
@@ -246,7 +246,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         </Header>
 
         {/* PAGE CONTENT */}
-        <main className="flex-1 overflow-auto overflow-x-hidden p-6 lg:p-8 bg-white relative max-w-full">
+        <main className="flex-1 overflow-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 bg-white relative max-w-full">
           <div className="max-w-7xl mx-auto space-y-6 w-full overflow-x-hidden">
             {children}
           </div>

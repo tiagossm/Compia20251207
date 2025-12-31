@@ -36,7 +36,7 @@ export default function ActionMenu({ items, triggerClassName }: ActionMenuProps)
     }, [isOpen]);
 
     return (
-        <div className="relative" ref={menuRef}>
+        <div className={cn("relative", isOpen && "z-[100]")} ref={menuRef}>
             <button
                 onClick={(e) => {
                     e.stopPropagation();

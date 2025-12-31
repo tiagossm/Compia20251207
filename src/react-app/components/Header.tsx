@@ -50,8 +50,8 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
 
     return (
         <header className="bg-white border-b border-slate-200 h-16 px-4 flex items-center justify-between sticky top-0 z-30">
-            {/* MOBILE: Menu + Logo */}
-            <div className="flex items-center gap-3 md:hidden">
+            {/* MOBILE/TABLET: Menu + Logo */}
+            <div className="flex items-center gap-3 xl:hidden">
                 <button
                     onClick={onMenuClick}
                     className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -63,8 +63,8 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
                 </div>
             </div>
 
-            {/* DESKTOP: Title or Greeting */}
-            <div className="hidden md:flex items-center gap-4">
+            {/* DESKTOP (xl+): Title or Greeting */}
+            <div className="hidden xl:flex items-center gap-4">
                 {isHome ? (
                     <h1 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
                         <span>{greeting.emoji}</span>

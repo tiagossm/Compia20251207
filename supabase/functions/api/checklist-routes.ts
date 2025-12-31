@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 import { logActivity } from "./audit-logger.ts";
+import { aiRateLimitMiddleware, finalizeAIUsage } from "./ai-rate-limit.ts";
+import { generateAICompletion } from "./ai-service.ts";
 
 type Env = {
   DB: any;
@@ -550,7 +552,8 @@ checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async 
 });
 
 // Generate AI checklist - simple version with enhanced error handling
-checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddleware, async (c) => {
+// Includes rate limiting to track usage per organization
+checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddleware, aiRateLimitMiddleware('analysis'), async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -576,171 +579,41 @@ checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddlewa
       }, 400);
     }
 
-    // Check OpenAI API key
+    // Check API keys
     const openAiKey = env?.OPENAI_API_KEY || Deno.env.get('OPENAI_API_KEY');
+    const geminiKey = env?.GEMINI_API_KEY || Deno.env.get('GEMINI_API_KEY');
 
-    if (!openAiKey) {
-      console.error('[AI-CHECKLIST] OpenAI API key não configurada no ambiente');
+    if (!openAiKey && !geminiKey) {
+      console.error('[AI-CHECKLIST] Nenhuma chave de API (OpenAI ou Gemini) configurada');
       return c.json({
         success: false,
-        error: "IA não configurada no sistema (Chave ausente). Contate o suporte."
+        error: "IA não configurada no sistema. Contate o suporte."
       }, 500);
     }
 
-    // Limit questions to prevent timeouts
-    const limitedQuestions = Math.min(num_questions || 10, 15);
+    console.log('[AI-CHECKLIST] Iniciando chamada para AI Service (Gemini/OpenAI)...');
 
-    // Construct context based on detail level
-    let detailContext = "";
-    switch (detail_level) {
-      case 'basico':
-        detailContext = "Crie perguntas simples e diretas (Sim/Não). Foque no essencial.";
-        break;
-      case 'avancado':
-        detailContext = "Crie perguntas detalhadas e técnicas. Inclua campos para medições ou observações específicas onde aplicável.";
-        break;
-      case 'intermediario':
-      default:
-        detailContext = "Equilibre perguntas diretas com algumas que exijam observação.";
-    }
+    // Call AI Service with fallback
+    const aiResult = await generateAICompletion(geminiKey, openAiKey, {
+      systemPrompt: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.',
+      userPrompt: prompt,
+      maxTokens: Math.min(1500, limitedQuestions * 100),
+      temperature: 0.3,
+      timeoutMs: 60000
+    });
 
-    // Construct regulation context
-    const regulationContext = regulation && regulation !== 'Nenhuma norma específica'
-      ? `Baseie as perguntas estritamente na norma ${regulation}. Cite o item da norma se possível.`
-      : "Baseie-se nas melhores práticas de segurança do trabalho.";
-
-    // Create optimized AI prompt
-    const prompt = `Crie um checklist de segurança com ${limitedQuestions} perguntas para:
-- Setor: ${industry}
-- Local: ${location_type}
-- Nome: ${template_name}
-- Categoria: ${category}
-${specific_requirements ? `- Requisitos: ${specific_requirements}` : ''}
-- Nível de Detalhe: ${detail_level} (${detailContext})
-- Norma/Regulamentação: ${regulationContext}
-
-Retorne APENAS JSON válido nesta estrutura exata:
-{
-  "template": {
-    "name": "${template_name}",
-    "description": "Checklist de segurança para ${industry} - ${location_type}. Baseado em: ${regulation || 'Melhores práticas'}",
-    "category": "${category}",
-    "is_public": false
-  },
-  "fields": [
-    {
-      "field_name": "Pergunta sobre segurança",
-      "field_type": "boolean",
-      "is_required": true,
-      "options": "",
-      "order_index": 0
-    }
-  ]
-}
-
-IMPORTANTE:
-- Exatamente ${limitedQuestions} campos no array fields
-- Use field_type: "boolean", "text", "textarea", "select", "rating", "date" ou "file"
-- Para "select", use options: ["Conforme", "Não Conforme", "N/A"]
-- Foque em itens práticos de segurança
-- Se o nível for avançado, você pode usar "text" para observações obrigatórias em pontos críticos
-- Use "file" para solicitar evidências fotográficas quando necessário`;
-
-    console.log('[AI-CHECKLIST] Fazendo chamada para OpenAI...');
-
-    // Call OpenAI API with timeout and retry logic
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-    let openaiResponse;
-    try {
-      openaiResponse = await globalThis.fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          max_tokens: Math.min(1500, limitedQuestions * 100),
-          temperature: 0.3 // Lower temperature for more consistent results
-        }),
-        signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    console.log('[AI-CHECKLIST] Response status:', openaiResponse.status);
-
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('[AI-CHECKLIST] OpenAI API Error:', openaiResponse.status, errorText);
-
-      // Return specific error messages based on status
-      if (openaiResponse.status === 429) {
-        return c.json({
-          success: false,
-          error: "Muitas requisições. Aguarde alguns minutos e tente novamente."
-        }, 429);
-      } else if (openaiResponse.status === 401) {
-        return c.json({
-          success: false,
-          error: "Chave da API OpenAI inválida ou expirada. Verifique as configurações."
-        }, 401);
-      } else if (openaiResponse.status >= 500) {
-        return c.json({
-          success: false,
-          error: "Servidor da OpenAI temporariamente indisponível. Tente novamente em alguns minutos."
-        }, 502);
-      } else {
-        return c.json({
-          success: false,
-          error: `Erro da OpenAI: ${openaiResponse.status}`
-        }, 502);
-      }
-    }
-
-    // Parse response with better error handling
-    let openaiResult;
-    try {
-      const responseText = await openaiResponse.text();
-      console.log('[AI-CHECKLIST] Response preview:', responseText.substring(0, 200));
-
-      // Check if response is HTML (error page)
-      if (responseText.trim().startsWith('<')) {
-        throw new Error('OpenAI retornou página de erro HTML');
-      }
-
-      openaiResult = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('[AI-CHECKLIST] Failed to parse OpenAI response:', parseError);
+    if (!aiResult.success) {
+      console.error('[AI-CHECKLIST] Erro na geração IA:', aiResult.error);
       return c.json({
         success: false,
-        error: "Erro ao processar resposta da IA. Tente novamente."
+        error: aiResult.error || "Erro ao gerar checklist com IA."
       }, 500);
     }
 
-    const content = openaiResult.choices?.[0]?.message?.content;
-    console.log('[AI-CHECKLIST] AI content preview:', content?.substring(0, 200));
+    const content = aiResult.content;
 
-    if (!content) {
-      console.error('[AI-CHECKLIST] Empty content from OpenAI');
-      return c.json({
-        success: false,
-        error: "Resposta vazia da IA. Tente novamente."
-      }, 500);
-    }
+    // Log which provider was used
+    console.log(`[AI-CHECKLIST] Sucesso via ${aiResult.provider} (${aiResult.model}). Fallback usado: ${aiResult.fallbackUsed}`);
 
     // Parse AI response with robust error handling
     let aiData;
@@ -850,6 +723,31 @@ IMPORTANTE:
     };
 
     console.log('[AI-CHECKLIST] Checklist gerado com sucesso');
+
+    // Increment AI usage count for the organization
+    try {
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(user.id || (user as any).sub).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        // Increment usage count
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        console.log('[AI-CHECKLIST] Usage incremented for org:', userProfile.organization_id);
+
+        // Log the AI usage for auditing
+        await env.DB.prepare(`
+          INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+          VALUES (?, ?, 'analysis', ?, 'success', NOW())
+        `).bind(userProfile.organization_id, user.id || (user as any).sub, aiResult.model).run();
+      }
+    } catch (usageError) {
+      console.error('[AI-CHECKLIST] Failed to update usage:', usageError);
+      // Don't fail the request if usage tracking fails
+    }
 
     return c.json({
       success: true,

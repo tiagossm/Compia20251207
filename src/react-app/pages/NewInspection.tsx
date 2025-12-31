@@ -329,7 +329,7 @@ export default function NewInspection() {
               )}
             </button>
             <div className="mt-3 text-center">
-              <p className={`text-sm font-medium ${currentStep === step.id ? 'text-blue-600' : 'text-slate-600'}`}>
+              <p className={`text-xs sm:text-sm font-medium ${currentStep === step.id ? 'text-blue-600' : 'text-slate-600'}`}>
                 {step.title}
               </p>
               <p className="text-xs text-slate-400 hidden md:block">{step.description}</p>
