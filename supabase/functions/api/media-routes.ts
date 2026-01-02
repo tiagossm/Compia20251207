@@ -4,6 +4,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const mediaRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
+type Env = {
+  DB: any;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+};
+
 // File size limits in bytes
 const FILE_SIZE_LIMITS = {
   image: 10 * 1024 * 1024,      // 10 MB
@@ -29,6 +35,7 @@ mediaRoutes.post("/:inspectionId/media/upload", authMiddleware, async (c) => {
       media_type,
       file_name,
       file_data,
+      thumbnail_data, // New field
       file_size,
       mime_type,
       description
@@ -95,6 +102,7 @@ mediaRoutes.post("/:inspectionId/media/upload", authMiddleware, async (c) => {
     }
 
     let file_url = '';
+    let thumbnail_url = ''; // New variable
 
     try {
       // Upload to Supabase Storage
@@ -132,22 +140,52 @@ mediaRoutes.post("/:inspectionId/media/upload", authMiddleware, async (c) => {
           .getPublicUrl(filePath);
 
         file_url = urlData.publicUrl;
+
+        // Process Thumbnail if present
+        if (thumbnail_data) {
+          try {
+            const thumbBase64 = thumbnail_data.split(',')[1];
+            const thumbBinary = Uint8Array.from(atob(thumbBase64), c => c.charCodeAt(0));
+            const thumbPath = `${filePath}_thumb`;
+
+            const { data: thumbUploadData, error: thumbError } = await supabase.storage
+              .from('inspection-media')
+              .upload(thumbPath, thumbBinary, {
+                contentType: 'image/jpeg', // Assuming thumbs are JPEGs
+                upsert: false
+              });
+
+            if (!thumbError) {
+              const { data: thumbUrlData } = supabase.storage
+                .from('inspection-media')
+                .getPublicUrl(thumbPath);
+              thumbnail_url = thumbUrlData.publicUrl;
+            } else {
+              console.warn('Thumbnail upload failed:', thumbError);
+            }
+          } catch (e) {
+            console.warn('Error processing thumbnail:', e);
+          }
+        }
+
       } else {
         // Fallback: Store base64 reference (truncated for DB)
         // This is a workaround - store just a marker and keep base64 client-side
         console.warn('Supabase Storage not configured, using fallback');
         file_url = `local:${file_name}`;
+        if (thumbnail_data) {
+          thumbnail_url = `local:thumb_${file_name}`;
+        }
       }
 
       const now = new Date().toISOString();
 
       // Insert media record with storage URL
-
       const result = await env.DB.prepare(`
         INSERT INTO inspection_media (
-          inspection_id, inspection_item_id, media_type, file_name, file_url,
+          inspection_id, inspection_item_id, media_type, file_name, file_url, thumbnail_url,
           file_size, mime_type, description, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).bind(
         inspectionId,
@@ -155,6 +193,7 @@ mediaRoutes.post("/:inspectionId/media/upload", authMiddleware, async (c) => {
         media_type,
         file_name,
         file_url,
+        thumbnail_url, // Bind new field
         file_size,
         mime_type,
         description || null,
