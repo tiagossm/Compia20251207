@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { demoAuthMiddleware } from './demo-auth-middleware.ts';
+import { tenantAuthMiddleware } from './tenant-auth-middleware.ts';
 
 const aiAssistant = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
@@ -68,7 +68,7 @@ Sempre responda em português do Brasil de forma clara e objetiva.
 Se o usuário pedir para converter dados, SEMPRE gere o CSV completo no formato correto com o cabeçalho "campo,tipo,obrigatorio,opcoes".
 `;
 
-aiAssistant.post('/chat', demoAuthMiddleware, async (c) => {
+aiAssistant.post('/chat', tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get('user');
 

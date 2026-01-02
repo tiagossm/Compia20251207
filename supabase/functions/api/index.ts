@@ -35,6 +35,8 @@ import notificationsRoutes from "./notifications-routes.ts";
 import inspectionItemRoutes from "./inspection-item-routes.ts";
 import gamificationRoutes from "./gamification-routes.ts";
 import aiAssistantRoutes from "./ai-assistant-routes.ts";
+import { auditRoutes } from "./audit-routes.ts";
+import calendarRoutes from "./calendar-routes.ts";
 
 const app = new Hono()
 
@@ -68,6 +70,8 @@ app.use('*', async (c, next) => {
     // Inject OPENAI_API_KEY from Deno.env so routes can access it
     // @ts-ignore
     c.env.OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || ''
+    // @ts-ignore - Gemini API key for AI fallback
+    c.env.GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || ''
     // @ts-ignore
     c.env.SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
     // @ts-ignore
@@ -176,7 +180,7 @@ apiRoutes.use('*', async (c, next) => {
 
 // Rotas básicas no sub-app
 apiRoutes.get('/', (c) => {
-    return c.text('COMPIA API running on Supabase Edge Functions with Postgres Wrapper! Status: Online')
+    return c.text('COMPIA API running on Supabase Edge Functions with Postgres Wrapper! Status: Online v2')
 })
 
 apiRoutes.get('/health', async (c) => {
@@ -236,6 +240,9 @@ apiRoutes.route('/autosuggest', autosuggestRoutes);
 apiRoutes.route('/ai-assistant', aiAssistantRoutes);
 
 apiRoutes.route('/kanban', kanbanRoutes);
+apiRoutes.route('/kanban', kanbanRoutes);
+apiRoutes.route('/audit', auditRoutes);
+apiRoutes.route('/calendar', calendarRoutes);
 
 // App principal monta o sub-app em dois lugares:
 // 1. Na raiz '/' (para chamadas diretas ou sem prefixo)

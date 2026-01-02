@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 
 type Env = {
@@ -44,7 +44,7 @@ async function canAssignToOrganization(
 }
 
 // GET /api/user-assignments/:userId - Listar atribuições de um usuário
-userAssignmentRoutes.get("/:userId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/:userId", tenantAuthMiddleware, async (c) => {
     const userId = c.req.param("userId");
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -86,7 +86,7 @@ userAssignmentRoutes.get("/:userId", demoAuthMiddleware, async (c) => {
 });
 
 // GET /api/user-assignments/organization/:orgId - Listar usuários de uma organização
-userAssignmentRoutes.get("/organization/:orgId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/organization/:orgId", tenantAuthMiddleware, async (c) => {
     const orgId = parseInt(c.req.param("orgId"));
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -127,7 +127,7 @@ userAssignmentRoutes.get("/organization/:orgId", demoAuthMiddleware, async (c) =
 });
 
 // GET /api/user-assignments/available/:orgId - Listar usuários disponíveis para atribuição
-userAssignmentRoutes.get("/available/:orgId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/available/:orgId", tenantAuthMiddleware, async (c) => {
     const orgId = parseInt(c.req.param("orgId"));
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -177,7 +177,7 @@ userAssignmentRoutes.get("/available/:orgId", demoAuthMiddleware, async (c) => {
 });
 
 // POST /api/user-assignments - Criar nova atribuição
-userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.post("/", tenantAuthMiddleware, async (c) => {
     const currentUser = c.get("user");
     const db = c.env.DB;
 
@@ -261,7 +261,7 @@ userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
 });
 
 // PUT /api/user-assignments/:assignmentId - Atualizar atribuição
-userAssignmentRoutes.put("/:assignmentId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.put("/:assignmentId", tenantAuthMiddleware, async (c) => {
     const assignmentId = c.req.param("assignmentId");
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -329,7 +329,7 @@ userAssignmentRoutes.put("/:assignmentId", demoAuthMiddleware, async (c) => {
 });
 
 // DELETE /api/user-assignments/:assignmentId - Remover atribuição
-userAssignmentRoutes.delete("/:assignmentId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.delete("/:assignmentId", tenantAuthMiddleware, async (c) => {
     const assignmentId = c.req.param("assignmentId");
     const currentUser = c.get("user");
     const db = c.env.DB;

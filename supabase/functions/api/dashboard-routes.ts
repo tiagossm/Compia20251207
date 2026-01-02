@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 
 type Env = {
@@ -9,7 +9,7 @@ type Env = {
 const dashboardRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // GET estatísticas gerais do dashboard
-dashboardRoutes.get("/stats", demoAuthMiddleware, async (c) => {
+dashboardRoutes.get("/stats", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const organizationId = c.req.query("organization_id");
@@ -72,7 +72,7 @@ dashboardRoutes.get("/stats", demoAuthMiddleware, async (c) => {
 });
 
 // GET sumário do plano de ação do dashboard
-dashboardRoutes.get("/action-plan-summary", demoAuthMiddleware, async (c) => {
+dashboardRoutes.get("/action-plan-summary", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const organizationId = c.req.query("organization_id");

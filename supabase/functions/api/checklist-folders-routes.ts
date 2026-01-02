@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 import { requireScopes, SCOPES, createAuthErrorResponse, isSystemAdmin } from "./rbac-middleware.ts";
+import { logActivity } from "./audit-logger.ts";
 
 type Env = {
   DB: any;
@@ -49,7 +50,7 @@ async function buildFolderPath(db: any, folderId: string): Promise<string> {
 }
 
 // Migração segura de categorias existentes para pastas
-checklistFoldersRoutes.post("/migrate-categories", demoAuthMiddleware, async (c) => {
+checklistFoldersRoutes.post("/migrate-categories", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -176,6 +177,18 @@ checklistFoldersRoutes.post("/migrate-categories", demoAuthMiddleware, async (c)
       totalMigrated
     ).run();
 
+    // Global Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id || null,
+      actionType: 'MIGRATE',
+      actionDescription: `Checklist Categories Migrated to Folders`,
+      targetType: 'SYSTEM',
+      targetId: null,
+      metadata: { organizations_migrated: migrationDetails.length, total_templates: totalMigrated },
+      req: c.req
+    });
+
     return c.json({
       success: true,
       message: `Migração concluída com sucesso`,
@@ -194,7 +207,7 @@ checklistFoldersRoutes.post("/migrate-categories", demoAuthMiddleware, async (c)
 });
 
 // Listar pastas com contadores (requires checklist:folders:read scope)
-checklistFoldersRoutes.get("/folders", demoAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_READ), async (c) => {
+checklistFoldersRoutes.get("/folders", tenantAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_READ), async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -250,7 +263,7 @@ checklistFoldersRoutes.get("/folders", demoAuthMiddleware, requireScopes(SCOPES.
 });
 
 // Obter árvore de pastas (leve para breadcrumbs)
-checklistFoldersRoutes.get("/tree", demoAuthMiddleware, async (c) => {
+checklistFoldersRoutes.get("/tree", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -302,7 +315,7 @@ checklistFoldersRoutes.get("/tree", demoAuthMiddleware, async (c) => {
 });
 
 // Get folder path/breadcrumb
-checklistFoldersRoutes.get("/folders/:id/path", demoAuthMiddleware, async (c) => {
+checklistFoldersRoutes.get("/folders/:id/path", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const folderId = c.req.param("id");
@@ -344,7 +357,7 @@ checklistFoldersRoutes.get("/folders/:id/path", demoAuthMiddleware, async (c) =>
 });
 
 // Criar nova pasta (requires checklist:folders:write scope)
-checklistFoldersRoutes.post("/folders", demoAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
+checklistFoldersRoutes.post("/folders", tenantAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -414,6 +427,18 @@ checklistFoldersRoutes.post("/folders", demoAuthMiddleware, requireScopes(SCOPES
     await env.DB.prepare("UPDATE checklist_folders SET path = ? WHERE id = ?")
       .bind(path, folderId).run();
 
+    // Log Creation
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'CREATE',
+      actionDescription: `Checklist Folder Created: ${name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name, slug, path },
+      req: c.req
+    });
+
     return c.json({
       id: folderId,
       message: "Pasta criada com sucesso",
@@ -428,7 +453,7 @@ checklistFoldersRoutes.post("/folders", demoAuthMiddleware, requireScopes(SCOPES
 });
 
 // Atualizar pasta (renomear/mover) (requires checklist:folders:write scope)
-checklistFoldersRoutes.patch("/folders/:id", demoAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
+checklistFoldersRoutes.patch("/folders/:id", tenantAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
   const env = c.env;
   const user = c.get("user");
   const folderId = c.req.param("id");
@@ -513,6 +538,18 @@ checklistFoldersRoutes.patch("/folders/:id", demoAuthMiddleware, requireScopes(S
 
     return c.json({ message: "Pasta atualizada com sucesso" });
 
+    // Log Update (Async)
+    logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'UPDATE',
+      actionDescription: `Checklist Folder Updated: ${name || folder.name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name, description, parent_id },
+      req: c.req
+    });
+
   } catch (error) {
     console.error('Error updating folder:', error);
     return c.json({ error: "Failed to update folder" }, 500);
@@ -536,7 +573,7 @@ async function updateFolderPaths(db: any, folderId: string) {
 }
 
 // Excluir pasta (requires checklist:folders:delete scope)
-checklistFoldersRoutes.delete("/folders/:id", demoAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_DELETE), async (c) => {
+checklistFoldersRoutes.delete("/folders/:id", tenantAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_DELETE), async (c) => {
   const env = c.env;
   const user = c.get("user");
   const folderId = c.req.param("id");
@@ -606,6 +643,18 @@ checklistFoldersRoutes.delete("/folders/:id", demoAuthMiddleware, requireScopes(
 
     return c.json({ message: "Pasta excluída com sucesso" });
 
+    // Log Deletion (Async)
+    logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id,
+      actionType: 'DELETE',
+      actionDescription: `Checklist Folder Deleted: ${folder.name}`,
+      targetType: 'CHECKLIST_FOLDER',
+      targetId: folderId,
+      metadata: { name: folder.name, strategy },
+      req: c.req
+    });
+
   } catch (error) {
     console.error('Error deleting folder:', error);
     return c.json({ error: "Failed to delete folder" }, 500);
@@ -630,7 +679,7 @@ async function deleteFolder(db: any, folderId: string) {
 }
 
 // Mover itens em lote (requires checklist:folders:write scope)
-checklistFoldersRoutes.post("/folders/:id/move-items", demoAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
+checklistFoldersRoutes.post("/folders/:id/move-items", tenantAuthMiddleware, requireScopes(SCOPES.CHECKLIST_FOLDERS_WRITE), async (c) => {
   const env = c.env;
   const user = c.get("user");
   const targetFolderId = c.req.param("id");

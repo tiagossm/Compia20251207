@@ -3,13 +3,13 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import { Navigate, useLocation, useNavigate, Link } from 'react-router-dom';
-import { Chrome, Loader2, AlertTriangle } from 'lucide-react';
+import { Chrome, Loader2, AlertTriangle, User, Lock } from 'lucide-react';
 
 export default function Login() {
   const {
     user,
     isPending,
-    redirectToLogin
+    signInWithGoogle
   } = useAuth();
 
   const location = useLocation();
@@ -32,9 +32,12 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     try {
       setIsLoading(true);
-      await redirectToLogin();
-    } catch (error) {
-      console.error('Login error:', error);
+      setError('');
+      await signInWithGoogle();
+      // Note: Page will redirect to Google OAuth, so no need to setIsLoading(false)
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'Erro ao fazer login com Google');
       setIsLoading(false);
     }
   };
@@ -92,142 +95,138 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 font-sans transition-colors duration-300 relative overflow-x-hidden">
-      <main className="w-full flex flex-col items-center justify-center p-4 lg:p-8 z-10 max-w-md">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F7FA] font-sans p-4">
 
-        {/* LOGO - Centralizado */}
-        <div className="flex flex-col items-center justify-center mb-6 text-center">
-          <div className="flex items-center justify-center">
+      {/* CARD DE LOGIN HORIZONTAL */}
+      <div className="w-full md:w-auto md:max-w-[95vw] bg-white rounded-3xl shadow-xl overflow-hidden flex flex-col md:flex-row shadow-slate-200/50">
+
+        {/* LADO ESQUERDO: Branding / Logo */}
+        <div className="w-full md:w-[540px] bg-white flex flex-col items-center justify-center p-0 border-b md:border-b-0 md:border-r border-slate-100 relative overflow-hidden shrink-0">
+          {/* Background Circle Decoration matched from brand */}
+          <div className="absolute w-64 h-64 bg-[#2050E0]/5 rounded-full blur-3xl -top-10 -left-10"></div>
+          <div className="absolute w-64 h-64 bg-[#605E88]/5 rounded-full blur-3xl -bottom-10 -right-10"></div>
+
+          <div className="relative z-10 flex flex-col items-center justify-center h-full w-full">
             <img
-              src="/compia-logo.png"
+              src="/compia_logo.png"
               alt="Compia Logo"
-              className="w-[60px] h-[60px] object-contain"
+              className="w-[85%] h-auto object-contain transition-transform hover:scale-105 duration-500"
             />
-            <span className="font-heading font-bold text-slate-800 text-4xl tracking-tight -ml-3">
-              Compia
-            </span>
           </div>
-          <p className="text-sm font-medium text-slate-500 mt-2">
-            Sua Plataforma Inteligente de Inspeções.
-          </p>
         </div>
 
-        {/* CARD DE LOGIN */}
-        <div className="w-full bg-white p-8 lg:p-10 rounded-2xl shadow-xl transition-all duration-300 border border-slate-100">
+        {/* LADO DIREITO: Formulário */}
+        <div className="w-full md:w-[420px] p-8 md:p-12 flex flex-col justify-center bg-white shrink-0">
 
-          <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Bem-vindo de volta</h2>
-            <p className="text-slate-500 text-sm">Acesse sua conta corporativa.</p>
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-[#303C60] mb-2 tracking-tight">Login</h2>
+            <p className="text-slate-400 text-sm">Entre com suas credenciais ou social.</p>
           </div>
 
-          <form onSubmit={handleEmailLogin} className="space-y-6">
+          <form onSubmit={handleEmailLogin} className="space-y-5">
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start text-left">
-                <AlertTriangle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0" />
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start text-left animate-in fade-in slide-in-from-top-2">
+                <AlertTriangle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
                 <span className="text-sm text-red-600 font-medium">{error}</span>
               </div>
             )}
 
-            {/* Login Social */}
+            {/* Login Social - Google como PRINCIPAL */}
             <button
               type="button"
               onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="ripple w-full flex items-center justify-center gap-3 p-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-all duration-300 shadow-sm hover:shadow-md group"
+              className="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-[#2050E0] hover:bg-[#1a40b0] text-white font-bold text-lg transition-all duration-300 shadow-lg shadow-blue-900/10 hover:shadow-blue-900/20 active:scale-[0.99] relative overflow-hidden group"
             >
-              <Chrome className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-primary transition-colors" />
-              <span className="text-slate-700 dark:text-white font-semibold">Entrar com Google</span>
+              <div className="bg-white p-1 rounded-full absolute left-4">
+                <Chrome className="w-5 h-5 text-[#2050E0]" />
+              </div>
+              <span>Entrar com Google</span>
             </button>
 
-            <div className="my-8 flex items-center justify-between gap-4">
-              <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
-              <span className="text-slate-400 dark:text-slate-500 text-sm font-medium uppercase tracking-wide">OU E-MAIL</span>
-              <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+            <div className="flex items-center justify-between gap-4 py-2">
+              <div className="h-px bg-slate-100 flex-1"></div>
+              <span className="text-slate-300 text-xs font-semibold uppercase tracking-widest">ou continue com email</span>
+              <div className="h-px bg-slate-100 flex-1"></div>
             </div>
 
-            {/* CAMPO E-MAIL (Floating Label + Sem Ícone Interno) */}
-            <div className="relative group">
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder=" "
-                className="input-no-icon block px-4 pb-2.5 pt-5 w-full text-base text-slate-900 bg-slate-50 dark:bg-slate-800/50 rounded-lg border-0 border-b-2 border-slate-300 appearance-none dark:text-white dark:border-slate-600 dark:focus:border-primary focus:outline-none focus:ring-0 focus:border-primary peer transition-colors"
-              />
-              <label
-                htmlFor="email"
-                className="absolute text-sm text-slate-500 dark:text-slate-400 duration-300 transform -translate-y-4 scale-75 top-4 z-10 origin-[0] left-4 peer-focus:text-primary peer-focus:dark:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-4"
-              >
-                E-mail
-              </label>
+            {/* CAMPO E-MAIL */}
+            <div className="space-y-1.5">
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none">
+                  <div className="h-full px-3 flex items-center justify-center border-r border-slate-100">
+                    <User className="h-5 w-5 text-slate-400 group-focus-within:text-[#2050E0] transition-colors" />
+                  </div>
+                </div>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Usuário" // Matching "User" from mockup
+                  className="block w-full pl-14 pr-4 py-3.5 bg-white border border-slate-200 text-slate-800 rounded-lg focus:ring-2 focus:ring-[#2050E0]/10 focus:border-[#2050E0] placeholder:text-slate-400 font-medium transition-all duration-200"
+                />
+              </div>
             </div>
 
-            {/* CAMPO SENHA (Floating Label + Sem Ícone Interno) */}
-            <div className="relative group">
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder=" "
-                className="input-no-icon block px-4 pb-2.5 pt-5 w-full text-base text-slate-900 bg-slate-50 dark:bg-slate-800/50 rounded-lg border-0 border-b-2 border-slate-300 appearance-none dark:text-white dark:border-slate-600 dark:focus:border-primary focus:outline-none focus:ring-0 focus:border-primary peer transition-colors"
-              />
-              <label
-                htmlFor="password"
-                className="absolute text-sm text-slate-500 dark:text-slate-400 duration-300 transform -translate-y-4 scale-75 top-4 z-10 origin-[0] left-4 peer-focus:text-primary peer-focus:dark:text-primary peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-4"
-              >
-                Senha
-              </label>
+            {/* CAMPO SENHA */}
+            <div className="space-y-1.5">
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none">
+                  <div className="h-full px-3 flex items-center justify-center border-r border-slate-100">
+                    <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-[#2050E0] transition-colors" />
+                  </div>
+                </div>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Senha" // Matching "Password" from mockup
+                  className="block w-full pl-14 pr-4 py-3.5 bg-white border border-slate-200 text-slate-800 rounded-lg focus:ring-2 focus:ring-[#2050E0]/10 focus:border-[#2050E0] placeholder:text-slate-400 font-medium transition-all duration-200"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center justify-between text-sm pt-2">
-              <label className="flex items-center gap-2 cursor-pointer group">
+            <div className="flex items-center justify-between text-sm px-1">
+              <label className="flex items-center gap-2 cursor-pointer group select-none">
                 <input
                   type="checkbox"
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary dark:bg-slate-700 dark:border-slate-600 transition-all"
+                  className="w-4 h-4 rounded border-slate-300 text-[#2050E0] focus:ring-[#2050E0] transition-all"
                 />
-                <span className="text-slate-600 dark:text-slate-300 group-hover:text-primary dark:group-hover:text-primary-light transition-colors font-medium">Lembrar de mim</span>
+                <span className="text-slate-500 group-hover:text-[#2050E0] transition-colors">Lembrar de mim</span>
               </label>
-              <a className="text-primary hover:text-primary-hover font-semibold transition-colors decoration-2 hover:underline underline-offset-4" href="#">Esqueceu a senha?</a>
+              <a className="text-[#2050E0] hover:text-[#1a40b0] font-semibold transition-colors hover:underline" href="#">Esqueceu a senha?</a>
             </div>
 
-            {/* BOTÃO PRINCIPAL (CTA) */}
+            {/* BOTÃO SECUNDÁRIO (EMAIL) */}
             <button
               type="submit"
               disabled={isLoading}
-              className="ripple w-full bg-primary hover:bg-primary-hover active:bg-primary-focus text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 uppercase tracking-wider text-sm flex items-center justify-center gap-2 mt-4"
+              className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 px-6 rounded-lg shadow-lg shadow-slate-900/10 hover:shadow-slate-900/20 transition-all duration-300 transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                'ENTRAR NA PLATAFORMA'
+                'Entrar'
               )}
             </button>
           </form>
 
-          {/* Rodapé de Cadastro (Fluxo de Aprovação) */}
+          {/* Rodapé de Cadastro */}
           <div className="pt-8 text-center text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Novo na Compia? </span>
+            <span className="text-slate-400">Novo na Compia? </span>
             <Link
               to="/register"
-              className="text-primary hover:text-primary-hover font-semibold transition-colors decoration-2 hover:underline underline-offset-4"
+              className="text-[#2050E0] hover:text-[#1a40b0] font-bold transition-colors"
             >
               Solicite seu acesso
             </Link>
           </div>
-
         </div>
-
-        {/* Links de Conformidade (Rodapé da Página) */}
-        <footer className="mt-8 text-center text-xs text-slate-500 dark:text-slate-400">
-          <a className="hover:underline" href="#">Termos de Uso</a>
-          <span className="mx-2">|</span>
-          <a className="hover:underline" href="#">Política de Privacidade</a>
-        </footer>
-      </main>
+      </div>
     </div>
   );
 }

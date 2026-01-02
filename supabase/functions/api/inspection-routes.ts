@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 // import database-init removido
 import { TenantContext } from "./tenant-auth-middleware.ts";
+import { logActivity } from "./audit-logger.ts";
 
 type Env = {
   DB: any;
@@ -13,7 +14,7 @@ type Env = {
 const inspectionRoutes = new Hono<{ Bindings: Env; Variables: { user: any; tenantContext: TenantContext } }>();
 
 // Get all inspections for current user
-inspectionRoutes.get("/", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -26,7 +27,7 @@ inspectionRoutes.get("/", demoAuthMiddleware, async (c) => {
     const userProfile = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first() as any;
 
     let query = `
-      SELECT i.*, u.name as created_by_name, o.name as organization_name
+      SELECT i.*, u.name as created_by_name, u.avatar_url as inspector_avatar, o.name as organization_name
       FROM inspections i
       LEFT JOIN users u ON i.created_by = u.id
       LEFT JOIN organizations o ON i.organization_id = o.id
@@ -71,7 +72,7 @@ inspectionRoutes.get("/", demoAuthMiddleware, async (c) => {
 });
 
 // Get simple list of inspections for dropdowns
-inspectionRoutes.get("/simple-list", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/simple-list", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const organizationId = c.req.query("organization_id");
@@ -123,7 +124,7 @@ inspectionRoutes.get("/simple-list", demoAuthMiddleware, async (c) => {
 });
 
 // Get specific inspection with all related data
-inspectionRoutes.get("/:id", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -193,7 +194,7 @@ SELECT * FROM inspection_media
 
 // Create new inspection - BLINDADO
 // @security: organization_id vem do contexto seguro, NUNCA do body
-inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const tenantContext = c.get("tenantContext");
@@ -218,6 +219,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
     const {
       title, description, location, inspector_name, inspector_email,
       company_name, cep, address, scheduled_date,
+      logradouro, numero, complemento, bairro, cidade, uf, sectors,
       status = 'pendente', priority = 'media', responsible_name, responsible_email,
       template_id, ai_assistant_id, action_plan_type = '5w2h',
       // Novos campos de auditoria (opcionais, enviados pelo cliente)
@@ -252,6 +254,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       INSERT INTO inspections(
       title, description, location, inspector_name, inspector_email,
       company_name, cep, address, scheduled_date,
+      logradouro, numero, complemento, bairro, cidade, uf, sectors,
       status, priority, created_by, organization_id, responsible_name, responsible_email,
       ai_assistant_id, action_plan_type,
       started_at_user_time, started_at_server_time,
@@ -259,7 +262,7 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       device_fingerprint, device_model, device_os,
       is_offline_sync, sync_timestamp,
       created_at, updated_at
-    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
       `).bind(
       title || null,
@@ -271,6 +274,13 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       cep || null,
       address || null,
       scheduled_date || null,
+      logradouro || null,
+      numero || null,
+      complemento || null,
+      bairro || null,
+      cidade || null,
+      uf || null,
+      sectors ? JSON.stringify(sectors) : null,
       status,
       priority,
       user.id,
@@ -330,6 +340,18 @@ inspectionRoutes.post("/", demoAuthMiddleware, async (c) => {
       console.error('[AUDIT] Erro ao registrar log de criação:', logError);
       // Não bloquear a operação principal
     }
+
+    // Registrar log global de auditoria
+    await logActivity(env, {
+      userId: user.id,
+      orgId: secureOrgId,
+      actionType: 'CREATE',
+      actionDescription: `Criação de inspeção: ${title}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { title, status, priority, template_id },
+      req: c.req
+    });
 
     // If a template is selected, create inspection items based on template fields
     if (template_id) {
@@ -399,7 +421,7 @@ SELECT * FROM checklist_fields
 
 // Update inspection - BLINDADO
 // @security: Verifica propriedade e registra log de auditoria
-inspectionRoutes.put("/:id", demoAuthMiddleware, async (c) => {
+inspectionRoutes.put("/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const tenantContext = c.get("tenantContext");
@@ -450,6 +472,7 @@ SELECT * FROM inspections WHERE id = ?
     const allowedFields = [
       'title', 'description', 'location', 'inspector_name', 'inspector_email',
       'company_name', 'cep', 'address', 'scheduled_date',
+      'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'sectors',
       'completed_date', 'status', 'priority', 'action_plan', 'action_plan_type',
       'inspector_signature', 'responsible_signature', 'responsible_name', 'responsible_email',
       // Campos de auditoria que podem ser atualizados
@@ -475,6 +498,18 @@ SELECT * FROM inspections WHERE id = ?
       SET ${updateFields.join(", ")}
       WHERE id = ?
   `).bind(...updateValues, inspectionId).run();
+
+    // Registrar log global de auditoria
+    await logActivity(env, {
+      userId: user.id,
+      orgId: inspection.organization_id,
+      actionType: 'UPDATE',
+      actionDescription: `Atualização de inspeção: ${inspection.title}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { changed_fields: Object.keys(changedFields) },
+      req: c.req
+    });
 
     // Registrar log de auditoria para cada campo alterado (LGPD)
     const ipAddress = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
@@ -517,7 +552,7 @@ SELECT * FROM inspections WHERE id = ?
 
 
 // Finalize inspection
-inspectionRoutes.post("/:id/finalize", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/:id/finalize", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -583,8 +618,81 @@ inspectionRoutes.post("/:id/finalize", demoAuthMiddleware, async (c) => {
   }
 });
 
+// Reopen inspection (with audit trail)
+inspectionRoutes.post("/:id/reopen", tenantAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "User not found" }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { justification } = body;
+
+    if (!justification || justification.trim() === '') {
+      return c.json({ error: "Justificativa é obrigatória para reabrir a inspeção" }, 400);
+    }
+
+    // Get current inspection state
+    const inspection = await env.DB.prepare(`
+      SELECT id, status, inspector_signature, responsible_signature, completed_date
+      FROM inspections WHERE id = ?
+    `).bind(inspectionId).first() as any;
+
+    if (!inspection) {
+      return c.json({ error: "Inspeção não encontrada" }, 404);
+    }
+
+    if (inspection.status !== 'concluida' && inspection.status !== 'completed') {
+      return c.json({ error: "Apenas inspeções finalizadas podem ser reabertas" }, 400);
+    }
+
+    // Archive current state in history
+    await env.DB.prepare(`
+      INSERT INTO inspection_reopening_history (
+        inspection_id, reopened_by, justification, 
+        previous_status, previous_inspector_signature, 
+        previous_responsible_signature, previous_completed_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      inspectionId,
+      user.id,
+      justification.trim(),
+      inspection.status,
+      inspection.inspector_signature,
+      inspection.responsible_signature,
+      inspection.completed_date
+    ).run();
+
+    // Update inspection: clear signatures and set status to in_progress
+    await env.DB.prepare(`
+      UPDATE inspections 
+      SET status = 'em_andamento',
+          inspector_signature = NULL,
+          responsible_signature = NULL,
+          completed_date = NULL,
+          updated_at = NOW()
+      WHERE id = ?
+    `).bind(inspectionId).run();
+
+    console.log(`[REOPEN] Inspeção ${inspectionId} reaberta por ${user.email}. Justificativa: ${justification.substring(0, 50)}...`);
+
+    return c.json({
+      success: true,
+      message: "Inspeção reaberta com sucesso"
+    });
+
+  } catch (error) {
+    console.error('Error reopening inspection:', error);
+    return c.json({ error: "Falha ao reabrir inspeção" }, 500);
+  }
+});
+
 // PATCH endpoint for individual response auto-save
-inspectionRoutes.patch("/:id/responses/:itemId", demoAuthMiddleware, async (c) => {
+inspectionRoutes.patch("/:id/responses/:itemId", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -670,7 +778,7 @@ inspectionRoutes.patch("/:id/responses/:itemId", demoAuthMiddleware, async (c) =
 });
 
 // Save template responses for inspection
-inspectionRoutes.post("/:id/template-responses", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/:id/template-responses", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -731,13 +839,22 @@ inspectionRoutes.post("/:id/template-responses", demoAuthMiddleware, async (c) =
         }
       }
 
-      // Update inspection item with enhanced data preservation
+      // Convert compliance status to boolean for legacy column
+      // Accept both EN (compliant, non_compliant) and PT-BR (conforme, nao_conforme) values
+      let isCompliantBool: boolean | null = null;
+      if (complianceStatus === 'conforme' || complianceStatus === 'compliant') {
+        isCompliantBool = true;
+      } else if (complianceStatus === 'nao_conforme' || complianceStatus === 'non_compliant') {
+        isCompliantBool = false;
+      }
+
+      // Update inspection item with both compliance_status (text) and is_compliant (boolean for legacy)
       updateStatements.push(
         env.DB.prepare(`
           UPDATE inspection_items 
-          SET field_responses = ?, is_compliant = ?, updated_at = NOW()
+          SET field_responses = ?, is_compliant = ?, compliance_status = ?, updated_at = NOW()
           WHERE id = ? AND inspection_id = ?
-  `).bind(fieldResponsesJson, complianceStatus, itemIdNum, inspectionId).run()
+  `).bind(fieldResponsesJson, isCompliantBool, complianceStatus, itemIdNum, inspectionId).run()
       );
     }
 
@@ -759,7 +876,7 @@ inspectionRoutes.post("/:id/template-responses", demoAuthMiddleware, async (c) =
 });
 
 // Get template responses for inspection
-inspectionRoutes.get("/:id/template-responses", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/:id/template-responses", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -798,7 +915,7 @@ inspectionRoutes.get("/:id/template-responses", demoAuthMiddleware, async (c) =>
 });
 
 // Get signatures for inspection
-inspectionRoutes.get("/:id/signatures", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/:id/signatures", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -831,7 +948,7 @@ inspectionRoutes.get("/:id/signatures", demoAuthMiddleware, async (c) => {
 });
 
 // Save signatures for inspection
-inspectionRoutes.post("/:id/signatures", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/:id/signatures", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -894,7 +1011,7 @@ inspectionRoutes.post("/:id/signatures", demoAuthMiddleware, async (c) => {
 
 // Delete inspection - BLINDADO
 // @security: Apenas Manager+ pode deletar, com verificação de tenant e log de auditoria
-inspectionRoutes.delete("/:id", demoAuthMiddleware, async (c) => {
+inspectionRoutes.delete("/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const tenantContext = c.get("tenantContext");
@@ -976,6 +1093,26 @@ SELECT * FROM inspections WHERE id = ?
       console.error('[AUDIT] Erro ao registrar log de deleção:', logError);
     }
 
+    // Registrar log global de auditoria
+    try {
+      await env.DB.prepare(`
+          INSERT INTO activity_log (
+            user_id, organization_id, action_type, action_description, 
+            target_type, target_id, metadata, ip_address, user_agent, created_at
+          ) VALUES (?, ?, 'DELETE', ?, 'INSPECTION', ?, ?, ?, ?, NOW())
+        `).bind(
+        user.id,
+        inspection.organization_id,
+        `Exclusão de inspeção: ${inspection.title}`,
+        inspectionId,
+        JSON.stringify({ title: inspection.title, status: inspection.status }),
+        ipAddress,
+        userAgent
+      ).run();
+    } catch (logErr) {
+      console.error('Failed to log to global activity_log:', logErr);
+    }
+
     // Excluir itens relacionados na ordem correta (filhos -> pais)
     // 1. Mídia (ligada a items e inspeção)
     await env.DB.prepare('DELETE FROM inspection_media WHERE inspection_id = ?').bind(inspectionId).run();
@@ -1009,7 +1146,7 @@ SELECT * FROM inspections WHERE id = ?
 
 
 // Generate field response with AI for inspection items
-inspectionRoutes.post("/items/:itemId/generate-field-response", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/items/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1297,7 +1434,7 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
 });
 
 // Get media for specific inspection item
-inspectionRoutes.get("/items/:itemId/media", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/items/:itemId/media", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1337,7 +1474,7 @@ inspectionRoutes.get("/items/:itemId/media", demoAuthMiddleware, async (c) => {
 });
 
 // Upload media for inspection item
-inspectionRoutes.post("/items/:itemId/media", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/items/:itemId/media", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1390,7 +1527,7 @@ inspectionRoutes.post("/items/:itemId/media", demoAuthMiddleware, async (c) => {
 });
 
 // Create AI-generated action item for inspection item
-inspectionRoutes.post("/items/:itemId/create-action", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/items/:itemId/create-action", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1720,7 +1857,7 @@ Base sua decisão exclusivamente nas evidências analisadas e seja específico s
 });
 
 // Pre-analysis endpoint for inspection items
-inspectionRoutes.post("/items/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/items/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1921,7 +2058,7 @@ Seja técnico, específico e cite detalhes visuais / sonoros concretos das evid�
 
 // Media upload for inspection
 // Path: /api/inspections/:inspectionId/media/upload
-inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/:inspectionId/media/upload", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));
@@ -1964,6 +2101,19 @@ inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (
       return c.json({ error: "Inspeção não encontrada" }, 404);
     }
 
+    // Validate inspection_item_id exists if provided
+    let validItemId = null;
+    if (inspection_item_id) {
+      const itemExists = await env.DB.prepare(`
+        SELECT id FROM inspection_items WHERE id = ? AND inspection_id = ?
+      `).bind(inspection_item_id, inspectionId).first();
+
+      if (itemExists) {
+        validItemId = inspection_item_id;
+      }
+      // If item doesn't exist, we'll use null instead of failing with FK error
+    }
+
     const file_url = file_data;
     const now = new Date().toISOString();
 
@@ -1975,7 +2125,7 @@ inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (
       RETURNING id
     `).bind(
       inspectionId,
-      inspection_item_id || null,
+      validItemId,
       media_type,
       file_name,
       file_url,
@@ -2012,7 +2162,7 @@ inspectionRoutes.post("/:inspectionId/media/upload", demoAuthMiddleware, async (
 });
 
 // GET action items for inspection
-inspectionRoutes.get("/:inspectionId/action-items", demoAuthMiddleware, async (c) => {
+inspectionRoutes.get("/:inspectionId/action-items", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));
@@ -2038,7 +2188,7 @@ inspectionRoutes.get("/:inspectionId/action-items", demoAuthMiddleware, async (c
 });
 
 // Create action item for inspection (Manual action creation)
-inspectionRoutes.post("/:inspectionId/action-items", demoAuthMiddleware, async (c) => {
+inspectionRoutes.post("/:inspectionId/action-items", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Sun, Moon, Sunset } from 'lucide-react';
 import CompiaLogo from './CompiaLogo';
 import { useLocation } from 'react-router-dom';
 
@@ -34,10 +33,25 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
         return 'Portal Compia';
     };
 
+    // Time-based greeting
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour >= 5 && hour < 12) {
+            return { text: 'Bom dia', Icon: Sun, emoji: '☀️' };
+        } else if (hour >= 12 && hour < 18) {
+            return { text: 'Boa tarde', Icon: Sunset, emoji: '🌤️' };
+        } else {
+            return { text: 'Boa noite', Icon: Moon, emoji: '🌙' };
+        }
+    };
+
+    const greeting = getGreeting();
+    const isHome = location.pathname === '/';
+
     return (
         <header className="bg-white border-b border-slate-200 h-16 px-4 flex items-center justify-between sticky top-0 z-30">
-            {/* MOBILE: Menu + Logo */}
-            <div className="flex items-center gap-3 md:hidden">
+            {/* MOBILE/TABLET: Menu + Logo */}
+            <div className="flex items-center gap-3 xl:hidden">
                 <button
                     onClick={onMenuClick}
                     className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -49,11 +63,22 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
                 </div>
             </div>
 
-            {/* DESKTOP: Breadcrumbs/Title ONLY (Logo/Brand hidden) */}
-            <div className="hidden md:flex items-center gap-4">
-                <h1 className="text-xl font-semibold text-slate-800">
-                    {getPageTitle()}
-                </h1>
+            {/* DESKTOP (xl+): Title or Greeting */}
+            <div className="hidden xl:flex items-center gap-4">
+                {isHome ? (
+                    <h1 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+                        <span>{greeting.emoji}</span>
+                        {greeting.text}!
+                        <span className="text-slate-400 font-normal text-base">·</span>
+                        <span className="text-slate-500 font-normal text-base">
+                            {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
+                        </span>
+                    </h1>
+                ) : (
+                    <h1 className="text-2xl font-bold text-slate-800">
+                        {getPageTitle()}
+                    </h1>
+                )}
             </div>
 
             {/* Right Side Actions */}

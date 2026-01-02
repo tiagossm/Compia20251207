@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 const notificationsRoutes = new Hono<{ Bindings: any; Variables: { user: any } }>();
 
 // List notifications
-notificationsRoutes.get("/", demoAuthMiddleware, async (c) => {
+notificationsRoutes.get("/", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const limit = parseInt(c.req.query("limit") || "50");
@@ -36,7 +36,7 @@ notificationsRoutes.get("/", demoAuthMiddleware, async (c) => {
 });
 
 // Mark as read
-notificationsRoutes.post("/:id/read", demoAuthMiddleware, async (c) => {
+notificationsRoutes.post("/:id/read", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const id = c.req.param("id");
@@ -55,7 +55,7 @@ notificationsRoutes.post("/:id/read", demoAuthMiddleware, async (c) => {
 });
 
 // Mark all as read
-notificationsRoutes.post("/read-all", demoAuthMiddleware, async (c) => {
+notificationsRoutes.post("/read-all", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
 

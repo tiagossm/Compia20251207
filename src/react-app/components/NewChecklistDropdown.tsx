@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Brain, FileEdit, ChevronDown } from 'lucide-react';
 
 export default function NewChecklistDropdown() {

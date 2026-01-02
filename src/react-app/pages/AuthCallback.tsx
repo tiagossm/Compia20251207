@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
-import { Navigate } from 'react-router';
+import { Navigate } from 'react-router-dom';
 import { Shield, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';

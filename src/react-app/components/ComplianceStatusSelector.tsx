@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, MinusCircle, HelpCircle } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MinusCircle, HelpCircle, CheckCircle2 } from 'lucide-react';
 
 export type ComplianceStatus = 'compliant' | 'non_compliant' | 'not_applicable' | 'unanswered';
 
@@ -7,37 +7,42 @@ interface ComplianceStatusSelectorProps {
   value?: ComplianceStatus;
   onChange: (status: ComplianceStatus) => void;
   disabled?: boolean;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
+  compact?: boolean; // Icon-only mode
 }
 
 const statusOptions = [
   {
     value: 'compliant' as ComplianceStatus,
     label: 'Conforme',
-    description: 'Item está em conformidade com os requisitos',
-    icon: CheckCircle2,
+    shortLabel: '👍',
+    description: 'Item em conformidade',
+    icon: ThumbsUp,
     color: 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200',
     activeColor: 'bg-green-600 text-white border-green-600'
   },
   {
     value: 'non_compliant' as ComplianceStatus,
     label: 'Não Conforme',
-    description: 'Item não atende aos requisitos de segurança',
-    icon: XCircle,
+    shortLabel: '👎',
+    description: 'Item não conforme',
+    icon: ThumbsDown,
     color: 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200',
     activeColor: 'bg-red-600 text-white border-red-600'
   },
   {
     value: 'not_applicable' as ComplianceStatus,
-    label: 'Não Aplicável',
-    description: 'Item não se aplica a esta inspeção',
+    label: 'N/A',
+    shortLabel: '—',
+    description: 'Não aplicável',
     icon: MinusCircle,
     color: 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200',
     activeColor: 'bg-blue-600 text-white border-blue-600'
   },
   {
     value: 'unanswered' as ComplianceStatus,
-    label: 'Não Respondido',
+    label: '?',
+    shortLabel: '?',
     description: 'Aguardando avaliação',
     icon: HelpCircle,
     color: 'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200',
@@ -49,7 +54,8 @@ export default function ComplianceStatusSelector({
   value = 'unanswered',
   onChange,
   disabled = false,
-  size = 'md'
+  size = 'md',
+  compact = false
 }: ComplianceStatusSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -61,11 +67,13 @@ export default function ComplianceStatusSelector({
   };
 
   const sizeClasses = {
+    xs: 'px-1.5 py-1 text-xs',
     sm: 'px-2 py-1 text-xs',
     md: 'px-3 py-2 text-sm'
   };
 
   const iconSizes = {
+    xs: 'w-3 h-3',
     sm: 'w-3 h-3',
     md: 'w-4 h-4'
   };
@@ -79,18 +87,18 @@ export default function ComplianceStatusSelector({
         onMouseLeave={() => setShowTooltip(false)}
         disabled={disabled}
         className={`
-          inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200
+          inline-flex items-center ${compact ? 'gap-0' : 'gap-1.5'} rounded-lg border font-medium transition-all duration-200
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-sm'}
           ${value === 'unanswered' ? selectedOption.color : selectedOption.activeColor}
-          ${sizeClasses[size]}
+          ${compact ? 'px-2 py-1.5' : sizeClasses[size]}
         `}
-        aria-label={`Status de conformidade: ${selectedOption.label}`}
+        aria-label={`Status: ${selectedOption.label}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
         <selectedOption.icon className={iconSizes[size]} aria-hidden="true" />
-        {selectedOption.label}
-        {!disabled && (
+        {!compact && <span>{selectedOption.label}</span>}
+        {!disabled && !compact && (
           <svg
             className={`${iconSizes[size]} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
             fill="none"

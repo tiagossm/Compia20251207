@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 
 type Env = {
@@ -89,7 +89,7 @@ aiAssistantsRoutes.get('/:id', async (c) => {
 });
 
 // Create AI assistant (admin only)
-aiAssistantsRoutes.post('/', demoAuthMiddleware, async (c) => {
+aiAssistantsRoutes.post('/', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get('user');
 
@@ -136,7 +136,7 @@ aiAssistantsRoutes.post('/', demoAuthMiddleware, async (c) => {
 });
 
 // Update AI assistant (admin only)
-aiAssistantsRoutes.put('/:id', demoAuthMiddleware, async (c) => {
+aiAssistantsRoutes.put('/:id', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get('user');
   const assistantId = parseInt(c.req.param('id'));

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { ExtendedMochaUser, USER_ROLES, ORGANIZATION_LEVELS } from "./user-types.ts";
 
 type Env = {
@@ -15,7 +15,7 @@ const getDatabase = (env: any) => env.DB;
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Organizations stats endpoint
-app.get('/stats', demoAuthMiddleware, async (c) => {
+app.get('/stats', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -85,7 +85,7 @@ app.get('/stats', demoAuthMiddleware, async (c) => {
 });
 
 // Get all organizations (with user filtering)
-app.get('/', demoAuthMiddleware, async (c) => {
+app.get('/', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -158,7 +158,7 @@ app.get('/', demoAuthMiddleware, async (c) => {
 });
 
 // Get single organization by ID
-app.get('/:id', demoAuthMiddleware, async (c) => {
+app.get('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -218,7 +218,7 @@ app.get('/:id', demoAuthMiddleware, async (c) => {
 });
 
 // Create new organization
-app.post('/', demoAuthMiddleware, async (c) => {
+app.post('/', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -350,7 +350,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Update organization
-app.put('/:id', demoAuthMiddleware, async (c) => {
+app.put('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -442,7 +442,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Delete organization
-app.delete('/:id', demoAuthMiddleware, async (c) => {
+app.delete('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -538,6 +538,68 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
   } catch (error) {
     console.error('Error deleting organization:', error);
     return c.json({ error: 'Erro ao excluir organização' }, 500);
+  }
+});
+
+// Increment AI usage count for an organization
+app.post('/increment-ai-usage', tenantAuthMiddleware, async (c) => {
+  try {
+    const user = c.get('user') as ExtendedMochaUser;
+    const db = getDatabase(c.env);
+
+    const body = await c.req.json();
+    const { organization_id } = body;
+
+    if (!organization_id) {
+      return c.json({ error: 'organization_id é obrigatório' }, 400);
+    }
+
+    // Get user profile to verify access
+    const userProfile = await db.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first() as any;
+
+    if (!userProfile) {
+      return c.json({ error: "User profile not found" }, 404);
+    }
+
+    // Verify user belongs to this organization or is admin
+    const hasAccess =
+      userProfile.organization_id === organization_id ||
+      userProfile.managed_organization_id === organization_id ||
+      userProfile.role === USER_ROLES.SYSTEM_ADMIN ||
+      userProfile.role === 'sys_admin';
+
+    if (!hasAccess) {
+      return c.json({ error: 'Acesso negado' }, 403);
+    }
+
+    // Increment the counter
+    await db.prepare(`
+      UPDATE organizations 
+      SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1,
+          updated_at = NOW()
+      WHERE id = ?
+    `).bind(organization_id).run();
+
+    // Log to ai_usage_log if table exists
+    try {
+      await db.prepare(`
+        INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+        VALUES (?, ?, 'analysis', 'gpt-4o-mini', 'success', NOW())
+      `).bind(organization_id, user.id).run();
+    } catch (logError) {
+      console.warn('[AI-USAGE] Could not log to ai_usage_log:', logError);
+    }
+
+    console.log('[AI-USAGE] ✅ Incremented for org:', organization_id, 'by user:', user.id);
+
+    return c.json({
+      success: true,
+      message: 'Uso de IA contabilizado'
+    });
+
+  } catch (error) {
+    console.error('Error incrementing AI usage:', error);
+    return c.json({ error: 'Erro ao contabilizar uso de IA' }, 500);
   }
 });
 
