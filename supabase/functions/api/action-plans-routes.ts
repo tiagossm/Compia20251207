@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 import { addXP } from "./gamification-routes.ts";
 
 const actionPlansRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Get all action items across all inspections with optional organization filter
-actionPlansRoutes.get("/all", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.get("/all", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -98,7 +98,7 @@ actionPlansRoutes.get("/all", demoAuthMiddleware, async (c) => {
 });
 
 // Get action items by inspection ID
-actionPlansRoutes.get("/inspection/:inspectionId", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.get("/inspection/:inspectionId", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));
@@ -189,7 +189,7 @@ async function createGoogleCalendarEvent(token: string, title: string, descripti
 }
 
 // Create new action item
-actionPlansRoutes.post("/", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.post("/", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -269,7 +269,7 @@ actionPlansRoutes.post("/", demoAuthMiddleware, async (c) => {
 });
 
 // Update action item status
-actionPlansRoutes.put("/:id/status", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.put("/:id/status", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));
@@ -345,7 +345,7 @@ actionPlansRoutes.put("/:id/status", demoAuthMiddleware, async (c) => {
 });
 
 // Get action items statistics
-actionPlansRoutes.get("/stats", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.get("/stats", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -420,7 +420,7 @@ actionPlansRoutes.get("/stats", demoAuthMiddleware, async (c) => {
 });
 
 // Delete action item
-actionPlansRoutes.delete("/:id", demoAuthMiddleware, async (c) => {
+actionPlansRoutes.delete("/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));

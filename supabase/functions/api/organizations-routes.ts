@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { ExtendedMochaUser, USER_ROLES, ORGANIZATION_LEVELS } from "./user-types.ts";
 
 type Env = {
@@ -15,7 +15,7 @@ const getDatabase = (env: any) => env.DB;
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Organizations stats endpoint
-app.get('/stats', demoAuthMiddleware, async (c) => {
+app.get('/stats', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -85,7 +85,7 @@ app.get('/stats', demoAuthMiddleware, async (c) => {
 });
 
 // Get all organizations (with user filtering)
-app.get('/', demoAuthMiddleware, async (c) => {
+app.get('/', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -158,7 +158,7 @@ app.get('/', demoAuthMiddleware, async (c) => {
 });
 
 // Get single organization by ID
-app.get('/:id', demoAuthMiddleware, async (c) => {
+app.get('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -218,7 +218,7 @@ app.get('/:id', demoAuthMiddleware, async (c) => {
 });
 
 // Create new organization
-app.post('/', demoAuthMiddleware, async (c) => {
+app.post('/', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -350,7 +350,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Update organization
-app.put('/:id', demoAuthMiddleware, async (c) => {
+app.put('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -442,7 +442,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Delete organization
-app.delete('/:id', demoAuthMiddleware, async (c) => {
+app.delete('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -542,7 +542,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Increment AI usage count for an organization
-app.post('/increment-ai-usage', demoAuthMiddleware, async (c) => {
+app.post('/increment-ai-usage', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);

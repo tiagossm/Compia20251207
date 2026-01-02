@@ -2,6 +2,11 @@ import { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 import { USER_ROLES } from "./user-types.ts";
 
+type Env = {
+    DB: any;
+    JWT_SECRET?: string;
+};
+
 /**
  * TENANT AUTH MIDDLEWARE - Blindagem de Segurança Multi-Tenant
  * 
@@ -56,15 +61,6 @@ export async function tenantAuthMiddleware(c: Context, next: Next) {
 
     // 1. Extrair token de autenticação (Cookie) se não encontrado no contexto
     if (!userId) {
-        // Tentar headers de Demo (fallback para dev)
-        const demoHeader = c.req.header('x-demo-auth');
-        if (demoHeader === 'true') {
-            const demoUserId = c.req.header('x-demo-user-id');
-            if (demoUserId) {
-                userId = demoUserId;
-            }
-        }
-
         if (!userId) {
             const sessionToken = getCookie(c, "mocha-session-token") || getCookie(c, "mocha_session_token");
 

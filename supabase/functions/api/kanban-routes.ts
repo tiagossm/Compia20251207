@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 
 type Env = {
@@ -9,7 +9,7 @@ type Env = {
 const kanbanRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Get columns for organization
-kanbanRoutes.get("/:orgId/columns", demoAuthMiddleware, async (c) => {
+kanbanRoutes.get("/:orgId/columns", tenantAuthMiddleware, async (c) => {
     const user = c.get('user');
     const orgId = c.req.param('orgId');
     const env = c.env;
@@ -39,7 +39,7 @@ kanbanRoutes.get("/:orgId/columns", demoAuthMiddleware, async (c) => {
 });
 
 // Create new column
-kanbanRoutes.post("/:orgId/columns", demoAuthMiddleware, async (c) => {
+kanbanRoutes.post("/:orgId/columns", tenantAuthMiddleware, async (c) => {
     const user = c.get('user');
     const orgId = c.req.param('orgId');
     const env = c.env;
@@ -68,7 +68,7 @@ kanbanRoutes.post("/:orgId/columns", demoAuthMiddleware, async (c) => {
 });
 
 // Update column order
-kanbanRoutes.put("/:orgId/columns/reorder", demoAuthMiddleware, async (c) => {
+kanbanRoutes.put("/:orgId/columns/reorder", tenantAuthMiddleware, async (c) => {
     const orgId = c.req.param('orgId');
     const env = c.env;
     const { columnIds } = await c.req.json();
@@ -85,7 +85,7 @@ kanbanRoutes.put("/:orgId/columns/reorder", demoAuthMiddleware, async (c) => {
 });
 
 // Update column (title/color)
-kanbanRoutes.put("/:orgId/columns/:colId", demoAuthMiddleware, async (c) => {
+kanbanRoutes.put("/:orgId/columns/:colId", tenantAuthMiddleware, async (c) => {
     const orgId = c.req.param('orgId');
     const colId = c.req.param('colId');
     const env = c.env;
@@ -100,7 +100,7 @@ kanbanRoutes.put("/:orgId/columns/:colId", demoAuthMiddleware, async (c) => {
 });
 
 // Delete column
-kanbanRoutes.delete("/:orgId/columns/:colId", demoAuthMiddleware, async (c) => {
+kanbanRoutes.delete("/:orgId/columns/:colId", tenantAuthMiddleware, async (c) => {
     const orgId = c.req.param('orgId');
     const colId = c.req.param('colId');
     const env = c.env;
@@ -118,7 +118,7 @@ kanbanRoutes.delete("/:orgId/columns/:colId", demoAuthMiddleware, async (c) => {
 });
 
 // Move Item (Update Status)
-kanbanRoutes.put("/:orgId/items/:itemId/move", demoAuthMiddleware, async (c) => {
+kanbanRoutes.put("/:orgId/items/:itemId/move", tenantAuthMiddleware, async (c) => {
     const { status } = await c.req.json();
     const itemId = c.req.param('itemId');
     const env = c.env;

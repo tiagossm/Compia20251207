@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { demoAuthMiddleware as authMiddleware } from './demo-auth-middleware.ts';
+import { tenantAuthMiddleware as authMiddleware } from './tenant-auth-middleware.ts';
 import { logActivity } from './audit-logger.ts';
 
 const shareRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 import { logActivity } from "./audit-logger.ts";
 import { aiRateLimitMiddleware, finalizeAIUsage } from "./ai-rate-limit.ts";
@@ -14,7 +14,7 @@ type Env = {
 const checklistRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // List all checklist templates - ENHANCED ADMIN VISIBILITY
-checklistRoutes.get("/checklist-templates", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/checklist-templates", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -112,7 +112,7 @@ checklistRoutes.get("/checklist-templates", demoAuthMiddleware, async (c) => {
 });
 
 // Get specific checklist template with fields
-checklistRoutes.get("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -161,7 +161,7 @@ checklistRoutes.get("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
 });
 
 // Create checklist template
-checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -221,7 +221,7 @@ checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
 });
 
 // Create checklist field
-checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -286,7 +286,7 @@ checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
 });
 
 // Update checklist template
-checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -348,7 +348,7 @@ checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
 });
 
 // Delete checklist template
-checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -407,7 +407,7 @@ checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c)
 });
 
 // Duplicate checklist template
-checklistRoutes.post("/checklist-templates/:id/duplicate", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/:id/duplicate", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -480,7 +480,7 @@ checklistRoutes.post("/checklist-templates/:id/duplicate", demoAuthMiddleware, a
 });
 
 // Share checklist template
-checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/checklist-templates/:id/share", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -553,7 +553,7 @@ checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async 
 
 // Generate AI checklist - simple version with enhanced error handling
 // Includes rate limiting to track usage per organization
-checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddleware, aiRateLimitMiddleware('analysis'), async (c) => {
+checklistRoutes.post("/checklist-templates/generate-ai-simple", tenantAuthMiddleware, aiRateLimitMiddleware('analysis'), async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -865,7 +865,7 @@ IMPORTANTE:
 });
 
 // Save generated checklist
-checklistRoutes.post("/checklist-templates/save-generated", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/save-generated", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -1026,7 +1026,7 @@ checklistRoutes.post("/checklist-templates/save-generated", demoAuthMiddleware, 
 });
 
 // Delete template fields (for template editing)
-checklistRoutes.delete("/checklist-templates/:id/fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/checklist-templates/:id/fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -1068,7 +1068,7 @@ checklistRoutes.delete("/checklist-templates/:id/fields", demoAuthMiddleware, as
 });
 
 // Create checklist field
-checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -1175,7 +1175,7 @@ checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
 });
 
 // Create folder for templates
-checklistRoutes.post("/checklist-templates/create-folder", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/create-folder", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -1221,7 +1221,7 @@ checklistRoutes.post("/checklist-templates/create-folder", demoAuthMiddleware, a
 });
 
 // Pre-analysis with AI multimodal support
-checklistRoutes.post("/inspection-items/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1387,7 +1387,7 @@ Forneça uma análise estruturada e técnica (máximo 600 caracteres) em texto c
 });
 
 // Generate field response with AI multimodal analysis
-checklistRoutes.post("/inspection-items/:itemId/generate-field-response", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1654,7 +1654,7 @@ Seja tecnicamente preciso, detalhado e específico sobre as evidências analisad
 });
 
 // Create AI-generated action item for inspection item
-checklistRoutes.post("/inspection-items/:itemId/create-action", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/create-action", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1969,7 +1969,7 @@ Responda APENAS em formato JSON:
 });
 
 // Delete pre-analysis for an inspection item
-checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -2000,7 +2000,7 @@ checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", demoAuthMiddlew
 });
 
 // Get actions for specific inspection item
-checklistRoutes.get("/inspection-items/:itemId/actions", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/inspection-items/:itemId/actions", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -2044,7 +2044,7 @@ checklistRoutes.get("/inspection-items/:itemId/actions", demoAuthMiddleware, asy
 // ================================
 
 // Get action plan for inspection
-checklistRoutes.get("/inspections/:id/action-plan", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/inspections/:id/action-plan", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -2102,7 +2102,7 @@ checklistRoutes.get("/inspections/:id/action-plan", demoAuthMiddleware, async (c
 });
 
 // Create manual action item
-checklistRoutes.post("/inspections/:inspectionId/action-items", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspections/:inspectionId/action-items", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));
@@ -2199,7 +2199,7 @@ checklistRoutes.post("/inspections/:inspectionId/action-items", demoAuthMiddlewa
 });
 
 // Update action item
-checklistRoutes.put("/action-items/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/action-items/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));
@@ -2303,7 +2303,7 @@ checklistRoutes.put("/action-items/:id", demoAuthMiddleware, async (c) => {
 });
 
 // Delete action item
-checklistRoutes.delete("/action-items/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/action-items/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));

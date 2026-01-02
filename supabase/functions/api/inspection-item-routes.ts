@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 const inspectionItemRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
@@ -109,7 +109,7 @@ async function transcribeAudio(
 
 // Get actions for specific inspection item
 // Path: /api/inspection-items/:itemId/actions
-inspectionItemRoutes.get("/:itemId/actions", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.get("/:itemId/actions", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -148,7 +148,7 @@ inspectionItemRoutes.get("/:itemId/actions", demoAuthMiddleware, async (c) => {
 
 // Pre-analysis with AI - POST
 // Pre-analysis with AI - POST
-inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -399,7 +399,7 @@ Análise técnica breve (máximo 500 caracteres). Se houver riscos visíveis, ci
 });
 
 // Delete pre-analysis
-inspectionItemRoutes.delete("/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.delete("/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -428,7 +428,7 @@ inspectionItemRoutes.delete("/:itemId/pre-analysis", demoAuthMiddleware, async (
 });
 
 // Update pre-analysis (manual edit)
-inspectionItemRoutes.put("/:itemId/analysis", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.put("/:itemId/analysis", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -461,7 +461,7 @@ inspectionItemRoutes.put("/:itemId/analysis", demoAuthMiddleware, async (c) => {
 });
 
 // Create action for inspection item
-inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/create-action", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -706,7 +706,7 @@ Responda APENAS em JSON no seguinte formato:
 });
 
 // Delete inspection item
-inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.delete("/:itemId", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -729,7 +729,7 @@ inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
         }
 
         // Verify if user has permission (same organization or sys admin)
-        // Assuming demoAuthMiddleware handles basic tenant check via secureOrgId context if applicable
+        // Assuming tenantAuthMiddleware handles basic tenant check via secureOrgId context if applicable
         // But double checking logic:
         // if (item.organization_id !== user.organization_id && user.role !== 'sys_admin') ...
 
@@ -743,7 +743,7 @@ inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
 });
 
 // Generate field response with AI for inspection items
-inspectionItemRoutes.post("/:itemId/generate-field-response", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -1037,7 +1037,7 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
 });
 
 // Generate comprehensive action plan (5W2H) for inspection item
-inspectionItemRoutes.post("/:itemId/generate-action-plan", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/generate-action-plan", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
