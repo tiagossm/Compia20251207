@@ -7,7 +7,6 @@ import { ExtendedMochaUser } from '@/shared/user-types';
 import {
   LayoutDashboard,
   ClipboardList,
-  FileText,
   Settings,
   Users,
   Building2,
@@ -19,8 +18,9 @@ import {
   Brain,
   BarChart3,
   Activity,
-  Shield,
-  Database
+  Cloud,
+  Lock,
+  Blocks
 } from 'lucide-react';
 import NotificationSystem from '@/react-app/components/NotificationSystem';
 import FloatingAiAssistant from '@/react-app/components/FloatingAiAssistant';
@@ -42,18 +42,32 @@ export default function Layout({ children, actionButton }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  // Restore Navigation Groups
-  const navigationGroups = [
-    {
-      title: 'Principal',
-      items: [
-        { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-        { name: 'Inspeções', href: '/inspections', icon: ClipboardList },
-        { name: 'Planos de Ação', href: '/action-plans', icon: FileText },
-      ]
-    },
+  // State for collapsible groups
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    'Ferramentas': false,
+    'Análise': false,
+    'Administração': false
+  });
+
+  const toggleGroup = (title: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [title]: !prev[title]
+    }));
+  };
+
+  // Main Navigation (Fixed - Always Visible)
+  const mainNav = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Inspeções', href: '/inspections', icon: ClipboardList },
+    { name: 'Planos de Ação', href: '/action-plans', icon: Blocks },
+  ];
+
+  // Secondary Collapsible Groups
+  const secondaryGroups = [
     {
       title: 'Ferramentas',
+      icon: Settings,
       items: [
         { name: 'Nova Inspeção', href: '/inspections/new', icon: PlusCircle },
         { name: 'Checklists', href: '/checklists', icon: FileCheck },
@@ -62,6 +76,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
     },
     {
       title: 'Análise',
+      icon: Activity,
       items: [
         { name: 'Relatórios', href: '/reports', icon: BarChart3 },
         { name: 'Atividades', href: '/activities', icon: Activity },
@@ -98,8 +113,9 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         onClick={() => setIsSidebarOpen(false)}
       >
         <item.icon
-          size={20}
-          className={`transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'}`}
+          size={22}
+          strokeWidth={1.5}
+          className={`transition-colors ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'}`}
         />
         {item.name}
       </Link>
@@ -112,18 +128,18 @@ export default function Layout({ children, actionButton }: LayoutProps) {
       {/* --- SIDEBAR BRANCA --- */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg xl:shadow-none flex flex-col transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-100 shadow-xl shadow-slate-200/50 xl:shadow-none flex flex-col transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           xl:relative xl:translate-x-0
         `}
       >
         {/* Logo Area */}
-        <div className="h-16 flex items-center px-4 border-b border-gray-100 shrink-0">
+        <div className="h-20 flex items-center px-6 border-b border-slate-50 shrink-0">
           <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
-            <CompiaLogo size={40} textSize={28} />
+            <CompiaLogo size={42} textSize={30} />
           </Link>
           <button
-            className="xl:hidden ml-auto text-gray-500 hover:text-primary"
+            className="xl:hidden ml-auto text-slate-400 hover:text-primary"
             onClick={() => setIsSidebarOpen(false)}
           >
             <X size={24} />
@@ -131,15 +147,34 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-hide">
 
-          {/* Default Groups with Category Titles */}
-          {navigationGroups.map((group, groupIndex) => (
-            <div key={group.title} className={groupIndex > 0 ? "pt-4" : ""}>
-              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                {group.title}
-              </p>
-              <div className="space-y-1">
+          {/* Main Navigation (Fixed) */}
+          <div className="space-y-1 mb-6">
+            <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-4">Principal</p>
+            {mainNav.map((item) => (
+              <NavItem key={item.name} item={item} />
+            ))}
+          </div>
+
+          {/* Secondary Collapsible Groups */}
+          {secondaryGroups.map((group, _groupIndex) => (
+            <div key={group.title} className="mb-2">
+              <button
+                onClick={() => toggleGroup(group.title)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-primary hover:bg-slate-50 rounded-lg transition-colors group"
+              >
+                <span>{group.title}</span>
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-200 text-slate-400 group-hover:text-primary ${expandedGroups[group.title] ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <div
+                className={`space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${expandedGroups[group.title] ? 'max-h-screen opacity-100 mt-1' : 'max-h-0 opacity-0'
+                  }`}
+              >
                 {group.items.map((item) => (
                   <NavItem key={item.name} item={item} />
                 ))}
@@ -147,33 +182,49 @@ export default function Layout({ children, actionButton }: LayoutProps) {
             </div>
           ))}
 
-          {/* Admin Section */}
+          {/* Admin Section Collapsible */}
           {(profile?.role === 'system_admin' || profile?.role === 'sys_admin' || profile?.role === 'admin' || profile?.role === 'org_admin') && (
             <div className="pt-2 pb-2">
-              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Administração</p>
-              <div className="space-y-1">
+              <button
+                onClick={() => toggleGroup('Administração')}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-primary hover:bg-slate-50 rounded-lg transition-colors group"
+              >
+                <span>Administração</span>
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-200 text-slate-400 group-hover:text-primary ${expandedGroups['Administração'] ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <div
+                className={`space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${expandedGroups['Administração'] ? 'max-h-screen opacity-100 mt-1' : 'max-h-0 opacity-0'
+                  }`}
+              >
+                {/* System Admin Only */}
                 {(profile?.role === 'system_admin' || profile?.role === 'sys_admin') && (
                   <>
-                    <NavItem item={{ name: 'Permissões', href: '/settings/permissions', icon: Shield }} />
-                    <NavItem item={{ name: 'Sinc. Dados', href: '/admin/data-sync', icon: Database }} />
+                    <NavItem item={{ name: 'Permissões', href: '/settings/permissions', iconSrc: '/assets/icons/icon-lock.png', icon: Lock }} />
+                    <NavItem item={{ name: 'Sinc. Dados', href: '/admin/data-sync', iconSrc: '/assets/icons/icon-cloud.png', icon: Cloud }} />
                     <NavItem item={{ name: 'Logs Auditoria', href: '/admin/audit', icon: Activity }} />
                   </>
                 )}
 
+                {/* Admins & System Admins */}
                 {(profile?.role === 'system_admin' || profile?.role === 'sys_admin' || profile?.role === 'admin') &&
                   adminNavigation.map(item => <NavItem key={item.name} item={item} />)
                 }
 
+                {/* Org Admin */}
                 {(profile?.role === 'org_admin') && (
-                  <NavItem item={{ name: 'Minha Organização', href: '/organizations', icon: Building2 }} />
+                  <NavItem item={{ name: 'Minha Organização', href: '/organizations', iconSrc: '/assets/icons/icon-building.png', icon: Building2 }} />
                 )}
               </div>
             </div>
           )}
 
           {/* Settings */}
-          <div className="pt-2">
-            <NavItem item={{ name: 'Configurações', href: '/settings', icon: Settings }} />
+          <div className="pt-2 mt-auto">
+            <NavItem item={{ name: 'Configurações', href: '/settings', iconSrc: '/assets/icons/icon-settings.png', icon: Settings }} />
           </div>
 
         </nav>

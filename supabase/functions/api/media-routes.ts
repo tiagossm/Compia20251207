@@ -142,11 +142,13 @@ mediaRoutes.post("/:inspectionId/media/upload", authMiddleware, async (c) => {
       const now = new Date().toISOString();
 
       // Insert media record with storage URL
+
       const result = await env.DB.prepare(`
         INSERT INTO inspection_media (
           inspection_id, inspection_item_id, media_type, file_name, file_url,
           file_size, mime_type, description, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
       `).bind(
         inspectionId,
         resolvedItemId || null,
