@@ -41,11 +41,15 @@ interface LogAIUsageParams {
 export async function checkAIUsage(
     supabaseAdmin: ReturnType<typeof createClient>,
     organizationId: string
-): Promise<AIUsageResult> {
+): Promise<AIUsageResult & {
+    alert_50_sent: boolean;
+    alert_80_sent: boolean;
+    alert_100_sent: boolean;
+}> {
     // Buscar dados da organização
     const { data: org, error } = await supabaseAdmin
         .from('organizations')
-        .select('ai_usage_count, ai_limit, ai_reset_date, subscription_tier')
+        .select('ai_usage_count, ai_limit, ai_reset_date, subscription_tier, alert_50_sent, alert_80_sent, alert_100_sent')
         .eq('id', organizationId)
         .single();
 
@@ -58,6 +62,9 @@ export async function checkAIUsage(
             remaining: 0,
             resetDate: '',
             percentUsed: 100,
+            alert_50_sent: false,
+            alert_80_sent: false,
+            alert_100_sent: false
         };
     }
 
@@ -74,11 +81,17 @@ export async function checkAIUsage(
             .update({
                 ai_usage_count: 0,
                 ai_reset_date: nextReset.toISOString().split('T')[0],
+                alert_50_sent: false, // Reset alerts
+                alert_80_sent: false,
+                alert_100_sent: false
             })
             .eq('id', organizationId);
 
         org.ai_usage_count = 0;
         org.ai_reset_date = nextReset.toISOString().split('T')[0];
+        org.alert_50_sent = false;
+        org.alert_80_sent = false;
+        org.alert_100_sent = false;
     }
 
     const currentUsage = org.ai_usage_count || 0;
@@ -93,6 +106,9 @@ export async function checkAIUsage(
         remaining,
         resetDate: org.ai_reset_date,
         percentUsed,
+        alert_50_sent: org.alert_50_sent || false,
+        alert_80_sent: org.alert_80_sent || false,
+        alert_100_sent: org.alert_100_sent || false,
     };
 }
 
@@ -309,6 +325,17 @@ export function aiRateLimitMiddleware(featureType: LogAIUsageParams['featureType
     };
 }
 
+async function sendAlertEmail(
+    organizationId: string,
+    threshold: number,
+    currentUsage: number,
+    limit: number
+) {
+    console.log(`[ALERT] Organization ${organizationId} reached ${threshold}% usage (${currentUsage}/${limit})`);
+    // TODO: Implement actual email sending via SendGrid/Resend
+    // Example: fetch('https://api.resend.com/emails', ...)
+}
+
 /**
  * Após uso bem-sucedido de IA, finaliza o log e incrementa contador
  */
@@ -319,6 +346,40 @@ export async function finalizeAIUsage(
 ): Promise<void> {
     // Incrementar contador
     await incrementAIUsage(supabaseAdmin, organizationId);
+
+    // Check for alerts
+    try {
+        const usageData = await checkAIUsage(supabaseAdmin, organizationId);
+        const { percentUsed, alert_50_sent, alert_80_sent, alert_100_sent } = usageData;
+
+        let alertToSend = 0;
+        let startCondition = false;
+
+        if (percentUsed >= 100 && !alert_100_sent) {
+            alertToSend = 100;
+        } else if (percentUsed >= 80 && !alert_80_sent) {
+            alertToSend = 80;
+        } else if (percentUsed >= 50 && !alert_50_sent) {
+            alertToSend = 50;
+        }
+
+        if (alertToSend > 0) {
+            await sendAlertEmail(organizationId, alertToSend, usageData.currentUsage, usageData.limit);
+
+            // Update flag
+            const updateData: any = {};
+            if (alertToSend === 50) updateData.alert_50_sent = true;
+            if (alertToSend === 80) updateData.alert_80_sent = true;
+            if (alertToSend === 100) updateData.alert_100_sent = true;
+
+            await supabaseAdmin
+                .from('organizations')
+                .update(updateData)
+                .eq('id', organizationId);
+        }
+    } catch (e) {
+        console.error('Error checking usage alerts:', e);
+    }
 
     // Logar uso
     await logAIUsage(supabaseAdmin, {

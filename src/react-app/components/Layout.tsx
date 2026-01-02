@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CompiaLogo from '@/react-app/components/CompiaLogo';
 import Header from '@/react-app/components/Header';
@@ -23,6 +23,7 @@ import {
   Blocks
 } from 'lucide-react';
 import NotificationSystem from '@/react-app/components/NotificationSystem';
+import UsageIndicator from '@/react-app/components/UsageIndicator';
 import FloatingAiAssistant from '@/react-app/components/FloatingAiAssistant';
 import { SyncStatusIndicator } from '@/react-app/components/SyncStatusIndicator';
 import { OfflinePinModal } from '@/react-app/components/OfflinePinModal';
@@ -41,6 +42,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [orgUsage, setOrgUsage] = useState<{ current: number; limit: number; resetDate: string } | null>(null);
 
   // State for collapsible groups
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -48,6 +50,41 @@ export default function Layout({ children, actionButton }: LayoutProps) {
     'Análise': false,
     'Administração': false
   });
+
+  useEffect(() => {
+    if (profile?.organization_id) {
+      fetchOrgUsage(profile.organization_id);
+    }
+
+    const handleUsageUpdate = () => {
+      if (profile?.organization_id) {
+        fetchOrgUsage(profile.organization_id);
+      }
+    };
+
+    window.addEventListener('ai_usage_updated', handleUsageUpdate);
+
+    return () => {
+      window.removeEventListener('ai_usage_updated', handleUsageUpdate);
+    };
+  }, [profile?.organization_id]);
+
+  const fetchOrgUsage = async (orgId: number | string) => {
+    try {
+      const response = await fetch(`/api/organizations/${orgId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const orgData = data.organization || data;
+        setOrgUsage({
+          current: orgData.ai_usage_count || 0,
+          limit: orgData.ai_limit || 100,
+          resetDate: orgData.ai_reset_date
+        });
+      }
+    } catch (e) {
+      console.error('Failed to fetch org usage', e);
+    }
+  };
 
   const toggleGroup = (title: string) => {
     setExpandedGroups(prev => ({
@@ -237,6 +274,15 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         <Header onMenuClick={() => setIsSidebarOpen(true)} actionButton={actionButton}>
           {/* Sync Status */}
           <SyncStatusIndicator />
+
+          {/* Usage Indicator */}
+          {orgUsage && (
+            <UsageIndicator
+              currentUsage={orgUsage.current}
+              limit={orgUsage.limit}
+              className="hidden sm:block mr-2"
+            />
+          )}
 
           {/* Notification System */}
           <NotificationSystem />

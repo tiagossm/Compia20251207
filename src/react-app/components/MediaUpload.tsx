@@ -109,6 +109,50 @@ export default function MediaUpload({
     return labels[mediaType as keyof typeof labels] || mediaType;
   };
 
+  const generateThumbnail = async (file: File): Promise<string | null> => {
+    if (!file.type.startsWith('image/')) return null;
+    try {
+      // Create an image element to load the file data
+      // We use FileReader + Image because createImageBitmap might handle orientation differently or not be supported everywhere fully consistently with toDataURL requirements in some envs, but standard Canvas approach is safest.
+      return new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new window.Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 200;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDim || height > maxDim) {
+              const ratio = Math.min(maxDim / width, maxDim / height);
+              width *= ratio;
+              height *= ratio;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(null);
+              return;
+            }
+
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.onerror = () => resolve(null);
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+    } catch (e) {
+      console.warn('Thumbnail generation failed', e);
+      return null;
+    }
+  };
+
   const uploadFile = async (file: File) => {
     setUploading(true);
 
@@ -119,6 +163,12 @@ export default function MediaUpload({
       if (!validateFileSize(file, mediaType)) {
         setUploading(false);
         return;
+      }
+
+      // Generate thumbnail if it's an image
+      let thumbnailData: string | null = null;
+      if (mediaType === 'image') {
+        thumbnailData = await generateThumbnail(file);
       }
 
       // Convert file to base64 for upload to backend
@@ -137,6 +187,7 @@ export default function MediaUpload({
           media_type: mediaType,
           file_name: file.name,
           file_data: fileData,
+          thumbnail_data: thumbnailData, // Send thumbnail
           file_size: file.size,
           mime_type: file.type,
         }),

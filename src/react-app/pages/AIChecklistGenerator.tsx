@@ -206,6 +206,7 @@ export default function AIChecklistGenerator() {
 
           if (incrementResponse.ok) {
             console.log('[AI-USAGE] ✅ Usage incremented for org:', orgId);
+            window.dispatchEvent(new Event('ai_usage_updated'));
           } else {
             const errorData = await incrementResponse.json().catch(() => ({}));
             console.error('[AI-USAGE] Increment failed:', errorData);
