@@ -217,49 +217,61 @@ export const AdminAISettings: React.FC = () => {
                 </h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                    {providers.map((provider, index) => (
-                        <div
-                            key={provider.name}
-                            className={`p-4 rounded-lg border ${provider.status === 'online'
-                                ? 'border-green-200 bg-green-50'
-                                : provider.status === 'checking'
-                                    ? 'border-slate-200 bg-slate-50'
-                                    : 'border-red-200 bg-red-50'
-                                }`}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${provider.status === 'online'
-                                        ? 'bg-green-500 animate-pulse'
-                                        : provider.status === 'checking'
-                                            ? 'bg-slate-400 animate-pulse'
-                                            : 'bg-red-500'
-                                        }`} />
-                                    <div>
-                                        <p className="font-medium text-slate-900">{provider.name}</p>
-                                        <p className="text-xs text-slate-500">
-                                            {index === 0 ? 'Provedor Principal' : 'Backup / Fallback'}
-                                        </p>
+                    {providers.map((provider) => {
+                        const isPrimary = settings?.ai_primary_provider === (provider.name.includes('GPT') ? 'openai' : 'gemini');
+
+                        return (
+                            <div
+                                key={provider.name}
+                                onClick={() => {
+                                    if (!settings) return;
+                                    const newProvider = provider.name.includes('GPT') ? 'openai' : 'gemini';
+                                    saveSettings({ ai_primary_provider: newProvider });
+                                }}
+                                className={`cursor-pointer relative p-4 rounded-lg border-2 transition-all ${isPrimary
+                                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 ring-offset-2'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                                    }`}
+                            >
+                                {isPrimary && (
+                                    <div className="absolute -top-3 -right-3 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                                        PRINCIPAL
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-3 h-3 rounded-full ${provider.status === 'online'
+                                            ? 'bg-green-500 animate-pulse'
+                                            : provider.status === 'checking'
+                                                ? 'bg-slate-400 animate-pulse'
+                                                : 'bg-red-500'
+                                            }`} />
+                                        <div>
+                                            <p className="font-medium text-slate-900">{provider.name}</p>
+                                            <p className="text-xs text-slate-500">
+                                                {isPrimary ? 'Definido como prioridade' : 'Usado apenas como backup'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        {provider.status === 'checking' ? (
+                                            <span className="text-sm text-slate-500">...</span>
+                                        ) : provider.status === 'online' ? (
+                                            <p className="text-xs text-slate-500">{provider.latency}ms</p>
+                                        ) : (
+                                            <span className="text-sm font-medium text-red-600">Offline</span>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    {provider.status === 'checking' ? (
-                                        <span className="text-sm text-slate-500">Verificando...</span>
-                                    ) : provider.status === 'online' ? (
-                                        <>
-                                            <span className="text-sm font-medium text-green-600">Online</span>
-                                            {provider.latency && (
-                                                <p className="text-xs text-slate-500">{provider.latency}ms</p>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <span className="text-sm font-medium text-red-600">Offline</span>
-                                    )}
-                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
+
+                <p className="mt-4 text-xs text-slate-500">
+                    * Clique em um provedor para defini-lo como principal. O outro será usado automaticamente como backup se o fallback estiver ativado.
+                </p>
             </div>
 
             {/* Opções Adicionais */}
@@ -315,12 +327,14 @@ export const AdminAISettings: React.FC = () => {
             </div>
 
             {/* Última atualização */}
-            {settings?.updated_at && (
-                <p className="text-xs text-slate-400 text-center">
-                    Última atualização: {new Date(settings.updated_at).toLocaleString('pt-BR')}
-                </p>
-            )}
-        </div>
+            {
+                settings?.updated_at && (
+                    <p className="text-xs text-slate-400 text-center">
+                        Última atualização: {new Date(settings.updated_at).toLocaleString('pt-BR')}
+                    </p>
+                )
+            }
+        </div >
     );
 };
 

@@ -168,63 +168,75 @@ async function callOpenAI(
 export async function generateAICompletion(
     geminiKey: string | undefined,
     openaiKey: string | undefined,
-    options: AICompletionOptions
+    options: AICompletionOptions,
+    preferences: {
+        preferredProvider: 'gemini' | 'openai';
+        fallbackEnabled: boolean;
+    } = { preferredProvider: 'gemini', fallbackEnabled: true }
 ): Promise<AICompletionResult> {
 
-    // 1. Tentar Gemini primeiro (se disponível)
-    if (geminiKey && geminiKey.trim()) {
-        console.log('[AI-SERVICE] Tentando Gemini primeiro...');
+    const { preferredProvider, fallbackEnabled } = preferences;
+    const providerOrder = preferredProvider === 'openai'
+        ? ['openai', 'gemini']
+        : ['gemini', 'openai'];
 
-        const geminiResult = await callGemini(geminiKey.trim(), options);
+    console.log(`[AI-SERVICE] Config: Primary=${preferredProvider}, Fallback=${fallbackEnabled ? 'ON' : 'OFF'}`);
 
-        if (geminiResult.success && geminiResult.content) {
-            return {
-                success: true,
-                content: geminiResult.content,
-                provider: 'gemini',
-                model: 'gemini-1.5-flash',
-                fallbackUsed: false
-            };
+    for (const provider of providerOrder) {
+        // Skip secondary provider if fallback is disabled and we are on the second iteration
+        if (!fallbackEnabled && provider !== preferredProvider) {
+            console.log(`[AI-SERVICE] Fallback disabled, skipping ${provider}`);
+            continue;
         }
 
-        console.log('[AI-SERVICE] Gemini falhou:', geminiResult.error);
-    } else {
-        console.log('[AI-SERVICE] Gemini API key não disponível, pulando para OpenAI...');
-    }
+        if (provider === 'gemini') {
+            if (geminiKey && geminiKey.trim()) {
+                console.log('[AI-SERVICE] Tentando Gemini...');
+                const result = await callGemini(geminiKey.trim(), options);
 
-    // 2. Fallback para OpenAI
-    if (openaiKey && openaiKey.trim()) {
-        console.log('[AI-SERVICE] Usando OpenAI como fallback...');
-
-        const openaiResult = await callOpenAI(openaiKey.trim(), options);
-
-        if (openaiResult.success && openaiResult.content) {
-            return {
-                success: true,
-                content: openaiResult.content,
-                provider: 'openai',
-                model: 'gpt-4o-mini',
-                fallbackUsed: !!geminiKey // Se tinha Gemini key, foi fallback
-            };
+                if (result.success && result.content) {
+                    return {
+                        success: true,
+                        content: result.content,
+                        provider: 'gemini',
+                        model: 'gemini-1.5-flash',
+                        fallbackUsed: provider !== preferredProvider
+                    };
+                }
+                console.log('[AI-SERVICE] Gemini falhou:', result.error);
+            } else {
+                console.log('[AI-SERVICE] Gemini Key ausente ou inválida.');
+            }
         }
 
-        return {
-            success: false,
-            content: '',
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-            error: openaiResult.error || 'OpenAI failed',
-            fallbackUsed: !!geminiKey
-        };
+        if (provider === 'openai') {
+            if (openaiKey && openaiKey.trim()) {
+                console.log('[AI-SERVICE] Tentando OpenAI...');
+                const result = await callOpenAI(openaiKey.trim(), options);
+
+                if (result.success && result.content) {
+                    return {
+                        success: true,
+                        content: result.content,
+                        provider: 'openai',
+                        model: 'gpt-4o-mini',
+                        fallbackUsed: provider !== preferredProvider
+                    };
+                }
+                console.log('[AI-SERVICE] OpenAI falhou:', result.error);
+            } else {
+                console.log('[AI-SERVICE] OpenAI Key ausente ou inválida.');
+            }
+        }
     }
 
-    // 3. Nenhum provider disponível
+    // Se chegou aqui, ambos falharam ou não estavam configurados adequadamente
     return {
         success: false,
         content: '',
-        provider: 'openai',
+        provider: 'openai', // Default for error reporting
         model: 'none',
-        error: 'Nenhum provedor de IA configurado (GEMINI_API_KEY ou OPENAI_API_KEY)'
+        error: 'Falha em todos os provedores configurados ou chaves ausentes.'
     };
 }
 

@@ -33,11 +33,16 @@ export default function ChecklistForm({
   onUpdateAiAnalysis
 }: ChecklistFormProps) {
 
-  // Debug log
-  console.log('[CHECKLIST] ChecklistForm mounted', {
-    fieldsCount: fields.length,
-    hasOnAutoSave: !!onAutoSave
-  });
+  // Debug log - Mount only
+  useEffect(() => {
+    console.log('[CHECKLIST] ChecklistForm MOUNTED', {
+      fieldsCount: fields.length,
+      hasOnAutoSave: !!onAutoSave
+    });
+
+    // Check render count
+    return () => console.log('[CHECKLIST] ChecklistForm UNMOUNTED');
+  }, []);
 
   // State
   const [responses, setResponses] = useState<Record<number, any>>(initialValues);

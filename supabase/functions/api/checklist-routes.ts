@@ -557,6 +557,8 @@ checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddlewa
   const env = c.env;
   const user = c.get("user");
 
+  console.log('[AI-CHECKLIST] Prompt Generation Route Hit - VERSION 2.2 (Stable - Fallback Active)');
+
   if (!user) {
     return c.json({ error: "User not found" }, 401);
   }
@@ -652,6 +654,24 @@ IMPORTANTE:
 - Se o nível for avançado, você pode usar "text" para observações obrigatórias em pontos críticos
 - Use "file" para solicitar evidências fotográficas quando necessário`;
 
+    // Fetch system settings for AI preferences
+    let preferredProvider: 'gemini' | 'openai' = 'gemini';
+    let fallbackEnabled = true;
+
+    try {
+      const settings = await env.DB.prepare("SELECT ai_primary_provider, ai_fallback_enabled FROM system_settings WHERE id = 'global'").first() as any;
+      if (settings) {
+        if (settings.ai_primary_provider === 'openai') preferredProvider = 'openai';
+        // default is gemini if null or 'gemini'
+
+        if (settings.ai_fallback_enabled === false || settings.ai_fallback_enabled === 0) {
+          fallbackEnabled = false;
+        }
+      }
+    } catch (err) {
+      console.warn('[AI-CHECKLIST] Failed to fetch settings, using defaults:', err);
+    }
+
     // Call AI Service with fallback
     const aiResult = await generateAICompletion(geminiKey, openAiKey, {
       systemPrompt: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.',
@@ -659,7 +679,7 @@ IMPORTANTE:
       maxTokens: Math.min(1500, limitedQuestions * 100),
       temperature: 0.3,
       timeoutMs: 60000
-    });
+    }, { preferredProvider, fallbackEnabled });
 
     if (!aiResult.success) {
       console.error('[AI-CHECKLIST] Erro na geração IA:', aiResult.error);

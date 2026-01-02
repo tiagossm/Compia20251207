@@ -24,17 +24,93 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
     const chunksRef = useRef<Blob[]>([]);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const uploadFile = useCallback(async (file: File, fieldId: number, type: 'image' | 'audio' | 'video' | 'file') => {
+    // Helper to compress image to WebP
+    const compressImage = async (file: File): Promise<Blob> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Max dimensions to avoid huge images
+                const MAX_WIDTH = 1920;
+                const MAX_HEIGHT = 1920;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Canvas context not available'));
+                    return;
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        console.log(`[COMPRESSION] Original: ${(file.size / 1024).toFixed(2)}KB -> WebP: ${(blob.size / 1024).toFixed(2)}KB`);
+                        resolve(blob);
+                    } else {
+                        reject(new Error('Compression failed'));
+                    }
+                }, 'image/webp', 0.8); // Quality 0.8
+            };
+
+            img.onerror = (err) => reject(err);
+            img.src = url;
+        });
+    };
+
+    const uploadFile = useCallback(async (originalFile: File, fieldId: number, type: 'image' | 'audio' | 'video' | 'file') => {
         if (!inspectionId) return null;
 
         setUploading(true);
         try {
+            let fileToUpload = originalFile;
+            let finalFileName = originalFile.name;
+            let finalMimeType = originalFile.type;
+
+            // Compress if image
+            if (type === 'image' && originalFile.type.startsWith('image/')) {
+                try {
+                    console.log('[COMPRESSION] Starting compression for', originalFile.name);
+                    const compressedBlob = await compressImage(originalFile);
+
+                    // Create new filename with .webp extension
+                    const nameWithoutExt = originalFile.name.substring(0, originalFile.name.lastIndexOf('.')) || originalFile.name;
+                    finalFileName = `${nameWithoutExt}.webp`;
+                    finalMimeType = 'image/webp';
+
+                    // Create new File object
+                    fileToUpload = new File([compressedBlob], finalFileName, { type: 'image/webp' });
+                } catch (err) {
+                    console.warn('[COMPRESSION] Failed, using original file:', err);
+                }
+            }
+
             // Convert file to base64
             const base64 = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result as string);
                 reader.onerror = reject;
-                reader.readAsDataURL(file);
+                reader.readAsDataURL(fileToUpload);
             });
 
             // Send JSON with base64 data (matching backend expectations)
@@ -46,10 +122,10 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
                 body: JSON.stringify({
                     inspection_item_id: fieldId,
                     media_type: type,
-                    file_name: file.name,
+                    file_name: finalFileName,
                     file_data: base64,
-                    file_size: file.size,
-                    mime_type: file.type
+                    file_size: fileToUpload.size,
+                    mime_type: finalMimeType
                 })
             });
 
@@ -59,7 +135,7 @@ export function useMediaHandling({ inspectionId, onMediaUploaded }: UseMediaHand
                     id: data.media?.id || data.id,
                     file_url: data.media?.file_url || data.file_url,
                     media_type: type,
-                    file_name: file.name
+                    file_name: finalFileName
                 };
 
                 if (onMediaUploaded) {

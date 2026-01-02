@@ -100,10 +100,12 @@ export default function ChecklistDetail() {
     alert('Respostas salvas com sucesso! (Implementação de exemplo)');
   };
 
-  const handleAutoSave = async (responses: Record<string, any>, comments: Record<string, any>, complianceStatuses?: Record<string, any>) => {
-    console.log('Auto-save preview:', { responses, comments, complianceStatuses });
+  /*
+  const handleAutoSave = async (responses: any, comments: any, complianceStatuses?: any) => {
+    // console.log('Auto-save preview:', { responses, comments, complianceStatuses });
     // This is just for preview - no actual saving in template preview mode
   };
+  */
 
   if (loading) {
     return (
@@ -266,7 +268,7 @@ export default function ChecklistDetail() {
               fields={template.fields}
               onSubmit={handleFormSubmit}
               readonly={false}
-              onAutoSave={handleAutoSave}
+            // onAutoSave={handleAutoSave}
             />
           )}
         </div>
