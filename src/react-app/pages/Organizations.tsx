@@ -235,10 +235,7 @@ export default function Organizations() {
     console.log('Exportar organizações:', organizationIds);
   };
 
-  const handleBulkInviteUsers = async (organizationIds: number[]) => {
-    // Implementar convite em lote
-    console.log('Convidar usuários para organizações:', organizationIds);
-  };
+
 
   // Filtrar organizações baseado na busca e filtros
   const filteredOrganizations = organizations.filter(org => {

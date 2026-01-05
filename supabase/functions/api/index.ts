@@ -245,7 +245,7 @@ apiRoutes.route('/dashboard', dashboardRoutes);
 apiRoutes.route('/share', shareRoutes);
 apiRoutes.route('/notifications', notificationsRoutes);
 apiRoutes.route('/admin', adminApprovalRoutes);
-apiRoutes.route('/user-assignment', userAssignmentRoutes);
+apiRoutes.route('/user-assignments', userAssignmentRoutes);
 apiRoutes.route('/multi-tenant', multiTenantRoutes);
 apiRoutes.route('/system-admin', systemAdminRoutes);
 apiRoutes.route('/role-permissions', rolePermissionsRoutes);
