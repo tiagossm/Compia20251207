@@ -108,9 +108,65 @@ async function transcribeAudio(
         await logToDb('WHISPER_SUCCESS', { transcription_preview: transcription.substring(0, 100) });
         return transcription.trim() || '[Áudio sem fala detectada]';
     } catch (error) {
-        console.error('[WHISPER] Error:', error);
+        console.error('[WHISPER] Unexpected error:', error);
         await logToDb('WHISPER_EXCEPTION', { error: error instanceof Error ? error.message : String(error) });
-        return `[Erro ao processar áudio: ${error instanceof Error ? error.message : 'desconhecido'}]`;
+        return '[Erro interno na transcrição]';
+    }
+}
+
+// Robust helper for AI Usage Increment
+async function incrementAiUsage(
+    db: any,
+    userId: string,
+    featureType: string,
+    modelUsed: string
+): Promise<{ success: boolean; debug_org_id?: number | null; error?: string }> {
+    try {
+        // Safe userId extraction
+        if (!userId) {
+            console.error('[AI-USAGE-HELPER] No userId provided');
+            return { success: false, error: 'no_user_id' };
+        }
+
+        console.log(`[AI-USAGE-HELPER] Incrementing for user: ${userId}`);
+
+        // Get User's Organization
+        const userProfile = await db.prepare(
+            "SELECT organization_id FROM users WHERE id = ?"
+        ).bind(userId).first() as { organization_id?: number };
+
+        if (!userProfile?.organization_id) {
+            console.error('[AI-USAGE-HELPER] Organization ID not found for user:', userId);
+            // Fallback: Checks if user has 'profile' json with org_id? No, relies on standard schema
+            return { success: false, debug_org_id: null, error: 'org_not_found' };
+        }
+
+        const orgId = userProfile.organization_id;
+        console.log(`[AI-USAGE-HELPER] Updating usage for Org: ${orgId}`);
+
+        // Update Counter
+        const updateResult = await db.prepare(
+            "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(orgId).run();
+
+        // Check if update affected any rows? Hono/D1 run() often returns { success: true, meta: ... }
+        // We assume success if no throw.
+
+        // Insert Log
+        try {
+            await db.prepare(`
+                INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+                VALUES (?, ?, ?, ?, 'success', NOW())
+            `).bind(orgId, userId, featureType, modelUsed).run();
+        } catch (logErr) {
+            console.warn('[AI-USAGE-HELPER] Log insertion failed (non-critical):', logErr);
+        }
+
+        return { success: true, debug_org_id: orgId };
+
+    } catch (err: any) {
+        console.error('[AI-USAGE-HELPER] Critical failure:', err);
+        return { success: false, error: err.message };
     }
 }
 
@@ -177,30 +233,10 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", tenantAuthMiddleware, async (
         const { field_name, response_value, media_data, user_prompt, inspection_id } = body;
 
         // Increment AI Usage
-        let usageIncremented = false;
-        try {
-            const userId = user.id || (user as any).sub;
-            const userProfile = await env.DB.prepare(
-                "SELECT organization_id FROM users WHERE id = ?"
-            ).bind(userId).first() as { organization_id?: number };
-
-            if (userProfile?.organization_id) {
-                await env.DB.prepare(
-                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
-                ).bind(userProfile.organization_id).run();
-
-                usageIncremented = true;
-
-                try {
-                    await env.DB.prepare(`
-             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
-             VALUES (?, ?, 'pre_analysis', ?, 'success', NOW())
-           `).bind(userProfile.organization_id, userId, 'gemini-1.5-flash').run();
-                } catch (e) { /* ignore log error */ }
-            }
-        } catch (usageErr) {
-            console.error("Failed to increment AI usage:", usageErr);
-        }
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'pre_analysis', GEMINI_API_KEY ? 'gemini-1.5-flash' : 'unknown');
+        const usageIncremented = usageResult.success;
+        const debugUsage = usageResult;
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -422,6 +458,7 @@ Análise técnica breve (máximo 500 caracteres). Se houver riscos visíveis, ci
             timestamp: now,
             provider: usedProvider,
             ai_usage_incremented: usageIncremented,
+            debug_usage: debugUsage
         });
 
     } catch (error) {
@@ -514,30 +551,10 @@ inspectionItemRoutes.post("/:itemId/create-action", tenantAuthMiddleware, async 
         const { field_name, field_type, response_value, comment, compliance_status, pre_analysis, media_data, inspection_id } = body;
 
         // Increment AI Usage
-        let usageIncremented = false;
-        try {
-            const userId = user.id || (user as any).sub;
-            const userProfile = await env.DB.prepare(
-                "SELECT organization_id FROM users WHERE id = ?"
-            ).bind(userId).first() as { organization_id?: number };
-
-            if (userProfile?.organization_id) {
-                await env.DB.prepare(
-                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
-                ).bind(userProfile.organization_id).run();
-
-                usageIncremented = true;
-
-                try {
-                    await env.DB.prepare(`
-             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
-             VALUES (?, ?, 'action_plan', ?, 'success', NOW())
-           `).bind(userProfile.organization_id, userId, 'gpt-4o').run();
-                } catch (e) { /* ignore log error */ }
-            }
-        } catch (usageErr) {
-            console.error("Failed to increment AI usage:", usageErr);
-        }
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'action_plan', 'gpt-4o');
+        const usageIncremented = usageResult.success;
+        const debugUsage = usageResult;
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -712,7 +729,7 @@ Responda APENAS em JSON no seguinte formato:
         }
 
         // Always return suggestion data for inline display, even if not saved
-        const actionSuggestion = {
+        const finalAction = {
             id: actionItemId || null,
             title: field_name,
             what_description: actionData.what || '',
@@ -734,9 +751,11 @@ Responda APENAS em JSON no seguinte formato:
 
         return c.json({
             success: true,
-            action: actionData,
-            action_item: actionSuggestion, // Always return for inline display
-            ai_usage_incremented: usageIncremented
+            action_item: actionData.requires_action ? finalAction : null,
+            analysis: actionText,
+            raw_response: actionText,
+            ai_usage_incremented: usageIncremented,
+            debug_usage: debugUsage
         });
 
     } catch (error) {
@@ -823,30 +842,9 @@ inspectionItemRoutes.post("/:itemId/generate-field-response", tenantAuthMiddlewa
         const { field_name, field_type, current_response, media_data, field_options } = body;
 
         // Increment AI Usage
-        let usageIncremented = false;
-        try {
-            const userId = user.id || (user as any).sub;
-            const userProfile = await env.DB.prepare(
-                "SELECT organization_id FROM users WHERE id = ?"
-            ).bind(userId).first() as { organization_id?: number };
-
-            if (userProfile?.organization_id) {
-                await env.DB.prepare(
-                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
-                ).bind(userProfile.organization_id).run();
-
-                usageIncremented = true;
-
-                try {
-                    await env.DB.prepare(`
-             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
-             VALUES (?, ?, 'analysis', ?, 'success', NOW())
-           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
-                } catch (e) { /* ignore log error */ }
-            }
-        } catch (usageErr) {
-            console.error("Failed to increment AI usage:", usageErr);
-        }
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'field_response', 'gpt-4o-mini');
+        const usageIncremented = usageResult.success;
 
         // Get inspection item and context
         const item = await env.DB.prepare(`

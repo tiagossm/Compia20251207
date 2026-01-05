@@ -1,18 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import Layout from '@/react-app/components/Layout';
 import { Download } from 'lucide-react';
 
 export default function AIUsageReport() {
-    const { user, organization } = useAuth();
+    const { session } = useAuth();
+    const { selectedOrganization: organization } = useOrganization();
+
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [filterType, setFilterType] = useState('');
+    const [usageCount, setUsageCount] = useState(0);
+
+    // Fetch Organization Details to get ai_usage_count
+    useEffect(() => {
+        const fetchOrgDetails = async () => {
+            if (!organization?.id || !session?.access_token) return;
+            try {
+                const response = await fetch(`/api/organizations/${organization.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'x-organization-id': organization.id.toString()
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.organization) {
+                        setUsageCount(data.organization.ai_usage_count || 0);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch org details', error);
+            }
+        };
+        fetchOrgDetails();
+    }, [organization?.id, session?.access_token]);
 
     const fetchLogs = async () => {
-        if (!organization?.id) return;
+        if (!organization?.id || !session?.access_token) return;
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -21,8 +49,7 @@ export default function AIUsageReport() {
                 ...(filterType && { feature_type: filterType })
             });
 
-            // Using fetch with auth headers manually since we don't have the wrapper imported
-            const token = user?.access_token;
+            const token = session.access_token;
 
             const response = await fetch(`/api/ai-usage/${organization.id}/logs?${params}`, {
                 headers: {
@@ -48,20 +75,14 @@ export default function AIUsageReport() {
 
     useEffect(() => {
         fetchLogs();
-    }, [organization?.id, page, filterType]);
+    }, [organization?.id, page, filterType, session?.access_token]);
 
     const handleExport = () => {
-        if (!organization?.id || !user?.access_token) return;
-
-        // Convert auth token to a cookie or query param if needed for download, 
-        // but for now let's hope the browser section handles it or we use fetch=>blob
-
-        // Simpler approach: Open in new window with token in query param if backend supports it,
-        // OR better: use fetch to download blob.
+        if (!organization?.id || !session?.access_token) return;
 
         fetch(`/api/ai-usage/${organization.id}/export`, {
             headers: {
-                'Authorization': `Bearer ${user.access_token}`,
+                'Authorization': `Bearer ${session.access_token}`,
                 'x-organization-id': organization.id.toString()
             }
         })
@@ -100,7 +121,7 @@ export default function AIUsageReport() {
                         <div className="flex flex-col space-y-1.5 pb-2">
                             <h3 className="text-sm font-medium text-slate-500">Total de Chamadas (Mês)</h3>
                         </div>
-                        <div className="text-2xl font-bold text-slate-900">{organization?.ai_usage_count || 0}</div>
+                        <div className="text-2xl font-bold text-slate-900">{usageCount}</div>
                     </div>
                 </div>
 

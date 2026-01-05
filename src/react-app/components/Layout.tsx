@@ -174,7 +174,6 @@ export default function Layout({ children, actionButton }: LayoutProps) {
             <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-4">Visão Geral</p>
             <NavItem item={{ name: 'Dashboard', href: '/', icon: LayoutDashboard }} />
             <NavItem item={{ name: 'Relatórios', href: '/reports', icon: BarChart3 }} />
-            <NavItem item={{ name: 'Uso de IA', href: '/ai-reports', icon: BarChart3 }} />
           </div>
 
           {/* Operação */}
