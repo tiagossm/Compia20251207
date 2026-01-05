@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
+// import { useOrganization } from '@/react-app/context/OrganizationContext';
 import { Save, ArrowLeft, FileCheck, MapPin, Navigation } from 'lucide-react';
 import AutoSuggestField from '@/react-app/components/AutoSuggestField';
 import NewUserModal from '@/react-app/components/NewUserModal';
@@ -69,7 +69,7 @@ export default function EditInspection() {
       if (response.ok) {
         const data = await response.json();
         const inspection = data.inspection;
-        
+
         setFormData({
           title: inspection.title || '',
           description: inspection.description || '',
@@ -90,7 +90,7 @@ export default function EditInspection() {
           status: inspection.status || 'pendente',
           ai_assistant_id: inspection.ai_assistant_id || ''
         });
-        
+
         setSelectedOrgId(inspection.organization_id);
       } else {
         throw new Error('Falha ao carregar inspeção');
@@ -104,7 +104,7 @@ export default function EditInspection() {
     }
   };
 
-  
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +152,7 @@ export default function EditInspection() {
   const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const cep = e.target.value.replace(/\D/g, '');
     setFormData(prev => ({ ...prev, cep }));
-    
+
     if (cep.length === 8) {
       try {
         const response = await fetch(`/api/cep/${cep}`);
@@ -226,7 +226,7 @@ export default function EditInspection() {
         {/* Form */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-8">
-            
+
             {/* Informações Gerais */}
             <div className="space-y-4">
               <div className="border-b border-slate-200 pb-2">
@@ -277,11 +277,9 @@ export default function EditInspection() {
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Organização
                   </label>
-                  <OrganizationSelector
-                    selectedOrgId={selectedOrgId}
-                    onOrganizationChange={setSelectedOrgId}
-                    showAllOption={false}
-                  />
+                  <div className="p-3 bg-gray-50 rounded text-sm text-gray-500">
+                    A organização não pode ser alterada na edição.
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <label htmlFor="company_name" className="block text-sm font-medium text-slate-700 mb-2">
@@ -551,7 +549,7 @@ export default function EditInspection() {
                   <span className="font-medium text-amber-800">Template não pode ser alterado</span>
                 </div>
                 <p className="text-sm text-amber-700">
-                  O template de checklist é definido apenas na criação da inspeção. Para usar um template diferente, 
+                  O template de checklist é definido apenas na criação da inspeção. Para usar um template diferente,
                   crie uma nova inspeção. Você pode adicionar itens manuais na página de detalhes da inspeção.
                 </p>
               </div>
@@ -598,7 +596,7 @@ export default function EditInspection() {
         <NewOrganizationModal
           isOpen={showNewOrgModal}
           onClose={() => setShowNewOrgModal(false)}
-          onSuccess={() => {}}
+          onSuccess={() => { }}
           parentOrganizations={[]}
         />
       </div>

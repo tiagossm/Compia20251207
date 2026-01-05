@@ -1,6 +1,7 @@
 import './utils/fetch-setup'; // Configure fetch to always include credentials
 import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
 import { AuthProvider } from "@/react-app/context/AuthContext";
+import { OrganizationProvider } from "@/react-app/context/OrganizationContext";
 import { ToastProvider } from "@/react-app/hooks/useToast";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
@@ -12,7 +13,7 @@ import AuthGuard from "@/react-app/components/AuthGuard";
 const HomePage = lazy(() => import("@/react-app/pages/Home"));
 const Inspections = lazy(() => import("@/react-app/pages/Inspections"));
 const NewInspection = lazy(() => import("@/react-app/pages/NewInspection"));
-const EditInspection = lazy(() => import("@/react-app/pages/EditInspection"));
+
 const InspectionDetail = lazy(() => import("@/react-app/pages/InspectionDetail"));
 const Reports = lazy(() => import("@/react-app/pages/Reports"));
 const Settings = lazy(() => import("@/react-app/pages/Settings"));
@@ -38,58 +39,63 @@ const RolePermissions = lazy(() => import("@/react-app/pages/RolePermissions"));
 const AdminDataSync = lazy(() => import("@/react-app/pages/AdminDataSync"));
 const AuditLogs = lazy(() => import("@/react-app/pages/AuditLogs"));
 const LandingPage = lazy(() => import("@/react-app/pages/LandingPage"));
+const AgendaPage = lazy(() => import("@/react-app/pages/AgendaPage"));
+const IntegrationsPage = lazy(() => import("@/react-app/pages/IntegrationsPage"));
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        <OrganizationProvider>
+          <Router>
+            <Suspense fallback={
+              <div className="flex h-screen w-full items-center justify-center">
+                <LoadingSpinner size="lg" text="Carregando..." />
+              </div>
+            }>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/landing" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/shared/:token" element={<SharedInspection />} />
+                <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
 
-        <Router>
-          <Suspense fallback={
-            <div className="flex h-screen w-full items-center justify-center">
-              <LoadingSpinner size="lg" text="Carregando..." />
-            </div>
-          }>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/landing" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/shared/:token" element={<SharedInspection />} />
-              <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
-
-              {/* Protected routes */}
-              <Route path="/" element={<AuthGuard><HomePage /></AuthGuard>} />
-              <Route path="/inspections" element={<AuthGuard><Inspections /></AuthGuard>} />
-              <Route path="/inspections/new" element={<AuthGuard><NewInspection /></AuthGuard>} />
-              <Route path="/inspections/:id/edit" element={<AuthGuard><EditInspection /></AuthGuard>} />
-              <Route path="/inspections/:id" element={<AuthGuard><InspectionDetail /></AuthGuard>} />
-              <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
-              <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
-              <Route path="/settings/permissions" element={<AuthGuard requiredRole="system_admin"><RolePermissions /></AuthGuard>} />
-              <Route path="/admin/data-sync" element={<AuthGuard requiredRole="system_admin"><AdminDataSync /></AuthGuard>} />
-              <Route path="/admin/audit" element={<AuthGuard requiredRole="system_admin"><AuditLogs /></AuthGuard>} />
+                {/* Protected routes */}
+                <Route path="/" element={<AuthGuard><HomePage /></AuthGuard>} />
+                <Route path="/inspections" element={<AuthGuard><Inspections /></AuthGuard>} />
+                <Route path="/inspections/new" element={<AuthGuard><NewInspection /></AuthGuard>} />
+                <Route path="/inspections/:id/edit" element={<AuthGuard><NewInspection /></AuthGuard>} />
+                <Route path="/inspections/:id" element={<AuthGuard><InspectionDetail /></AuthGuard>} />
+                <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
+                <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
+                <Route path="/settings/permissions" element={<AuthGuard requiredRole="system_admin"><RolePermissions /></AuthGuard>} />
+                <Route path="/admin/data-sync" element={<AuthGuard requiredRole="system_admin"><AdminDataSync /></AuthGuard>} />
+                <Route path="/admin/audit" element={<AuthGuard requiredRole="system_admin"><AuditLogs /></AuthGuard>} />
 
 
-              <Route path="/checklists" element={<AuthGuard><ChecklistTemplates /></AuthGuard>} />
-              <Route path="/checklists/new" element={<AuthGuard><NewChecklistTemplate /></AuthGuard>} />
-              <Route path="/checklists/ai-generate" element={<AuthGuard><AIChecklistGenerator /></AuthGuard>} />
-              <Route path="/checklists/import" element={<AuthGuard><CSVImport /></AuthGuard>} />
-              <Route path="/checklists/:id" element={<AuthGuard><ChecklistDetail /></AuthGuard>} />
-              <Route path="/checklists/:id/edit" element={<AuthGuard><ChecklistTemplateEdit /></AuthGuard>} />
-              <Route path="/inspections/:id/action-plan" element={<AuthGuard><ActionPlan /></AuthGuard>} />
-              <Route path="/action-plans" element={<AuthGuard><ActionPlans /></AuthGuard>} />
-              <Route path="/activities" element={<AuthGuard><ActivitiesHub /></AuthGuard>} />
+                <Route path="/checklists" element={<AuthGuard><ChecklistTemplates /></AuthGuard>} />
+                <Route path="/checklists/new" element={<AuthGuard><NewChecklistTemplate /></AuthGuard>} />
+                <Route path="/checklists/ai-generate" element={<AuthGuard><AIChecklistGenerator /></AuthGuard>} />
+                <Route path="/checklists/import" element={<AuthGuard><CSVImport /></AuthGuard>} />
+                <Route path="/checklists/:id" element={<AuthGuard><ChecklistDetail /></AuthGuard>} />
+                <Route path="/checklists/:id/edit" element={<AuthGuard><ChecklistTemplateEdit /></AuthGuard>} />
+                <Route path="/inspections/:id/action-plan" element={<AuthGuard><ActionPlan /></AuthGuard>} />
+                <Route path="/action-plans" element={<AuthGuard><ActionPlans /></AuthGuard>} />
+                <Route path="/activities" element={<AuthGuard><ActivitiesHub /></AuthGuard>} />
+                <Route path="/agenda" element={<AuthGuard><AgendaPage /></AuthGuard>} />
+                <Route path="/integrations" element={<AuthGuard><IntegrationsPage /></AuthGuard>} />
 
-              {/* Admin routes */}
-              <Route path="/users" element={<AuthGuard requiredRoles={["system_admin", "admin"]}><Users /></AuthGuard>} />
-              <Route path="/organizations" element={<AuthGuard requiredRoles={["system_admin", "admin", "org_admin", "manager"]}><Organizations /></AuthGuard>} />
-              <Route path="/organizations/:id" element={<AuthGuard requiredRoles={["system_admin", "admin", "org_admin", "manager"]}><OrganizationProfile /></AuthGuard>} />
-              <Route path="/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
-            </Routes>
-          </Suspense>
-        </Router>
+                {/* Admin routes */}
+                <Route path="/users" element={<AuthGuard requiredRoles={["system_admin", "admin"]}><Users /></AuthGuard>} />
+                <Route path="/organizations" element={<AuthGuard requiredRoles={["system_admin", "admin", "org_admin", "manager"]}><Organizations /></AuthGuard>} />
+                <Route path="/organizations/:id" element={<AuthGuard requiredRoles={["system_admin", "admin", "org_admin", "manager"]}><OrganizationProfile /></AuthGuard>} />
+                <Route path="/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
+              </Routes>
+            </Suspense>
+          </Router>
+        </OrganizationProvider>
       </ToastProvider>
       <SpeedInsights />
       <Analytics />

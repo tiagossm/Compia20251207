@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import DashboardCharts from '@/react-app/components/DashboardCharts';
 import WelcomeHero from '@/react-app/components/WelcomeHero';
 import { ExtendedMochaUser } from '@/shared/user-types';
@@ -39,26 +39,24 @@ interface ActionPlanSummary {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { selectedOrganization } = useOrganization();
   const extendedUser = user as ExtendedMochaUser;
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [actionSummary, setActionSummary] = useState<ActionPlanSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-    extendedUser?.profile?.organization_id || null
-  );
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedOrgId]);
+  }, [selectedOrganization]); // Re-fetch when global org changes
 
   const fetchDashboardData = async () => {
     try {
       let statsUrl = '/api/dashboard/stats';
       let actionUrl = '/api/dashboard/action-plan-summary';
 
-      if (selectedOrgId) {
-        statsUrl += `?organization_id=${selectedOrgId}`;
-        actionUrl += `?organization_id=${selectedOrgId}`;
+      if (selectedOrganization) {
+        statsUrl += `?organization_id=${selectedOrganization.id}`;
+        actionUrl += `?organization_id=${selectedOrganization.id}`;
       }
 
       const [statsResponse, actionResponse] = await Promise.all([
@@ -122,15 +120,7 @@ export default function Dashboard() {
         <WelcomeHero
           stats={stats}
           completionRate={getCompletionRate()}
-          showOrgSelector={extendedUser?.profile?.role === 'system_admin' || extendedUser?.profile?.role === 'sys_admin'}
-          orgSelectorSlot={
-            <OrganizationSelector
-              selectedOrgId={selectedOrgId}
-              onOrganizationChange={setSelectedOrgId}
-              showAllOption={true}
-              className="bg-white border-gray-200 text-slate-700"
-            />
-          }
+          showOrgSelector={false}
         />
 
 

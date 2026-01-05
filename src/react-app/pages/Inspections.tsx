@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { fetchWithAuth } from '@/react-app/utils/auth';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import CSVExportImport from '@/react-app/components/CSVExportImport';
 import {
   Plus,
@@ -24,35 +24,23 @@ import { syncService } from '@/lib/sync-service';
 import { InspectionType } from '@/shared/types';
 
 export default function Inspections() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedOrganization } = useOrganization();
   const [inspections, setInspections] = useState<InspectionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-    searchParams.get('org') ? parseInt(searchParams.get('org')!) : null
-  );
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     fetchInspections();
-  }, [selectedOrgId]);
-
-  useEffect(() => {
-    // Update URL params when organization changes
-    if (selectedOrgId) {
-      setSearchParams({ org: selectedOrgId.toString() });
-    } else {
-      setSearchParams({});
-    }
-  }, [selectedOrgId, setSearchParams]);
+  }, [selectedOrganization]); // Re-fetch on global org change
 
   const fetchInspections = () => {
     let url = '/api/inspections';
-    if (selectedOrgId) {
-      url += `?organization_id=${selectedOrgId}`;
+    if (selectedOrganization) {
+      url += `?organization_id=${selectedOrganization.id}`;
     }
 
     console.log('[INSPECTIONS] [REACT] Buscando inspeções de:', url);
@@ -155,7 +143,7 @@ export default function Inspections() {
   };
 
   const handleDownloadOffline = async () => {
-    if (!selectedOrgId) {
+    if (!selectedOrganization?.id) {
       alert("Selecione uma organização primeiro.");
       return;
     }
@@ -164,7 +152,7 @@ export default function Inspections() {
 
     setIsDownloading(true);
     try {
-      await syncService.syncDown(selectedOrgId);
+      await syncService.syncDown(selectedOrganization.id);
       alert("Download concluído com sucesso! \nVocê já pode sair para campo com o app offline. \n(Certifique-se de que o ícone 'Instalar' do app já apareceu)");
     } catch (e: any) {
       console.error(e);
@@ -189,7 +177,7 @@ export default function Inspections() {
           scheduled_date: row.data_agendada || row.scheduled_date,
           address: row.endereco || row.address,
           cep: row.cep,
-          organization_id: selectedOrgId
+          organization_id: selectedOrganization?.id
         };
 
         const response = await fetchWithAuth('/api/inspections', {
@@ -314,214 +302,210 @@ export default function Inspections() {
           </div>
         </div>
 
-          {/* Filters - Responsive */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Buscar por título, empresa, local ou técnico..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
+        {/* Filters - Responsive */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+          <div className="grid grid-cols-1 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar por título, empresa, local ou técnico..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <OrganizationSelector
-                  selectedOrgId={selectedOrgId}
-                  onOrganizationChange={setSelectedOrgId}
-                  showAllOption={true}
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Organization Selector Removed - Global in Header */}
 
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-slate-400 hidden sm:block" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  >
-                    <option value="all">Todos os Status</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="em_andamento">Em Andamento</option>
-                    <option value="concluida">Concluída</option>
-                    <option value="cancelada">Cancelada</option>
-                  </select>
-                </div>
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-slate-400 hidden sm:block" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="em_andamento">Em Andamento</option>
+                  <option value="concluida">Concluída</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* CSV Export/Import */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              Importar/Exportar Inspeções
-            </h3>
-            <CSVExportImport
-              type="inspections"
-              onExport={handleExportInspections}
-              onImport={handleImportInspections}
-              isLoading={csvLoading}
-            />
-          </div>
+        {/* CSV Export/Import */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">
+            Importar/Exportar Inspeções
+          </h3>
+          <CSVExportImport
+            type="inspections"
+            onExport={handleExportInspections}
+            onImport={handleImportInspections}
+            isLoading={csvLoading}
+          />
+        </div>
 
-          {/* Inspections List */}
-          <div className="space-y-4">
-            {filteredInspections.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
-                <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-500 font-medium">
-                  {inspections.length === 0
-                    ? 'Nenhuma inspeção encontrada'
-                    : 'Nenhuma inspeção corresponde aos filtros'
-                  }
-                </p>
-                <p className="text-slate-400 text-sm mt-1">
-                  {inspections.length === 0
-                    ? 'Crie sua primeira inspeção para começar'
-                    : 'Tente ajustar os filtros ou termo de busca'
-                  }
-                </p>
-              </div>
-            ) : (
-              filteredInspections.map((inspection) => (
-                <div key={inspection.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                        <h3 className="font-heading text-base sm:text-lg font-semibold text-slate-900">
-                          {inspection.title}
-                        </h3>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(inspection.priority)}`}>
-                          {inspection.priority.charAt(0).toUpperCase() + inspection.priority.slice(1)}
-                        </span>
-                      </div>
+        {/* Inspections List */}
+        <div className="space-y-4">
+          {filteredInspections.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+              <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-500 font-medium">
+                {inspections.length === 0
+                  ? 'Nenhuma inspeção encontrada'
+                  : 'Nenhuma inspeção corresponde aos filtros'
+                }
+              </p>
+              <p className="text-slate-400 text-sm mt-1">
+                {inspections.length === 0
+                  ? 'Crie sua primeira inspeção para começar'
+                  : 'Tente ajustar os filtros ou termo de busca'
+                }
+              </p>
+            </div>
+          ) : (
+            filteredInspections.map((inspection) => (
+              <div key={inspection.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 hover:shadow-md transition-shadow duration-200">
+                <div className="flex flex-col gap-4">
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                      <h3 className="font-heading text-base sm:text-lg font-semibold text-slate-900">
+                        {inspection.title}
+                      </h3>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(inspection.priority)}`}>
+                        {inspection.priority.charAt(0).toUpperCase() + inspection.priority.slice(1)}
+                      </span>
+                    </div>
 
-                      {inspection.description && (
-                        <p className="text-slate-600 mb-3 line-clamp-2 text-sm">
-                          {inspection.description}
-                        </p>
+                    {inspection.description && (
+                      <p className="text-slate-600 mb-3 line-clamp-2 text-sm">
+                        {inspection.description}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500">
+                      {inspection.company_name && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span className="truncate max-w-[100px] sm:max-w-none">{inspection.company_name}</span>
+                        </div>
                       )}
-
-                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500">
-                        {inspection.company_name && (
-                          <div className="flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            <span className="truncate max-w-[100px] sm:max-w-none">{inspection.company_name}</span>
-                          </div>
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span className="truncate max-w-[80px] sm:max-w-none">{inspection.location}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {(inspection as any).inspector_avatar ? (
+                          <img
+                            src={(inspection as any).inspector_avatar}
+                            alt={inspection.inspector_name}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-4 h-4" />
                         )}
+                        <span className="truncate max-w-[80px] sm:max-w-none">{inspection.inspector_name}</span>
+                      </div>
+                      {inspection.scheduled_date && (
                         <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span className="truncate max-w-[80px] sm:max-w-none">{inspection.location}</span>
+                          <Calendar className="w-4 h-4" />
+                          {new Date(inspection.scheduled_date).toLocaleDateString('pt-BR')}
                         </div>
-                        <div className="flex items-center gap-1">
-                          {(inspection as any).inspector_avatar ? (
-                            <img
-                              src={(inspection as any).inspector_avatar}
-                              alt={inspection.inspector_name}
-                              className="w-5 h-5 rounded-full object-cover"
-                            />
-                          ) : (
-                            <User className="w-4 h-4" />
-                          )}
-                          <span className="truncate max-w-[80px] sm:max-w-none">{inspection.inspector_name}</span>
-                        </div>
-                        {inspection.scheduled_date && (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {new Date(inspection.scheduled_date).toLocaleDateString('pt-BR')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg">
-                        {getStatusIcon(inspection.status)}
-                        <span className="text-xs sm:text-sm font-medium text-slate-700">
-                          {getStatusLabel(inspection.status)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 sm:gap-2">
-                        <Link
-                          to={`/inspections/${inspection.id}/edit`}
-                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                          title="Editar inspeção"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleCloneInspection(inspection.id!, inspection.title)}
-                          className="p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
-                          title="Clonar inspeção"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteModal(inspection.id!)}
-                          className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                          title="Excluir inspeção"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <Link
-                          to={`/inspections/${inspection.id}`}
-                          className="px-3 sm:px-4 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors duration-200 text-xs sm:text-sm"
-                        >
-                          <span className="hidden sm:inline">Ver Detalhes</span>
-                          <span className="sm:hidden">Ver</span>
-                        </Link>
-                      </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
 
-          {/* Delete Confirmation Modal */}
-          {showDeleteModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 bg-red-100 rounded-full">
-                    <AlertCircle className="w-6 h-6 text-red-600" />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg">
+                      {getStatusIcon(inspection.status)}
+                      <span className="text-xs sm:text-sm font-medium text-slate-700">
+                        {getStatusLabel(inspection.status)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <Link
+                        to={`/inspections/${inspection.id}/edit`}
+                        className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                        title="Editar inspeção"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Link>
+                      <button
+                        onClick={() => handleCloneInspection(inspection.id!, inspection.title)}
+                        className="p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
+                        title="Clonar inspeção"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteModal(inspection.id!)}
+                        className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                        title="Excluir inspeção"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <Link
+                        to={`/inspections/${inspection.id}`}
+                        className="px-3 sm:px-4 py-2 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors duration-200 text-xs sm:text-sm"
+                      >
+                        <span className="hidden sm:inline">Ver Detalhes</span>
+                        <span className="sm:hidden">Ver</span>
+                      </Link>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-heading text-lg font-semibold text-slate-900">
-                      Confirmar Exclusão
-                    </h3>
-                    <p className="text-slate-600 text-sm">
-                      Esta ação não pode ser desfeita.
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-slate-700 mb-6">
-                  Tem certeza que deseja excluir esta inspeção? Todos os dados relacionados serão permanentemente removidos.
-                </p>
-
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    onClick={() => setShowDeleteModal(null)}
-                    className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => handleDeleteInspection(showDeleteModal)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    Excluir Inspeção
-                  </button>
                 </div>
               </div>
-            </div>
+            ))
           )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-red-100 rounded-full">
+                  <AlertCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg font-semibold text-slate-900">
+                    Confirmar Exclusão
+                  </h3>
+                  <p className="text-slate-600 text-sm">
+                    Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-slate-700 mb-6">
+                Tem certeza que deseja excluir esta inspeção? Todos os dados relacionados serão permanentemente removidos.
+              </p>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(null)}
+                  className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDeleteInspection(showDeleteModal)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Excluir Inspeção
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 }

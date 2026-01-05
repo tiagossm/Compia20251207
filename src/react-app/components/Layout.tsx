@@ -15,12 +15,13 @@ import {
   ChevronDown,
   PlusCircle,
   FileCheck,
-  Brain,
-  BarChart3,
   Activity,
+  BarChart3,
   Cloud,
   Lock,
-  Blocks
+  Blocks,
+  Calendar,
+  Link as LinkIcon
 } from 'lucide-react';
 import NotificationSystem from '@/react-app/components/NotificationSystem';
 import UsageIndicator from '@/react-app/components/UsageIndicator';
@@ -93,33 +94,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
     }));
   };
 
-  // Main Navigation (Fixed - Always Visible)
-  const mainNav = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Inspeções', href: '/inspections', icon: ClipboardList },
-    { name: 'Planos de Ação', href: '/action-plans', icon: Blocks },
-  ];
 
-  // Secondary Collapsible Groups
-  const secondaryGroups = [
-    {
-      title: 'Ferramentas',
-      icon: Settings,
-      items: [
-        { name: 'Nova Inspeção', href: '/inspections/new', icon: PlusCircle },
-        { name: 'Checklists', href: '/checklists', icon: FileCheck },
-        { name: 'IA Generator', href: '/checklists/ai-generate', icon: Brain },
-      ]
-    },
-    {
-      title: 'Análise',
-      icon: Activity,
-      items: [
-        { name: 'Relatórios', href: '/reports', icon: BarChart3 },
-        { name: 'Atividades', href: '/activities', icon: Activity },
-      ]
-    }
-  ];
 
   const adminNavigation = [
     { name: 'Usuários', href: '/users', icon: Users },
@@ -186,38 +161,23 @@ export default function Layout({ children, actionButton }: LayoutProps) {
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-hide">
 
-          {/* Main Navigation (Fixed) */}
-          <div className="space-y-1 mb-6">
-            <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-4">Principal</p>
-            {mainNav.map((item) => (
-              <NavItem key={item.name} item={item} />
-            ))}
+          {/* Visão Geral */}
+          <div className="space-y-1 mb-2">
+            <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-4">Visão Geral</p>
+            <NavItem item={{ name: 'Dashboard', href: '/', icon: LayoutDashboard }} />
+            <NavItem item={{ name: 'Relatórios', href: '/reports', icon: BarChart3 }} />
           </div>
 
-          {/* Secondary Collapsible Groups */}
-          {secondaryGroups.map((group, _groupIndex) => (
-            <div key={group.title} className="mb-2">
-              <button
-                onClick={() => toggleGroup(group.title)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-primary hover:bg-slate-50 rounded-lg transition-colors group"
-              >
-                <span>{group.title}</span>
-                <ChevronDown
-                  size={14}
-                  className={`transition-transform duration-200 text-slate-400 group-hover:text-primary ${expandedGroups[group.title] ? 'rotate-180' : ''}`}
-                />
-              </button>
-
-              <div
-                className={`space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${expandedGroups[group.title] ? 'max-h-screen opacity-100 mt-1' : 'max-h-0 opacity-0'
-                  }`}
-              >
-                {group.items.map((item) => (
-                  <NavItem key={item.name} item={item} />
-                ))}
-              </div>
-            </div>
-          ))}
+          {/* Operação */}
+          <div className="space-y-1 mb-2">
+            <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-2">Operação</p>
+            <NavItem item={{ name: 'Nova Inspeção', href: '/inspections/new', icon: PlusCircle }} />
+            <NavItem item={{ name: 'Inspeções', href: '/inspections', icon: ClipboardList }} />
+            <NavItem item={{ name: 'Agenda', href: '/agenda', icon: Calendar }} />
+            <NavItem item={{ name: 'Planos de Ação', href: '/action-plans', icon: Blocks }} />
+            <NavItem item={{ name: 'Checklists', href: '/checklists', icon: FileCheck }} />
+            <NavItem item={{ name: 'Atividades', href: '/activities', icon: Activity }} />
+          </div>
 
           {/* Admin Section Collapsible */}
           {(profile?.role === 'system_admin' || profile?.role === 'sys_admin' || profile?.role === 'admin' || profile?.role === 'org_admin') && (
@@ -261,6 +221,8 @@ export default function Layout({ children, actionButton }: LayoutProps) {
 
           {/* Settings */}
           <div className="pt-2 mt-auto">
+            <div className="border-t border-slate-100 my-2"></div>
+            <NavItem item={{ name: 'Integrações', href: '/integrations', icon: LinkIcon }} />
             <NavItem item={{ name: 'Configurações', href: '/settings', iconSrc: '/assets/icons/icon-settings.png', icon: Settings }} />
           </div>
 

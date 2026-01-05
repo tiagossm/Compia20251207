@@ -1,6 +1,7 @@
 import { Menu, Sun, Moon, Sunset } from 'lucide-react';
 import CompiaLogo from './CompiaLogo';
 import { useLocation } from 'react-router-dom';
+import { OrganizationSelector } from './OrganizationSelector';
 
 interface HeaderProps {
     onMenuClick: () => void;
@@ -83,6 +84,8 @@ export default function Header({ onMenuClick, pageTitle, children, actionButton 
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-3">
+                <OrganizationSelector />
+
                 {/* Primary Page Action (Dynamic) */}
                 {actionButton && (
                     <div className="mr-1">

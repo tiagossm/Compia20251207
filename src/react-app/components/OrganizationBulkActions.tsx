@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { 
-  Check, 
-  X, 
-  Trash2, 
-  UserPlus, 
-  Download, 
+import {
+  Check,
+  X,
+  Trash2,
+  UserPlus,
+  Download,
   Archive,
   RotateCcw,
   Settings,
@@ -74,11 +74,11 @@ export default function OrganizationBulkActions({
             </button>
           )}
 
-          {/* Convidar usuários */}
+          {/* Atribuir usuários */}
           <button
             onClick={() => onBulkInviteUsers(selectedOrganizations.map(org => org.id))}
             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Convidar usuários em lote"
+            title="Atribuir usuários às organizações selecionadas"
           >
             <UserPlus className="h-4 w-4" />
           </button>

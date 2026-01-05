@@ -74,6 +74,7 @@ export const InspectionSchema = z.object({
   responsible_signature: z.string().optional(),
   // AI Integration
   ai_assistant_id: z.number().optional(),
+  template_id: z.number().optional(),
   // Anti-fraud telemetry
   started_at_user_time: z.string().optional(),
   started_at_server_time: z.string().optional(),

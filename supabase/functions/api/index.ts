@@ -37,6 +37,9 @@ import gamificationRoutes from "./gamification-routes.ts";
 import aiAssistantRoutes from "./ai-assistant-routes.ts";
 import { auditRoutes } from "./audit-routes.ts";
 import calendarRoutes from "./calendar-routes.ts";
+import testOrgsRoutes from "./test-orgs.ts";
+import integrationsRoutes from "./integrations-routes.ts";
+import calendarUploadRoutes from "./calendar-upload-routes.ts";
 
 const app = new Hono()
 
@@ -83,7 +86,7 @@ app.use('*', async (c, next) => {
     console.log(`[AUTH-DEBUG] ===== Request: ${c.req.method} ${path} =====`);
 
     // Rotas públicas que não precisam de autenticação
-    const publicPaths = ['/api/health', '/api/', '/api/shared'];
+    const publicPaths = ['/api/health', '/api/', '/api/shared', '/api/test-orgs/debug', '/test-orgs/debug', '/api/calendar/debug'];
     const isPublicRoute = publicPaths.some(p => path === p || path.startsWith(p + '/'));
 
     if (isPublicRoute) {
@@ -187,11 +190,20 @@ apiRoutes.get('/health', async (c) => {
     const dbUrl = Deno.env.get('SUPABASE_DB_URL');
     let dbStatus = 'unknown';
     let dbError = null;
+    let orgAddresses = null;
 
     if (c.env?.DB) {
         try {
             await c.env.DB.prepare('SELECT 1').bind().first();
             dbStatus = 'connected';
+
+            // Debug: Check organization addresses
+            const orgsResult = await c.env.DB.prepare(`
+                SELECT id, name, nome_fantasia, address, contact_email 
+                FROM organizations 
+                LIMIT 5
+            `).all();
+            orgAddresses = orgsResult.results || [];
         } catch (e) {
             dbStatus = 'error';
             dbError = e instanceof Error ? e.message : String(e);
@@ -208,13 +220,22 @@ apiRoutes.get('/health', async (c) => {
         env_vars: {
             SUPABASE_DB_URL: dbUrl ? 'present' : 'missing',
         },
+        debug_org_addresses: orgAddresses,
         timestamp: new Date().toISOString()
     }, dbStatus === 'connected' ? 200 : 503)
 })
 
+// Debug middleware for apiRoutes
+apiRoutes.use('*', async (c, next) => {
+    console.log('[API_ROUTER] Method:', c.req.method, 'Path:', c.req.path);
+    await next();
+});
+
 // Registrar todas as rotas no sub-app (sem prefixos, pois serão montadas)
 apiRoutes.route('/users', usersRoutes);
+console.log('Registering /organizations route');
 apiRoutes.route('/organizations', organizationsRoutes);
+apiRoutes.route('/test-orgs', testOrgsRoutes);
 apiRoutes.route('/inspections', inspectionRoutes);
 apiRoutes.route('/checklist', checklistRoutes);
 apiRoutes.route('/auth', authRoutes);
@@ -240,15 +261,24 @@ apiRoutes.route('/autosuggest', autosuggestRoutes);
 apiRoutes.route('/ai-assistant', aiAssistantRoutes);
 
 apiRoutes.route('/kanban', kanbanRoutes);
-apiRoutes.route('/kanban', kanbanRoutes);
+apiRoutes.route('/audit', auditRoutes);
 apiRoutes.route('/audit', auditRoutes);
 apiRoutes.route('/calendar', calendarRoutes);
+apiRoutes.route('/calendar-upload', calendarUploadRoutes);
+apiRoutes.route('/integrations', integrationsRoutes);
 
 // App principal monta o sub-app em dois lugares:
 // 1. Na raiz '/' (para chamadas diretas ou sem prefixo)
 // 2. Em '/api' (para chamadas vindo do Vercel que faz rewrite mantendo o path)
 app.route('/', apiRoutes);
 app.route('/api', apiRoutes);
+
+// CRITICAL FIX: Explicitly mount organizations route to ensure visibility
+// This bypasses any nested routing issues in apiRoutes
+console.log('Explicitly mounting /organizations on root app');
+app.route('/organizations', organizationsRoutes);
+app.route('/orgs', organizationsRoutes); // ALIAS for testing
+app.route('/api/organizations', organizationsRoutes);
 
 Deno.serve(app.fetch)
 

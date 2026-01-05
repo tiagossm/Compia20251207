@@ -419,6 +419,257 @@ SELECT * FROM checklist_fields
 });
 
 
+
+
+// Configure inspection (Template & AI)
+inspectionRoutes.put("/:id/configure", tenantAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "Autenticação necessária" }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { template_id, ai_assistant_id } = body;
+
+    // 1. Update Inspection Record
+    await env.DB.prepare(`
+      UPDATE inspections 
+      SET template_id = ?, ai_assistant_id = ?, updated_at = NOW()
+      WHERE id = ?
+    `).bind(template_id, ai_assistant_id, inspectionId).run();
+
+    // 2. Generate Items if Template Selected (and no items exist)
+    if (template_id) {
+      // Check if items already exist
+      const existing = await env.DB.prepare("SELECT count(*) as count FROM inspection_items WHERE inspection_id = ?").bind(inspectionId).first() as any;
+
+      if (existing.count === 0) {
+        console.log(`[CONFIGURE] Generating items for inspection ${inspectionId} from template ${template_id}`);
+        const template = await env.DB.prepare("SELECT * FROM checklist_templates WHERE id = ?").bind(template_id).first() as any;
+        const fields = await env.DB.prepare(`
+               SELECT * FROM checklist_fields 
+               WHERE template_id = ?
+               ORDER BY order_index ASC
+           `).bind(template_id).all();
+
+        // Create inspection items for each template field
+        for (const field of (fields.results || [])) {
+          const fieldData = field as any;
+
+          // Fallback for types
+          const validTypes = [
+            'text', 'textarea', 'select', 'multiselect', 'radio', 'checkbox',
+            'number', 'date', 'time', 'boolean', 'rating', 'file'
+          ];
+          if (!validTypes.includes(fieldData.field_type)) {
+            fieldData.field_type = 'text';
+          }
+
+          const fieldResponseData = {
+            field_id: fieldData.id,
+            field_name: fieldData.field_name,
+            field_type: fieldData.field_type,
+            is_required: fieldData.is_required,
+            options: fieldData.options,
+            response_value: null,
+            comment: null
+          };
+
+          await env.DB.prepare(`
+                  INSERT INTO inspection_items(
+                    inspection_id, category, item_description, template_id,
+                    field_responses, created_at, updated_at
+                  ) VALUES(?, ?, ?, ?, ?, NOW(), NOW())
+                `).bind(
+            inspectionId,
+            template?.category || 'Geral',
+            fieldData.field_name,
+            template_id,
+            JSON.stringify(fieldResponseData)
+          ).run();
+        }
+      } else {
+        console.log(`[CONFIGURE] Skipping item generation: Items already exist for inspection ${inspectionId}`);
+      }
+    }
+
+    // Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: user.organization_id, // Or from inspection lookup if needed, but context is safer
+      actionType: 'UPDATE',
+      actionDescription: `Configurou inspeção (Template: ${template_id}, AI: ${ai_assistant_id})`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { template_id, ai_assistant_id },
+      req: c.req
+    });
+
+    return c.json({ success: true, message: "Configuração atualizada com sucesso" });
+
+  } catch (error) {
+    console.error('Error configuring inspection:', error);
+    return c.json({ error: "Erro ao configurar inspeção" }, 500);
+  }
+});
+
+// Update status (Workflow Transition with GPS & Audit)
+inspectionRoutes.put("/:id/status", tenantAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const tenantContext = c.get("tenantContext");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "Autenticação necessária" }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { status, location_lat, location_lng } = body;
+
+    // Validate Status Enum
+    const validStatuses = ['scheduled', 'acknowledged', 'in_progress', 'completed', 'delivered'];
+    if (!validStatuses.includes(status)) {
+      return c.json({ error: "Status inválido" }, 400);
+    }
+
+    // Get current inspection
+    const inspection = await env.DB.prepare("SELECT * FROM inspections WHERE id = ?").bind(inspectionId).first() as any;
+
+    if (!inspection) {
+      return c.json({ error: "Inspeção não encontrada" }, 404);
+    }
+
+    // Verify Access
+    const hasAccess = tenantContext?.isSystemAdmin ||
+      (inspection.organization_id && tenantContext?.allowedOrganizationIds.includes(inspection.organization_id)) ||
+      inspection.created_by === user.id ||
+      inspection.inspector_email === user.email; // Allow assigned inspector update
+
+    if (!hasAccess) {
+      return c.json({ error: "Acesso negado" }, 403);
+    }
+
+    // Update Query
+    let updateQuery = "UPDATE inspections SET status = ?, updated_at = NOW()";
+    const updateParams: any[] = [status];
+
+    // Status-specific updates
+    if (status === 'in_progress' && !inspection.started_at_server_time) {
+      updateQuery += ", started_at_server_time = NOW()";
+      if (location_lat) { updateQuery += ", location_start_lat = ?"; updateParams.push(location_lat); }
+      if (location_lng) { updateQuery += ", location_start_lng = ?"; updateParams.push(location_lng); }
+    }
+
+    updateQuery += " WHERE id = ?";
+    updateParams.push(inspectionId);
+
+    // Execute Update
+    await env.DB.prepare(updateQuery).bind(...updateParams).run();
+
+    // Audit History
+    await env.DB.prepare(`
+        INSERT INTO inspection_status_history (
+            inspection_id, status_from, status_to, changed_by, 
+            location_lat, location_lng, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `).bind(
+      inspectionId, inspection.status, status, user.id,
+      location_lat || null, location_lng || null
+    ).run();
+
+    // Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: inspection.organization_id,
+      actionType: 'STATUS_CHANGE',
+      actionDescription: `Alterou status para ${status}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { from: inspection.status, to: status, gps: { lat: location_lat, lng: location_lng } },
+      req: c.req
+    });
+
+    return c.json({ success: true, message: `Status atualizado para ${status}` });
+
+  } catch (error) {
+    console.error('Error updating status:', error);
+    return c.json({ error: "Erro ao atualizar status" }, 500);
+  }
+});
+
+inspectionRoutes.post("/:id/deliver", tenantAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "Autenticação necessária" }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { pdf_url } = body;
+
+    // Get current inspection
+    const inspection = await env.DB.prepare("SELECT * FROM inspections WHERE id = ?").bind(inspectionId).first() as any;
+
+    if (!inspection) {
+      return c.json({ error: "Inspeção não encontrada" }, 404);
+    }
+
+    // Verify Access (Creator, Inspector, or Admin)
+    const hasAccess = inspection.created_by === user.id ||
+      inspection.inspector_email === user.email ||
+      (c.get("tenantContext")?.isSystemAdmin ?? false);
+
+    if (!hasAccess) {
+      return c.json({ error: "Acesso negado" }, 403);
+    }
+
+    // Update Status to Delivered
+    const newStatus = 'delivered';
+    await env.DB.prepare(`
+        UPDATE inspections 
+        SET status = ?, 
+            pdf_report_url = ?, 
+            delivered_at = NOW(), 
+            updated_at = NOW() 
+        WHERE id = ?
+    `).bind(newStatus, pdf_url || inspection.pdf_report_url, inspectionId).run();
+
+    // Audit History
+    await env.DB.prepare(`
+        INSERT INTO inspection_status_history (
+            inspection_id, status_from, status_to, changed_by, created_at
+        ) VALUES (?, ?, ?, ?, NOW())
+    `).bind(inspectionId, inspection.status, newStatus, user.id).run();
+
+    // Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: inspection.organization_id,
+      actionType: 'DELIVERY',
+      actionDescription: `Entregou relatório de inspeção`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { pdf_url },
+      req: c.req
+    });
+
+    return c.json({ success: true, message: "Inspeção entregue com sucesso", new_status: 'delivered' });
+
+  } catch (error) {
+    console.error('Error delivering inspection:', error);
+    return c.json({ error: "Erro ao entregar inspeção" }, 500);
+  }
+});
+
 // Update inspection - BLINDADO
 // @security: Verifica propriedade e registra log de auditoria
 inspectionRoutes.put("/:id", tenantAuthMiddleware, async (c) => {
@@ -444,7 +695,8 @@ SELECT * FROM inspections WHERE id = ?
     // Verificar acesso baseado em tenant
     const hasAccess = tenantContext?.isSystemAdmin ||
       (inspection.organization_id && tenantContext?.allowedOrganizationIds.includes(inspection.organization_id)) ||
-      inspection.created_by === user.id;
+      inspection.created_by === user.id ||
+      inspection.inspector_email === user.email; // Allow assigned inspector to update
 
     if (!hasAccess) {
       return c.json({

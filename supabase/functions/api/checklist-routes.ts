@@ -14,7 +14,23 @@ type Env = {
 const checklistRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // List all checklist templates - ENHANCED ADMIN VISIBILITY
+// List all checklist templates - ENHANCED ADMIN VISIBILITY
+checklistRoutes.get("/templates", tenantAuthMiddleware, async (c) => {
+  // Reuse the same logic - copy paste or function extraction would be better but for now replacing content
+  // Actually, I can just mount the same handler if I extracted it, but for this tool I need to careful.
+  // I will just change the existing route to be /templates OR keep both if I want backward compatibility.
+  // Given this is a new app phase, let's just CHANGE it to /templates as it is cleaner, 
+  // BUT wait, looking at the code I see "/checklist-templates". I should probably just change that line to "/templates" 
+  // since "checklist" is already in the prefix from index.ts.
+  // So URL will be /api/checklist/templates. Perfect.
+  return handleListTemplates(c);
+});
+
 checklistRoutes.get("/checklist-templates", tenantAuthMiddleware, async (c) => {
+  return handleListTemplates(c);
+});
+
+async function handleListTemplates(c: any) {
   const env = c.env;
   const user = c.get("user");
 
@@ -109,7 +125,7 @@ checklistRoutes.get("/checklist-templates", tenantAuthMiddleware, async (c) => {
     console.error('[TEMPLATES] [PROD] Error fetching templates:', error);
     return c.json({ error: error instanceof Error ? error.message : "Failed to fetch templates" }, 500);
   }
-});
+}
 
 // Get specific checklist template with fields
 checklistRoutes.get("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
@@ -804,6 +820,7 @@ IMPORTANTE:
     console.log('[AI-CHECKLIST] Checklist gerado com sucesso');
 
     // Increment AI usage count for the organization
+    let usageIncremented = false;
     try {
       const userProfile = await env.DB.prepare(
         "SELECT organization_id FROM users WHERE id = ?"
@@ -815,6 +832,7 @@ IMPORTANTE:
           "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
         ).bind(userProfile.organization_id).run();
 
+        usageIncremented = true;
         console.log('[AI-CHECKLIST] Usage incremented for org:', userProfile.organization_id);
 
         // Log the AI usage for auditing
@@ -835,7 +853,8 @@ IMPORTANTE:
       meta: {
         generated_at: new Date().toISOString(),
         requested_questions: num_questions,
-        delivered_questions: cleanFields.length
+        delivered_questions: cleanFields.length,
+        usage_incremented: usageIncremented
       }
     });
 

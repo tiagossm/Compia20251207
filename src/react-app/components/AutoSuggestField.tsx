@@ -6,13 +6,15 @@ interface AutoSuggestOption {
   value: string;
   label: string;
   email?: string;
+  address?: string;  // For companies endpoint
+  org_id?: number;   // For companies endpoint
 }
 
 interface AutoSuggestFieldProps {
   label: string;
   name: string;
   value: string;
-  onChange: (value: string, email?: string) => void;
+  onChange: (value: string, email?: string, data?: any) => void;
   placeholder: string;
   required?: boolean;
   apiEndpoint: string;
@@ -55,6 +57,7 @@ export default function AutoSuggestField({
       const response = await fetchWithAuth(`${apiEndpoint}?search=${encodeURIComponent(searchText)}`);
       if (response.ok) {
         const data = await response.json();
+        console.log('[AutoSuggestField] API response for', apiEndpoint, ':', data.suggestions);
         setSuggestions(data.suggestions || []);
         setIsInitialLoad(searchText === '');
       }
@@ -84,8 +87,9 @@ export default function AutoSuggestField({
 
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion: AutoSuggestOption) => {
+    console.log('[AutoSuggestField] Selected suggestion:', suggestion);
     setInputValue(suggestion.value);
-    onChange(suggestion.value, suggestion.email);
+    onChange(suggestion.value, suggestion.email, suggestion);
     setShowSuggestions(false);
   };
 

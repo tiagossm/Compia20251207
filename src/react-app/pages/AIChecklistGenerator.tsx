@@ -192,32 +192,29 @@ export default function AIChecklistGenerator() {
       console.log('Checklist gerado com sucesso!');
 
       // Increment AI usage count via backend API
-      try {
-        // Get organization_id from the authenticated user context
-        const orgId = (user as any)?.organization_id || (user as any)?.profile?.organization_id;
+      // SMART FALLBACK: Only increment if backend didn't do it
+      const backendIncremented = (result.meta as any)?.usage_incremented === true;
 
-        if (orgId) {
-          // Call backend API to increment usage (avoids Supabase auth issues)
-          const incrementResponse = await fetch('/api/organizations/increment-ai-usage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ organization_id: orgId })
-          });
-
-          if (incrementResponse.ok) {
-            console.log('[AI-USAGE] ✅ Usage incremented for org:', orgId);
-            window.dispatchEvent(new Event('ai_usage_updated'));
-          } else {
-            const errorData = await incrementResponse.json().catch(() => ({}));
-            console.error('[AI-USAGE] Increment failed:', errorData);
+      if (!backendIncremented) {
+        console.warn('[AI-USAGE] Backend did not increment usage. Triggering Frontend Fallback...');
+        try {
+          const orgId = (user as any)?.organization_id || (user as any)?.profile?.organization_id;
+          if (orgId) {
+            await fetch('/api/organizations/increment-ai-usage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ organization_id: orgId })
+            });
+            console.log('[AI-USAGE] ✅ Fallback increment successful');
           }
-        } else {
-          console.warn('[AI-USAGE] No organization_id found in user context');
+        } catch (fallbackError) {
+          console.error('[AI-USAGE] Fallback failed:', fallbackError);
         }
-      } catch (usageError) {
-        console.error('[AI-USAGE] Failed to track usage:', usageError);
-        // Don't fail the main flow
+      } else {
+        console.log('[AI-USAGE] ✅ Backend confirmed usage increment');
       }
+
+      window.dispatchEvent(new Event('ai_usage_updated'));
 
     } catch (error) {
       console.error('Erro detalhado:', error);

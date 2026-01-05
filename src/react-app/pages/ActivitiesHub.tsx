@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+// import { useSearchParams } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import NewTaskModal from '@/react-app/components/NewTaskModal';
 import GamificationWidget from '@/react-app/components/GamificationWidget';
 import KanbanBoard from '@/react-app/components/KanbanBoard';
@@ -39,14 +39,12 @@ interface FilterState {
 }
 
 export default function ActivitiesHub() {
-    const [searchParams] = useSearchParams();
+    // const [searchParams] = useSearchParams();
+    const { selectedOrganization } = useOrganization();
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
     const [activities, setActivities] = useState<ActionItem[]>([]);
     const [filteredItems, setFilteredItems] = useState<ActionItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-        searchParams.get('org') ? parseInt(searchParams.get('org')!) : null
-    );
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const [filters, setFilters] = useState<FilterState>({
@@ -59,7 +57,7 @@ export default function ActivitiesHub() {
 
     useEffect(() => {
         fetchActivities();
-    }, [selectedOrgId]);
+    }, [selectedOrganization]);
 
     useEffect(() => {
         applyFilters();
@@ -68,8 +66,8 @@ export default function ActivitiesHub() {
     const fetchActivities = async () => {
         try {
             let url = '/api/action-plans/all';
-            if (selectedOrgId) {
-                url += `?organization_id=${selectedOrgId}`;
+            if (selectedOrganization) {
+                url += `?organization_id=${selectedOrganization.id}`;
             }
             const response = await fetch(url);
             if (response.ok) {
@@ -128,7 +126,7 @@ export default function ActivitiesHub() {
 
         // Call Backend
         try {
-            await fetch(`/api/kanban/${selectedOrgId || 1}/items/${itemId}/move`, {
+            await fetch(`/api/kanban/${selectedOrganization?.id || 1}/items/${itemId}/move`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
@@ -193,7 +191,7 @@ export default function ActivitiesHub() {
                             onChange={e => setFilters({ ...filters, search: e.target.value })}
                         />
                     </div>
-                    <OrganizationSelector selectedOrgId={selectedOrgId} onOrganizationChange={setSelectedOrgId} showAllOption />
+                    {/* Organization Selector Removed - Global in Header */}
                     <select
                         className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                         value={filters.type}
@@ -219,7 +217,7 @@ export default function ActivitiesHub() {
                                 <div className="flex-1 overflow-hidden h-full">
                                     <KanbanBoard
                                         items={filteredItems.map(i => ({ ...i, id: Number(i.id) }))}
-                                        orgId={selectedOrgId || 1}
+                                        orgId={selectedOrganization?.id || 1}
                                         onItemMove={handleItemMove}
                                         onColumnChange={handleColumnChange}
                                     />
@@ -291,7 +289,7 @@ export default function ActivitiesHub() {
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
                     onTaskCreated={fetchActivities}
-                    defaultOrgId={selectedOrgId}
+                    defaultOrgId={selectedOrganization?.id}
                 />
 
             </div>

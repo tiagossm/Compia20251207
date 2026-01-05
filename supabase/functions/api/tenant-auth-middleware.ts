@@ -105,9 +105,63 @@ export async function tenantAuthMiddleware(c: Context, next: Next) {
     `).bind(userId).first() as AuthenticatedUser & { last_active_at?: string };
 
         if (!user) {
-            console.warn(`[TENANT-AUTH] Usuário ${userId} não encontrado ou inativo`);
-            await next();
-            return;
+            console.warn(`[TENANT-AUTH] Usuário ${userId} não encontrado no DB. Tentando auto-cadastro...`);
+
+            // AUTO-HEAL: Se temos o usuário do contexto (Supabase Auth/Google), criar no banco
+            if (existingUser && (existingUser as any).email) {
+                try {
+                    const email = (existingUser as any).email;
+                    const meta = (existingUser as any).user_metadata || {};
+                    const name = meta.full_name || meta.name || email.split('@')[0];
+
+                    console.log(`[TENANT-AUTH] Criando usuário ${email} no banco...`);
+
+                    // Try to insert
+                    try {
+                        await env.DB.prepare(`
+                            INSERT INTO users (id, email, name, role, is_active, approval_status, created_at, updated_at)
+                            VALUES (?, ?, ?, 'inspector', true, 'pending', NOW(), NOW())
+                        `).bind(userId, email, name).run();
+                    } catch (firstInsertError: any) {
+                        console.error('[TENANT-AUTH] Erro ao inserir como inspector:', firstInsertError);
+                        // Fallback to 'client' role if 'inspector' is rejected by constraint
+                        await env.DB.prepare(`
+                            INSERT INTO users (id, email, name, role, is_active, approval_status, created_at, updated_at)
+                            VALUES (?, ?, ?, 'client', true, 'pending', NOW(), NOW())
+                        `).bind(userId, email, name).run();
+                    }
+
+
+                    // Buscar o usuário recém-criado para prosseguir normalmente
+                    const newUser = await env.DB.prepare(`
+                        SELECT id, email, name, role, organization_id, 
+                        managed_organization_id, can_manage_users, 
+                        can_create_organizations, is_active, last_active_at
+                        FROM users WHERE id = ?
+                    `).bind(userId).first();
+
+                    if (newUser) {
+                        // Continuar execução com o novo usuário
+                        // @ts-ignore
+                        user = newUser;
+                        console.log(`[TENANT-AUTH] Usuário criado e recuperado com sucesso: ${email}`);
+                    } else {
+                        console.error(`[TENANT-AUTH] Falha ao recuperar usuário após criação`);
+                        // DO NOT RETURN 400 HERE. Let it proceed, maybe route handles it differently or we give specific error
+                        // But if user is null, route will likely return 400/404.
+                    }
+
+                } catch (createError) {
+                    console.error(`[TENANT-AUTH] Erro CRÍTICO ao criar usuário automaticamente:`, createError);
+                    // Proceeding without user will likely cause 400 downstream
+                }
+            } else {
+                console.warn(`[TENANT-AUTH] Dados insuficientes para auto-cadastro`);
+            }
+        } else {
+            // Caso user exista, mas var 'user' seja const (no replace content a gente redeclara se precisar? 
+            // Não, user vem do primeiro await. Se aquele await falhou, entra aqui.
+            // Se user existisse, não entrava no if(!user).
         }
 
         // Update last_active_at if null or > 5 min old
@@ -131,19 +185,36 @@ export async function tenantAuthMiddleware(c: Context, next: Next) {
         let allowedOrganizationIds: number[] = [];
 
         if (isSystemAdmin) {
-            allowedOrganizationIds = [];
-        } else if (user.role === USER_ROLES.ORG_ADMIN && user.managed_organization_id) {
-            const subsidiaries = await env.DB.prepare(`
-        SELECT id FROM organizations 
-        WHERE parent_organization_id = ?
-      `).bind(user.managed_organization_id).all();
+            allowedOrganizationIds = []; // System Admin has access to everything effectively (handled by logic elsewhere usually)
+        } else {
+            // Start with organization_id (Legacy/Primary)
+            const orgsSet = new Set<number>();
+            if (user.organization_id) orgsSet.add(user.organization_id);
 
-            allowedOrganizationIds = [
-                user.managed_organization_id,
-                ...((subsidiaries.results || []) as { id: number }[]).map(org => org.id)
-            ];
-        } else if (user.organization_id) {
-            allowedOrganizationIds = [user.organization_id];
+            // Fetch explicit assignments from user_organizations
+            try {
+                const assigned = await env.DB.prepare("SELECT organization_id FROM user_organizations WHERE user_id = ?").bind(userId).all();
+                if (assigned.results) {
+                    assigned.results.forEach((r: any) => orgsSet.add(r.organization_id));
+                }
+            } catch (e) {
+                console.error("[TENANT-AUTH] Error fetching user_organizations:", e);
+            }
+
+            // If Org Admin, include managed org and subsidiaries
+            if (user.role === USER_ROLES.ORG_ADMIN && user.managed_organization_id) {
+                orgsSet.add(user.managed_organization_id);
+                try {
+                    const subsidiaries = await env.DB.prepare("SELECT id FROM organizations WHERE parent_organization_id = ?").bind(user.managed_organization_id).all();
+                    if (subsidiaries.results) {
+                        subsidiaries.results.forEach((s: any) => orgsSet.add(s.id));
+                    }
+                } catch (e) {
+                    console.error("[TENANT-AUTH] Error fetching subsidiaries:", e);
+                }
+            }
+
+            allowedOrganizationIds = Array.from(orgsSet);
         }
 
         const tenantContext: TenantContext = {

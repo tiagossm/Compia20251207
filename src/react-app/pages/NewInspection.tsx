@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/auth';
 import { useAuth } from '@/react-app/context/AuthContext';
 import Layout from '@/react-app/components/Layout';
@@ -17,6 +17,7 @@ import NewUserModal from '@/react-app/components/NewUserModal';
 import NewOrganizationModal from '@/react-app/components/NewOrganizationModal';
 import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
 import UserAvatar from '@/react-app/components/UserAvatar';
+import { parseAddressString } from '@/react-app/utils/addressParser';
 
 interface InspectorType {
   name: string;
@@ -42,8 +43,11 @@ export default function NewInspection() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const extendedUser = user as ExtendedMochaUser;
+  const { id: routeId } = useParams();
   const [searchParams] = useSearchParams();
+  const existingId = routeId || searchParams.get('id'); // Support both route param and query param
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(!!existingId);
   const [currentStep, setCurrentStep] = useState(1);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [folders, setFolders] = useState<ChecklistFolder[]>([]);
@@ -52,7 +56,7 @@ export default function NewInspection() {
   const [showNewOrgModal, setShowNewOrgModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [stepValidation, setStepValidation] = useState<Record<number, boolean>>({});
-  const [submitProtection, setSubmitProtection] = useState(false); // New protection state
+  const [submitProtection, setSubmitProtection] = useState(false);
   const [selectedOrgId] = useState<number | null>(
     searchParams.get('org') ? parseInt(searchParams.get('org')!) :
       extendedUser?.profile?.organization_id || null
@@ -93,11 +97,76 @@ export default function NewInspection() {
     compliance_enabled: true,
   });
 
+  const location = useLocation();
+
   useEffect(() => {
     fetchTemplates();
     fetchFolders();
     fetchAiAssistants();
-  }, []);
+
+    if (existingId) {
+      fetchExistingInspection(existingId);
+    } else if (location.state?.prefill) {
+      // Pre-fill from Calendar State
+      const prefill = location.state.prefill;
+      setFormData(prev => ({
+        ...prev,
+        title: prefill.title || '',
+        description: prefill.description || '',
+        scheduled_date: prefill.scheduled_date || '', // YYYY-MM-DD
+        company_name: prefill.company_name || '',
+        // Map address from Calendar (which comes as 'address' in prefill)
+        address: prefill.address || '',
+        logradouro: prefill.address || '', // Fallback for specific fields
+        location: '', // Clear sector/area since 'location' in calendar is address
+      }));
+    }
+  }, [existingId, location.state]);
+
+  const fetchExistingInspection = async (id: string) => {
+    try {
+      const response = await fetchWithAuth(`/api/inspections/${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        const inspection = data.inspection;
+
+        // Map existing data to form
+        setFormData(prev => ({
+          ...prev,
+          title: inspection.title || '',
+          description: inspection.description || '',
+          // Use 'address' field if available (new migration), fall back to checking if 'location' looks like an address
+          address: inspection.address || (inspection.location && inspection.location.includes(',') ? inspection.location : ''),
+
+          // Populate granular fields from address string if they are empty
+          // This ensures the address from Calendar (which is a string) shows up in the Logradouro field
+          logradouro: inspection.logradouro || (inspection.address || (inspection.location && inspection.location.includes(',') ? inspection.location : '')),
+          numero: inspection.numero || '',
+          bairro: inspection.bairro || '',
+          cidade: inspection.cidade || '',
+          uf: inspection.uf || '',
+          cep: inspection.cep || '',
+          complemento: inspection.complemento || '',
+
+          // If 'location' is in 'address' format (has comma/numbers), don't put it in 'location' (Sector). 
+          location: (inspection.location && !inspection.location.includes(',')) ? inspection.location : '',
+          sectors: (inspection.location && !inspection.location.includes(',')) ? [inspection.location] : [],
+
+          company_name: inspection.company_name || '',
+          scheduled_date: inspection.scheduled_date ? inspection.scheduled_date.split('T')[0] : '',
+          priority: inspection.priority || 'media',
+          inspector_name: inspection.inspector_name || prev.inspector_name,
+          inspector_email: inspection.inspector_email || prev.inspector_email,
+          responsible_name: inspection.responsible_name || '',
+          responsible_email: inspection.responsible_email || '',
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching inspection:', error);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   useEffect(() => {
     const validation: Record<number, boolean> = {};
@@ -174,7 +243,7 @@ export default function NewInspection() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitProtection) return; // Double check
+    if (submitProtection) return;
 
     setLoading(true);
 
@@ -184,19 +253,10 @@ export default function NewInspection() {
         ? formData.sectors.join(', ')
         : formData.location.trim();
 
-      // Build complete address if not already set
-      let finalAddress = formData.address;
-      if (!finalAddress && formData.logradouro) {
-        const parts = [
-          formData.logradouro,
-          formData.numero && `nº ${formData.numero}`,
-          formData.complemento,
-          formData.bairro,
-          formData.cidade && formData.uf && `${formData.cidade}/${formData.uf}`,
-          formData.cep && `CEP: ${formData.cep}`
-        ].filter(Boolean);
-        finalAddress = parts.join(', ');
-      }
+      // Build complete address only if not editing and address is empty (or allow overwrite)
+      // Since we now map calendar 'location' to 'address', we likely have an address.
+      // If user edited address field, use that.
+      const finalAddress = formData.address;
 
       const inspectionData = {
         ...formData,
@@ -207,31 +267,44 @@ export default function NewInspection() {
 
       console.log('[NewInspection] Submitting data:', inspectionData);
 
-      const response = await fetchWithAuth('/api/inspections', {
-        method: 'POST',
-        body: JSON.stringify(inspectionData),
-      });
+      let response;
+      if (existingId) {
+        // Updating existing inspection (completing setup)
+        response = await fetchWithAuth(`/api/inspections/${existingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(inspectionData),
+        });
+      } else {
+        // Creating new inspection
+        response = await fetchWithAuth('/api/inspections', {
+          method: 'POST',
+          body: JSON.stringify(inspectionData),
+        });
+      }
 
       console.log('[NewInspection] Response status:', response.status);
 
       if (response.ok) {
         const result = await response.json();
-        console.log('[NewInspection] Created inspection:', result);
+        console.log('[NewInspection] Saved inspection:', result);
 
-        if (result.id) {
-          navigate(`/inspections/${result.id}`);
+        // If updating, result might be the updated object or { message, inspection }
+        const savedId = existingId || result.id || result.inspection?.id;
+
+        if (savedId) {
+          navigate(`/inspections/${savedId}`);
         } else {
-          console.error('[NewInspection] Created but ID is missing:', result);
-          alert('Inspeção criada, mas houve um erro ao redirecionar. Verifique na lista.');
+          console.error('[NewInspection] Saved but ID is missing:', result);
+          alert('Inspeção salva, mas houve um erro ao redirecionar. Verifique na lista.');
           navigate('/inspections');
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || 'Erro ao criar inspeção');
+        throw new Error(errorData.message || errorData.error || 'Erro ao salvar inspeção');
       }
     } catch (error) {
       console.error('Erro:', error);
-      alert(`Erro ao criar inspeção: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+      alert(`Erro ao salvar inspeção: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
     } finally {
       setLoading(false);
     }
@@ -340,6 +413,17 @@ export default function NewInspection() {
     </div>
   );
 
+  if (initialLoading) {
+    return (
+      <Layout>
+        <div className="flex h-[50vh] items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-slate-600">Carregando dados da inspe&ccedil;&atilde;o...</span>
+        </div>
+      </Layout>
+    )
+  }
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -420,7 +504,24 @@ export default function NewInspection() {
                 label="Nome da Empresa"
                 name="company_name"
                 value={formData.company_name}
-                onChange={(value) => setFormData(prev => ({ ...prev, company_name: value }))}
+                onChange={(value, _, data) => {
+                  const suggestion = data as { address?: string };
+                  const updates: any = { company_name: value };
+
+                  if (suggestion?.address) {
+                    const parsed = parseAddressString(suggestion.address);
+                    updates.cep = parsed.cep;
+                    updates.logradouro = parsed.logradouro;
+                    updates.numero = parsed.numero;
+                    updates.bairro = parsed.bairro;
+                    updates.cidade = parsed.cidade;
+                    updates.uf = parsed.uf;
+                    updates.complemento = parsed.complemento;
+                    updates.address = parsed.full_address; // Keep full legacy string
+                  }
+
+                  setFormData(prev => ({ ...prev, ...updates }));
+                }}
                 placeholder="Ex: ABC Indústria Ltda"
                 required
                 apiEndpoint="/api/autosuggest/companies"

@@ -102,6 +102,19 @@ authRoutes.get("/me", async (c) => {
             googleUserData = (user as any).google_user_data;
         }
 
+        // Fetch accessible organizations
+        let accessibleOrganizations: any[] = [];
+        try {
+            accessibleOrganizations = await env.DB.prepare(`
+                SELECT o.id, o.name, o.type, o.organization_level, uo.role, uo.is_primary
+                FROM organizations o
+                JOIN user_organizations uo ON o.id = uo.organization_id
+                WHERE uo.user_id = ? AND o.is_active = true
+            `).bind(dbUser.id).all().then((res: any) => res.results || []);
+        } catch (e) {
+            console.error('[AUTH-ME] Error fetching user organizations:', e);
+        }
+
         return c.json({
             success: true,
             user: {
@@ -111,7 +124,8 @@ authRoutes.get("/me", async (c) => {
                 role: dbUser.role,
                 approval_status: dbUser.approval_status,
                 profile: profile, // Frontend expects user.profile.role
-                google_user_data: googleUserData // Pass Verified Google Data
+                google_user_data: googleUserData, // Pass Verified Google Data
+                organizations: accessibleOrganizations // N-to-N Orgs list
             }
         });
     } catch (error) {

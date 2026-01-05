@@ -12,15 +12,15 @@ interface User {
 }
 
 interface UserAssignmentModalProps {
-    organizationId: number;
-    organizationName: string;
+    organizationIds: number[];
+    organizationName?: string; // opcional se for múltiplos
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
 }
 
 export default function UserAssignmentModal({
-    organizationId,
+    organizationIds,
     organizationName,
     isOpen,
     onClose,
@@ -33,6 +33,8 @@ export default function UserAssignmentModal({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState<string | null>(null);
     const [selectedRole, setSelectedRole] = useState('inspector');
+
+    const isBulk = organizationIds.length > 1;
 
     useEffect(() => {
         if (isOpen) {
@@ -52,11 +54,9 @@ export default function UserAssignmentModal({
 
             if (response.ok) {
                 // Filtra para exibir apenas usuários que podem ser atribuídos
-                // (ex: usuários sem org ou usuários que queremos mover)
-                // Por segurança, vamos focar em usuários sem org ou da própria org (para mudar role)
-                // Mas a ideia é "Atribuir a uma organização", então foco em unassigned é melhor,
-                // mas o sysadmin pode querer mover alguém. Vamos listar todos que não são System Admin.
                 const assignableUsers = data.users.filter((u: User) =>
+                    // Remover lógica restrita anterior para permitir mover/readicionar
+                    // Mas manter restrição de não mexer em sys_admin
                     u.role !== 'sys_admin' && u.role !== 'system_admin'
                 );
                 setUsers(assignableUsers);
@@ -83,20 +83,55 @@ export default function UserAssignmentModal({
 
         setLoading(true);
         try {
-            const response = await fetch(`/api/users/admin/${selectedUser}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    organization_id: organizationId,
-                    role: selectedRole
-                })
-            });
+            let response;
+
+            if (isBulk) {
+                response = await fetch('/api/user-assignments/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        user_id: selectedUser,
+                        organization_ids: organizationIds,
+                        role: selectedRole,
+                        permissions: {} // Default permissions
+                    })
+                });
+            } else {
+                // Single assignment compatibility (or just use bulk for single too, but keeps specific Logic if needed)
+                // Actually, let's use the standard POST for single to be safe with verified implementation
+                // OR use bulk with array of 1. Let's use bulk for array > 1, and regular for 1.
+                response = await fetch('/api/user-assignments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        user_id: selectedUser,
+                        organization_id: organizationIds[0],
+                        role: selectedRole,
+                        permissions: {},
+                        is_primary: false
+                    })
+                });
+            }
 
             if (response.ok) {
-                success('Sucesso', 'Usuário atribuído à organização com sucesso.');
+                const data = await response.json();
+                if (isBulk && data.results?.failed?.length > 0) {
+                    // Partial success or failure
+                    const failedCount = data.results.failed.length;
+                    const successCount = data.results.success.length;
+                    if (successCount > 0) {
+                        success('Processado', `${successCount} atribuições com sucesso. ${failedCount} falharam.`);
+                    } else {
+                        error('Erro', `Falha ao atribuir: ${data.results.failed[0].reason}`);
+                    }
+                } else {
+                    success('Sucesso', isBulk
+                        ? 'Usuário atribuído às organizações selecionadas.'
+                        : 'Usuário atribuído com sucesso.');
+                }
+
                 onSuccess();
                 onClose();
             } else {
@@ -130,7 +165,7 @@ export default function UserAssignmentModal({
                                     <UserPlus className="h-5 w-5 text-blue-600" />
                                 </div>
                                 <h3 className="text-lg leading-6 font-medium text-gray-900">
-                                    Atribuir Usuário
+                                    {isBulk ? 'Atribuir em Massa' : 'Atribuir Usuário'}
                                 </h3>
                             </div>
                             <button
@@ -143,7 +178,10 @@ export default function UserAssignmentModal({
 
                         <div className="mt-2">
                             <p className="text-sm text-gray-500 mb-4">
-                                Selecione um usuário para atribuir à organização <span className="font-semibold text-gray-800">{organizationName}</span>.
+                                {isBulk
+                                    ? <>Selecione um usuário para atribuir a <span className="font-semibold text-gray-800">{organizationIds.length} organizações selecionadas</span>.</>
+                                    : <>Selecione um usuário para atribuir à organização <span className="font-semibold text-gray-800">{organizationName}</span>.</>
+                                }
                             </p>
 
                             <div className="space-y-4">
@@ -193,7 +231,7 @@ export default function UserAssignmentModal({
                                                                 <p className="text-xs text-gray-500">{user.email}</p>
                                                                 {user.organization_id && (
                                                                     <span className="text-xs text-orange-600 bg-orange-50 px-1 rounded">
-                                                                        (Em outra Org)
+                                                                        (Principal: Outra Org)
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -225,7 +263,7 @@ export default function UserAssignmentModal({
                                         <option value="client_viewer">Visualizador (Cliente)</option>
                                     </select>
                                     <p className="mt-1 text-xs text-gray-500">
-                                        Define as permissões do usuário dentro desta organização.
+                                        Define as permissões do usuário {isBulk ? 'nestas organizações' : 'nesta organização'}.
                                     </p>
                                 </div>
 
@@ -243,7 +281,7 @@ export default function UserAssignmentModal({
                             {loading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Salvando...
+                                    Processando...
                                 </>
                             ) : (
                                 'Atribuir Usuário'

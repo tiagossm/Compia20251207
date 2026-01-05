@@ -40,10 +40,11 @@ dashboardRoutes.get("/stats", tenantAuthMiddleware, async (c) => {
         )
       `;
       params.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
-    } else if (userProfile?.organization_id) {
-      // Para usuários comuns (não-admin), filtre pela sua organização
-      whereClause = "WHERE organization_id = ?";
-      params.push(userProfile.organization_id);
+    } else {
+      // Para usuários comuns (não-admin), filtre pela sua organização OU atribuições
+      const userEmail = userProfile.email || user.email;
+      whereClause = "WHERE (organization_id = ? OR inspector_email = ?)";
+      params.push(userProfile.organization_id, userEmail);
     }
     // SYSTEM_ADMIN não tem filtro, vê tudo
 
@@ -98,9 +99,10 @@ dashboardRoutes.get("/action-plan-summary", tenantAuthMiddleware, async (c) => {
         )
       `;
       params.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
-    } else if (userProfile?.organization_id) {
-      whereClause = "WHERE i.organization_id = ?";
-      params.push(userProfile.organization_id);
+    } else {
+      const userEmail = userProfile.email || user.email;
+      whereClause = "WHERE (i.organization_id = ? OR i.inspector_email = ?)";
+      params.push(userProfile.organization_id, userEmail);
     }
     // SYSTEM_ADMIN não tem filtro
 

@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react'; // Added import
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import Layout from '@/react-app/components/Layout';
+import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
 import {
   ArrowLeft,
   Plus,
@@ -23,7 +25,9 @@ import {
   FileCheck,
   Sparkles,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Settings,
+  Bot
 } from 'lucide-react';
 import { InspectionType, InspectionItemType, InspectionMediaType } from '@/shared/types';
 import { FieldResponse } from '@/shared/checklist-types';
@@ -57,6 +61,7 @@ export default function InspectionDetail() {
   const [showReopenModal, setShowReopenModal] = useState(false);
   const [reopenJustification, setReopenJustification] = useState('');
   const [isReopening, setIsReopening] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [signatures, setSignatures] = useState<{ inspector?: string; responsible?: string }>({});
   const [responses, setResponses] = useState<Record<number, any>>({});
   const [newItem, setNewItem] = useState({
@@ -79,6 +84,18 @@ export default function InspectionDetail() {
     priority: 'media' as 'baixa' | 'media' | 'alta'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --- Configuration State (Deferred) ---
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configData, setConfigData] = useState({
+    template_id: '',
+    ai_assistant_id: ''
+  });
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<any[]>([]);
+  const [availableAIAssistants, setAvailableAIAssistants] = useState<any[]>([]);
+  const [showTemplateSelect, setShowTemplateSelect] = useState(false);
+  const [selectedTemplateName, setSelectedTemplateName] = useState('');
 
   useEffect(() => {
     // Only fetch if ID is valid (truthy and not the literal string "undefined")
@@ -251,10 +268,74 @@ export default function InspectionDetail() {
     } finally {
       setLoading(false);
     }
+
+  };
+
+  const fetchConfigurationOptions = async () => {
+    try {
+      // Fetch Templates
+      const tplResponse = await fetchWithAuth('/api/checklist/checklist-templates');
+      if (tplResponse.ok) {
+        const data = await tplResponse.json();
+        setAvailableTemplates(data.templates || []);
+        setAvailableFolders(data.folders || []);
+      }
+
+      // Fetch AI Assistants
+      const aiResponse = await fetchWithAuth('/api/ai-assistants');
+      if (aiResponse.ok) {
+        const data = await aiResponse.json();
+        setAvailableAIAssistants(data.assistants || []);
+      }
+    } catch (error) {
+      console.error('Error fetching config options:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (inspection && !inspection.template_id) {
+      fetchConfigurationOptions();
+      setShowConfigModal(true);
+    }
+  }, [inspection]);
+
+  const handleSaveConfiguration = async () => {
+    if (!configData.template_id) {
+      error('Template obrigatÃ³rio', 'Por favor, selecione um checklist para continuar.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetchWithAuth(`/api/inspections/${id}/configure`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: Number(configData.template_id),
+          ai_assistant_id: configData.ai_assistant_id ? Number(configData.ai_assistant_id) : null
+        })
+      });
+
+      if (response.ok) {
+        success('ConfiguraÃ§Ã£o salva', 'InspeÃ§Ã£o configurada com sucesso!');
+        setShowConfigModal(false);
+        // Reload inspection to apply template items
+        // We force a page reload or full re-fetch because the backend "configure" endpoint 
+        // likely generates the inspection items from the template.
+        window.location.reload();
+      } else {
+        throw new Error('Falha ao configurar inspeÃ§Ã£o');
+      }
+    } catch (err) {
+      console.error(err);
+      error('Erro', 'NÃ£o foi possÃ­vel salvar a configuraÃ§Ã£o.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteItem = async (itemId: number, isTemplateItem: boolean = false) => {
-    if (!confirm('Tem certeza que deseja excluir este item? ' + (isTemplateItem ? 'Isso removerá a pergunta do relatório.' : ''))) return;
+    if (!confirm('Tem certeza que deseja excluir este item? ' + (isTemplateItem ? 'Isso removerÃ¡ a pergunta do relatÃ³rio.' : ''))) return;
 
     try {
       const response = await fetchWithAuth(`/api/inspection-items/${itemId}`, {
@@ -304,7 +385,7 @@ export default function InspectionDetail() {
         success('Item adicionado', 'Item foi adicionado com sucesso ao checklist');
         fetchInspectionDetails();
       } else {
-        error('Erro ao adicionar item', 'Não foi possível adicionar o item. Tente novamente.');
+        error('Erro ao adicionar item', 'NÃ£o foi possÃ­vel adicionar o item. Tente novamente.');
       }
     } catch (err) {
       console.error('Erro ao adicionar item:', err);
@@ -359,11 +440,11 @@ export default function InspectionDetail() {
       ));
 
     } catch (err) {
-      console.error('Erro ao atualizar análise:', err);
+      console.error('Erro ao atualizar anÃ¡lise:', err);
       // Use standard alert if 'error' toast wrapper is shadowed or unavailable in this scope, 
       // but 'error' from useToast is available in component scope.
       // Renamed argument in catch block to 'err' to avoid shadowing 'error' function from useToast
-      error('Erro', 'Não foi possível atualizar a análise.');
+      error('Erro', 'NÃ£o foi possÃ­vel atualizar a anÃ¡lise.');
     }
   };
 
@@ -435,7 +516,7 @@ export default function InspectionDetail() {
       // But if we saved successfully, refreshing is safer.
     } catch (err) {
       console.error('Erro ao salvar respostas:', err);
-      error('Erro ao salvar respostas', 'Não foi possível salvar as respostas. Tente novamente.');
+      error('Erro ao salvar respostas', 'NÃ£o foi possÃ­vel salvar as respostas. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -452,7 +533,7 @@ export default function InspectionDetail() {
         });
         return updated;
       });
-      success('Assinatura salva', `Assinatura do ${type === 'inspector' ? 'inspetor' : 'responsável'} foi capturada com sucesso`);
+      success('Assinatura salva', `Assinatura do ${type === 'inspector' ? 'inspetor' : 'responsÃ¡vel'} foi capturada com sucesso`);
 
       // Immediately save signature to database
       try {
@@ -472,23 +553,41 @@ export default function InspectionDetail() {
         console.error('Error saving signature to database:', saveError);
       }
     } else {
-      error('Erro na assinatura', 'Não foi possível capturar a assinatura. Tente novamente.');
+      error('Erro na assinatura', 'NÃ£o foi possÃ­vel capturar a assinatura. Tente novamente.');
     }
   };
 
   const handleFinalizeInspection = async () => {
-    // Validate signatures with better checks
+    // 1. Validate Checklist Responses (Mandatory Items)
+    const missingItems = templateItems.filter(item => {
+      // Parse field data to check if mandatory (assuming all are mandatory for now, or check 'required' prop if available)
+      // For now, we enforce that all items must have a value
+      const val = responses[item.id];
+      const isValid = val !== null && val !== undefined && val !== '' && !(Array.isArray(val) && val.length === 0);
+      return !isValid;
+    });
+
+    if (missingItems.length > 0) {
+      warning(
+        'Itens Pendentes',
+        `VocÃª precisa responder ${missingItems.length} itens antes de finalizar a inspeÃ§Ã£o.`
+      );
+      // Optionally scroll to first missing item or show a list
+      return;
+    }
+
+    // 2. Validate Signatures
     const hasInspectorSignature = signatures.inspector && signatures.inspector.trim() !== '';
     const hasResponsibleSignature = signatures.responsible && signatures.responsible.trim() !== '';
 
     if (!hasInspectorSignature || !hasResponsibleSignature) {
       const missingSignatures = [];
       if (!hasInspectorSignature) missingSignatures.push('inspetor');
-      if (!hasResponsibleSignature) missingSignatures.push('responsável');
+      if (!hasResponsibleSignature) missingSignatures.push('responsÃ¡vel');
 
       warning(
-        'Assinaturas obrigatórias',
-        `É necessário ter a(s) assinatura(s) do(s) ${missingSignatures.join(' e ')} para finalizar a inspeção. Por favor, desenhe as assinaturas nos campos correspondentes.`
+        'Assinaturas obrigatÃ³rias',
+        `Ã‰ necessÃ¡rio ter a(s) assinatura(s) do(s) ${missingSignatures.join(' e ')} para finalizar a inspeÃ§Ã£o. Por favor, desenhe as assinaturas nos campos correspondentes.`
       );
       return;
     }
@@ -533,16 +632,17 @@ export default function InspectionDetail() {
       if (!finalizeResponse.ok) {
         const errorData = await finalizeResponse.text();
         console.error('Failed to finalize inspection:', finalizeResponse.status, errorData);
-        throw new Error('Erro ao finalizar inspeção');
+        throw new Error('Erro ao finalizar inspeÃ§Ã£o');
       }
 
       console.log('Inspection finalized successfully');
-      success('Inspeção finalizada', 'Inspeção foi finalizada com sucesso! As assinaturas foram salvas.');
+      success('InspeÃ§Ã£o finalizada', 'InspeÃ§Ã£o foi finalizada com sucesso! As assinaturas foram salvas.');
 
       // Update local state immediately to reflect completed status
       setInspection(prev => prev ? { ...prev, status: 'concluida', completed_date: new Date().toISOString() } : null);
 
       setShowSignatures(false);
+      setShowSuccessModal(true); // Show success modal instead of just summary
       setShowSummary(true);
 
       // Invalidate signatures cache and fetch updated data
@@ -560,8 +660,8 @@ export default function InspectionDetail() {
       // Fetch updated inspection details to ensure all data is current
       await fetchInspectionDetails();
     } catch (err) {
-      console.error('Erro ao finalizar inspeção:', err);
-      error('Erro ao finalizar inspeção', err instanceof Error ? err.message : 'Não foi possível finalizar a inspeção. Tente novamente.');
+      console.error('Erro ao finalizar inspeÃ§Ã£o:', err);
+      error('Erro ao finalizar inspeÃ§Ã£o', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel finalizar a inspeÃ§Ã£o. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -569,7 +669,7 @@ export default function InspectionDetail() {
 
   const handleReopenInspection = async () => {
     if (!reopenJustification.trim()) {
-      warning('Justificativa obrigatória', 'Por favor, informe o motivo para reabrir a inspeção.');
+      warning('Justificativa obrigatÃ³ria', 'Por favor, informe o motivo para reabrir a inspeÃ§Ã£o.');
       return;
     }
 
@@ -585,18 +685,18 @@ export default function InspectionDetail() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao reabrir inspeção');
+        throw new Error(errorData.error || 'Erro ao reabrir inspeÃ§Ã£o');
       }
 
-      success('Inspeção reaberta', 'A inspeção foi reaberta e está pronta para edição. Novas assinaturas serão necessárias para finalizar.');
+      success('InspeÃ§Ã£o reaberta', 'A inspeÃ§Ã£o foi reaberta e estÃ¡ pronta para ediÃ§Ã£o. Novas assinaturas serÃ£o necessÃ¡rias para finalizar.');
       setShowReopenModal(false);
       setReopenJustification('');
 
       // Reload inspection data
       await fetchInspectionDetails();
     } catch (err) {
-      console.error('Erro ao reabrir inspeção:', err);
-      error('Erro ao reabrir', err instanceof Error ? err.message : 'Não foi possível reabrir a inspeção.');
+      console.error('Erro ao reabrir inspeÃ§Ã£o:', err);
+      error('Erro ao reabrir', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel reabrir a inspeÃ§Ã£o.');
     } finally {
       setIsReopening(false);
     }
@@ -614,7 +714,7 @@ export default function InspectionDetail() {
 
   const handleCreateManualAction = async () => {
     if (!newAction.title.trim()) {
-      error('Título obrigatório', 'Por favor, informe o título da ação');
+      error('TÃ­tulo obrigatÃ³rio', 'Por favor, informe o tÃ­tulo da aÃ§Ã£o');
       return;
     }
 
@@ -643,17 +743,17 @@ export default function InspectionDetail() {
           priority: 'media' as 'baixa' | 'media' | 'alta'
         });
         setShowNewAction(false);
-        success('Ação criada', 'Ação manual foi criada com sucesso!');
+        success('AÃ§Ã£o criada', 'AÃ§Ã£o manual foi criada com sucesso!');
 
         // Refresh inspection details to show the new action
         await fetchInspectionDetails();
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao criar ação');
+        throw new Error(errorData.error || 'Erro ao criar aÃ§Ã£o');
       }
     } catch (err) {
-      console.error('Erro ao criar ação:', err);
-      error('Erro ao criar ação', err instanceof Error ? err.message : 'Não foi possível criar a ação. Tente novamente.');
+      console.error('Erro ao criar aÃ§Ã£o:', err);
+      error('Erro ao criar aÃ§Ã£o', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel criar a aÃ§Ã£o. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -670,7 +770,7 @@ export default function InspectionDetail() {
         .map(item => `${item.category}: ${item.item_description}${item.observations ? ` (${item.observations})` : ''}`);
 
       if (nonCompliantItems.length === 0) {
-        warning('Análise IA não disponível', 'Nenhum item não conforme encontrado para análise');
+        warning('AnÃ¡lise IA nÃ£o disponÃ­vel', 'Nenhum item nÃ£o conforme encontrado para anÃ¡lise');
         return;
       }
 
@@ -682,7 +782,7 @@ export default function InspectionDetail() {
         body: JSON.stringify({
           inspection_id: parseInt(id!),
           media_urls: mediaUrls,
-          inspection_context: `Inspeção: ${inspection.title} - Local: ${inspection.location} - Empresa: ${inspection.company_name || 'N/A'}`,
+          inspection_context: `InspeÃ§Ã£o: ${inspection.title} - Local: ${inspection.location} - Empresa: ${inspection.company_name || 'N/A'}`,
           non_compliant_items: nonCompliantItems
         })
       });
@@ -690,16 +790,16 @@ export default function InspectionDetail() {
       if (response.ok) {
         const result = await response.json();
         setActionPlan(result.action_plan);
-        success('Plano de ação gerado', 'Análise da IA foi concluída e plano de ação foi gerado!');
+        success('Plano de aÃ§Ã£o gerado', 'AnÃ¡lise da IA foi concluÃ­da e plano de aÃ§Ã£o foi gerado!');
 
         // Refresh inspection details to ensure action plan is saved and loaded
         await fetchInspectionDetails();
       } else {
-        throw new Error('Erro na análise de IA');
+        throw new Error('Erro na anÃ¡lise de IA');
       }
     } catch (err) {
-      console.error('Erro ao gerar análise:', err);
-      error('Erro na análise IA', 'Não foi possível gerar a análise. Verifique se há itens não conformes.');
+      console.error('Erro ao gerar anÃ¡lise:', err);
+      error('Erro na anÃ¡lise IA', 'NÃ£o foi possÃ­vel gerar a anÃ¡lise. Verifique se hÃ¡ itens nÃ£o conformes.');
     } finally {
       setAiAnalyzing(false);
     }
@@ -723,8 +823,9 @@ export default function InspectionDetail() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'pendente': return 'Pendente';
+      case 'scheduled': return 'Agendado';
       case 'em_andamento': return 'Em Andamento';
-      case 'concluida': return 'Concluída';
+      case 'concluida': return 'ConcluÃ­da';
       case 'cancelada': return 'Cancelada';
       default: return status;
     }
@@ -744,7 +845,7 @@ export default function InspectionDetail() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <LoadingSpinner size="lg" text="Carregando detalhes da inspeção..." />
+          <LoadingSpinner size="lg" text="Carregando detalhes da inspeÃ§Ã£o..." />
         </div>
       </Layout>
     );
@@ -755,9 +856,9 @@ export default function InspectionDetail() {
       <Layout>
         <div className="text-center py-12">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Inspeção não encontrada</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">InspeÃ§Ã£o nÃ£o encontrada</h2>
           <Link to="/inspections" className="text-blue-600 hover:underline">
-            Voltar para inspeções
+            Voltar para inspeÃ§Ãµes
           </Link>
         </div>
       </Layout>
@@ -779,79 +880,107 @@ export default function InspectionDetail() {
             actionItems={actionItems}
           />
         </div>
+      </Layout>
+    );
+  }
 
-        {/* FloatingActionBar also appears in summary view */}
-        <FloatingActionBar
-          status={inspection.status}
-          onSave={() => {
-            console.log('Manual save triggered');
-          }}
-          onFinalize={() => setShowSignatures(true)}
-          onReopen={() => setShowReopenModal(true)}
-          onGeneratePDF={() => setShowPDFGenerator(true)}
-          onShare={() => setShowShareModal(true)}
-          onViewSummary={() => setShowSummary(false)} // Toggle back to detail view
-          isSaving={isSubmitting}
-        />
+  // --- CONFIGURATION MODAL ---
+  if (showConfigModal && inspection) {
+    return (
+      <Layout>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="bg-blue-600 p-6 text-white text-center">
+              <Settings className="w-12 h-12 mx-auto mb-3 opacity-90" />
+              <h2 className="text-xl font-bold">ConfiguraÃ§Ã£o da InspeÃ§Ã£o</h2>
+              <p className="text-blue-100 text-sm mt-1">
+                Esta inspeÃ§Ã£o foi agendada sem detalhes tÃ©cnicos.
+                <br />Por favor, defina o checklist e o assistente antes de iniciar.
+              </p>
+            </div>
 
-        {/* Share Modal */}
-        {showShareModal && (
-          <InspectionShare
-            inspectionId={parseInt(id || '0')}
-            inspectionTitle={inspection.title}
-            isOpen={showShareModal}
-            onClose={() => setShowShareModal(false)}
-          />
-        )}
+            <div className="p-6 space-y-6">
+              {/* Summary of Context */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-600 space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-semibold">Cliente:</span>
+                  <span>{inspection.company_name || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Local:</span>
+                  <span>{inspection.location || 'N/A'}</span>
+                </div>
+              </div>
 
-        {/* PDF Generator */}
-        <PDFGenerator
-          inspection={inspection}
-          items={items}
-          templateItems={templateItems}
-          media={media}
-          responses={responses}
-          signatures={signatures}
-          isOpen={showPDFGenerator}
-          onClose={() => setShowPDFGenerator(false)}
-          actionItems={actionItems}
-          organizationLogoUrl={undefined}
-          parentOrganizationLogoUrl={undefined}
-          organizationName={inspection.company_name || 'Organização'}
-          parentOrganizationName="Matriz"
-        />
-
-        {/* Reopen Modal */}
-        {showReopenModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Reabrir Inspeção</h3>
-              <p className="text-slate-600 mb-4">Informe o motivo para reabrir esta inspeção:</p>
-              <textarea
-                value={reopenJustification}
-                onChange={(e) => setReopenJustification(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                rows={3}
-                placeholder="Justificativa..."
-              />
-              <div className="flex justify-end gap-3 mt-4">
+              {/* Template Select */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Checklist / Template *</label>
                 <button
-                  onClick={() => setShowReopenModal(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                  onClick={() => setShowTemplateSelect(true)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-300 rounded-lg hover:border-blue-500 hover:ring-2 hover:ring-blue-100 transition-all text-left group"
                 >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleReopenInspection}
-                  disabled={isReopening || !reopenJustification.trim()}
-                  className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
-                >
-                  {isReopening ? 'Reabrindo...' : 'Reabrir'}
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded group-hover:bg-blue-100 transition-colors">
+                      <FileText size={18} />
+                    </div>
+                    <span className={selectedTemplateName ? 'text-slate-900 font-medium' : 'text-slate-400'}>
+                      {selectedTemplateName || 'Selecione um checklist...'}
+                    </span>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-500" />
                 </button>
               </div>
+
+              {/* AI Assistant Select */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Assistente de IA</label>
+                <div className="relative">
+                  <Bot className="absolute left-3 top-3 text-slate-400" size={18} />
+                  <select
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
+                    value={configData.ai_assistant_id}
+                    onChange={(e) => setConfigData({ ...configData, ai_assistant_id: e.target.value })}
+                  >
+                    <option value="">Sem assistente específico (Padrão)</option>
+                    {availableAIAssistants.map(ai => (
+                      <option key={ai.id} value={ai.id}>{ai.name} - {ai.role}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveConfiguration}
+                disabled={isSubmitting || !configData.template_id}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    Configurando...
+                  </>
+                ) : (
+                  <>
+                    <Check size={20} />
+                    Confirmar e Iniciar
+                  </>
+                )}
+              </button>
             </div>
           </div>
-        )}
+
+          <TemplateSelectionModal
+            isOpen={showTemplateSelect}
+            onClose={() => setShowTemplateSelect(false)}
+            folders={availableFolders}
+            templates={availableTemplates}
+            onSelect={(template) => {
+              setConfigData({ ...configData, template_id: String(template.id) });
+              setSelectedTemplateName(template.name);
+              setShowTemplateSelect(false);
+            }}
+          />
+        </div>
       </Layout>
     );
   }
@@ -873,7 +1002,7 @@ export default function InspectionDetail() {
             <h1 className="font-heading text-3xl font-bold text-slate-900">
               {inspection.title}
             </h1>
-            <p className="text-slate-600 mt-1">Detalhes da inspeção</p>
+            <p className="text-slate-600 mt-1">Detalhes da inspeÃ§Ã£o</p>
           </div>
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full ${getPriorityColor(inspection.priority)}`}>
@@ -954,7 +1083,7 @@ export default function InspectionDetail() {
           </div>
           {inspection.description && (
             <div className="mt-6 pt-6 border-t border-slate-200">
-              <p className="text-sm text-slate-500 mb-2">Descrição</p>
+              <p className="text-sm text-slate-500 mb-2">DescriÃ§Ã£o</p>
               <p className="text-slate-700">{inspection.description}</p>
             </div>
           )}
@@ -972,7 +1101,7 @@ export default function InspectionDetail() {
                 <Link
                   to={`/inspections/${id}/action-plan`}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-white text-purple-700 border border-purple-200 text-sm font-medium rounded-lg hover:bg-purple-50 transition-colors shadow-sm"
-                  title="Visualizar todas as ações geradas ou criadas manualmente"
+                  title="Visualizar todas as aÃ§Ãµes geradas ou criadas manualmente"
                 >
                   <Target className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Ver Plano de Ação</span>
@@ -982,7 +1111,7 @@ export default function InspectionDetail() {
                   onClick={generateAIAnalysis}
                   disabled={aiAnalyzing || isSubmitting}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                  title="Gera análise automática (5W2H) para todos os itens não conformes"
+                  title="Gera anÃ¡lise automÃ¡tica (5W2H) para todos os itens nÃ£o conformes"
                 >
                   {aiAnalyzing ? (
                     <LoadingSpinner size="sm" />
@@ -991,7 +1120,7 @@ export default function InspectionDetail() {
                   )}
                   {aiAnalyzing ? 'Analisando...' : (
                     <>
-                      <span className="hidden sm:inline">Gerar Análises (IA)</span>
+                      <span className="hidden sm:inline">Gerar AnÃ¡lises (IA)</span>
                       <span className="sm:hidden">IA</span>
                     </>
                   )}
@@ -1005,7 +1134,7 @@ export default function InspectionDetail() {
                 <button
                   onClick={() => setShowNewAction(true)}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors shadow-sm"
-                  title="Criar uma ação manual"
+                  title="Criar uma aÃ§Ã£o manual"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Nova Ação</span>
@@ -1032,7 +1161,7 @@ export default function InspectionDetail() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Título da Ação *
+                    TÃ­tulo da Ação *
                   </label>
                   <input
                     type="text"
@@ -1040,12 +1169,12 @@ export default function InspectionDetail() {
                     value={newAction.title}
                     onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Ex: Instalar equipamento de proteção"
+                    placeholder="Ex: Instalar equipamento de proteÃ§Ã£o"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    <span className="text-red-600">O que?</span> (Descrição)
+                    <span className="text-red-600">O que?</span> (DescriÃ§Ã£o)
                   </label>
                   <textarea
                     value={newAction.what_description}
@@ -1064,7 +1193,7 @@ export default function InspectionDetail() {
                     value={newAction.where_location}
                     onChange={(e) => setNewAction({ ...newAction, where_location: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Local específico..."
+                    placeholder="Local especÃ­fico..."
                   />
                 </div>
                 <div>
@@ -1076,19 +1205,19 @@ export default function InspectionDetail() {
                     onChange={(e) => setNewAction({ ...newAction, why_reason: e.target.value })}
                     rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Justificativa da ação..."
+                    placeholder="Justificativa da aÃ§Ã£o..."
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    <span className="text-indigo-600">Como?</span> (Método)
+                    <span className="text-indigo-600">Como?</span> (MÃ©todo)
                   </label>
                   <textarea
                     value={newAction.how_method}
                     onChange={(e) => setNewAction({ ...newAction, how_method: e.target.value })}
                     rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Como será executado..."
+                    placeholder="Como serÃ¡ executado..."
                   />
                 </div>
                 <div>
@@ -1100,7 +1229,7 @@ export default function InspectionDetail() {
                     value={newAction.who_responsible}
                     onChange={(e) => setNewAction({ ...newAction, who_responsible: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Responsável pela execução..."
+                    placeholder="Responsável pela execuÃ§Ã£o..."
                   />
                 </div>
                 <div>
@@ -1122,7 +1251,7 @@ export default function InspectionDetail() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
+                    <option value="media">MÃ©dia</option>
                     <option value="alta">Alta</option>
                   </select>
                 </div>
@@ -1177,14 +1306,14 @@ export default function InspectionDetail() {
                 />
                 <input
                   type="text"
-                  placeholder="Descrição do item"
+                  placeholder="DescriÃ§Ã£o do item"
                   value={newItem.item_description}
                   onChange={(e) => setNewItem({ ...newItem, item_description: e.target.value })}
                   className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <textarea
-                placeholder="Observações (opcional)"
+                placeholder="ObservaÃ§Ãµes (opcional)"
                 value={newItem.observations}
                 onChange={(e) => setNewItem({ ...newItem, observations: e.target.value })}
                 className="w-full mt-4 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1345,7 +1474,7 @@ export default function InspectionDetail() {
                 <AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500 font-medium">Nenhum item de checklist adicionado</p>
                 <p className="text-slate-400 text-sm mt-1">
-                  Adicione itens para começar a inspeção
+                  Adicione itens para comeÃ§ar a inspeÃ§Ã£o
                 </p>
               </div>
             ) : items.length === 0 ? (
@@ -1379,7 +1508,7 @@ export default function InspectionDetail() {
                         <button
                           onClick={() => updateItemCompliance(item.id!, false)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Marcar como não conforme"
+                          title="Marcar como nÃ£o conforme"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1402,7 +1531,7 @@ export default function InspectionDetail() {
                           <AlertCircle className="w-4 h-4" />
                         )}
                         <span className="text-sm font-medium">
-                          {item.is_compliant ? 'Conforme' : 'Não Conforme'}
+                          {item.is_compliant ? 'Conforme' : 'NÃ£o Conforme'}
                         </span>
                       </div>
                     )
@@ -1419,7 +1548,7 @@ export default function InspectionDetail() {
           <div className="flex items-center gap-2 mb-4">
             <ImageIcon className="w-5 h-5 text-slate-600" />
             <h2 className="font-heading text-xl font-semibold text-slate-900">
-              Mídias da Inspeção
+              MÃ­dias da Inspeção
             </h2>
           </div>
           <MediaUpload
@@ -1465,7 +1594,7 @@ export default function InspectionDetail() {
                           }`}>
                           {action.status === 'pending' ? 'Pendente' :
                             action.status === 'in_progress' ? 'Em Progresso' :
-                              action.status === 'completed' ? 'Concluído' : action.status}
+                              action.status === 'completed' ? 'ConcluÃ­do' : action.status}
                         </span>
                       </div>
                     </div>
@@ -1553,7 +1682,7 @@ export default function InspectionDetail() {
                   <p className="text-blue-800 text-sm">{actionPlan.summary}</p>
                   {actionPlan.estimated_completion && (
                     <p className="text-blue-700 text-sm mt-2">
-                      <strong>Conclusão Estimada:</strong> {actionPlan.estimated_completion}
+                      <strong>ConclusÃ£o Estimada:</strong> {actionPlan.estimated_completion}
                     </p>
                   )}
                 </div>
@@ -1646,7 +1775,7 @@ export default function InspectionDetail() {
                       <InspectionSignature
                         onSignatureSaved={(signature) => handleSignatureSaved('responsible', signature)}
                         existingSignature={signatures.responsible}
-                        signerName={inspection.responsible_name || "Responsável Técnico"}
+                        signerName={inspection.responsible_name || "Responsável TÃ©cnico"}
                         signerRole="Empresa"
                       />
                     </div>
@@ -1697,14 +1826,14 @@ export default function InspectionDetail() {
                       Reabrir Inspeção
                     </h2>
                     <p className="text-sm text-slate-500">
-                      Esta ação será registrada para auditoria
+                      Esta aÃ§Ã£o serÃ¡ registrada para auditoria
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-amber-800">
-                    <strong>Atenção:</strong> Ao reabrir a inspeção, as assinaturas atuais serão arquivadas e novas assinaturas serão necessárias para finalizar novamente.
+                    <strong>AtenÃ§Ã£o:</strong> Ao reabrir a inspeÃ§Ã£o, as assinaturas atuais serÃ£o arquivadas e novas assinaturas serÃ£o necessÃ¡rias para finalizar novamente.
                   </p>
                 </div>
 
@@ -1715,7 +1844,7 @@ export default function InspectionDetail() {
                   <textarea
                     value={reopenJustification}
                     onChange={(e) => setReopenJustification(e.target.value)}
-                    placeholder="Informe o motivo para reabrir esta inspeção..."
+                    placeholder="Informe o motivo para reabrir esta inspeÃ§Ã£o..."
                     rows={3}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
                   />
@@ -1749,6 +1878,45 @@ export default function InspectionDetail() {
                     )}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Modal */}
+        {showSuccessModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-emerald-600" />
+
+              <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-300 delay-100">
+                <CheckCircle2 size={40} className="text-green-600" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Inspeção Concluída!</h2>
+              <p className="text-slate-600 mb-8">
+                O relatório foi gerado e salvo com sucesso. O gestor será notificado automaticamente.
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    // Stay on summary
+                  }}
+                  className="w-full py-3 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText size={20} />
+                  Visualizar Relatório
+                </button>
+
+                <button
+                  onClick={() => navigate('/agenda')}
+                  className="w-full py-3 px-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                >
+                  <Calendar size={20} />
+                  Voltar para Agenda
+                </button>
               </div>
             </div>
           </div>
