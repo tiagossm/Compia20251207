@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 
 type Env = {
@@ -9,7 +9,7 @@ type Env = {
 const dashboardRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // GET estatísticas gerais do dashboard
-dashboardRoutes.get("/stats", demoAuthMiddleware, async (c) => {
+dashboardRoutes.get("/stats", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const organizationId = c.req.query("organization_id");
@@ -40,10 +40,11 @@ dashboardRoutes.get("/stats", demoAuthMiddleware, async (c) => {
         )
       `;
       params.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
-    } else if (userProfile?.organization_id) {
-      // Para usuários comuns (não-admin), filtre pela sua organização
-      whereClause = "WHERE organization_id = ?";
-      params.push(userProfile.organization_id);
+    } else {
+      // Para usuários comuns (não-admin), filtre pela sua organização OU atribuições
+      const userEmail = userProfile.email || user.email;
+      whereClause = "WHERE (organization_id = ? OR inspector_email = ?)";
+      params.push(userProfile.organization_id, userEmail);
     }
     // SYSTEM_ADMIN não tem filtro, vê tudo
 
@@ -72,7 +73,7 @@ dashboardRoutes.get("/stats", demoAuthMiddleware, async (c) => {
 });
 
 // GET sumário do plano de ação do dashboard
-dashboardRoutes.get("/action-plan-summary", demoAuthMiddleware, async (c) => {
+dashboardRoutes.get("/action-plan-summary", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const organizationId = c.req.query("organization_id");
@@ -98,9 +99,10 @@ dashboardRoutes.get("/action-plan-summary", demoAuthMiddleware, async (c) => {
         )
       `;
       params.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
-    } else if (userProfile?.organization_id) {
-      whereClause = "WHERE i.organization_id = ?";
-      params.push(userProfile.organization_id);
+    } else {
+      const userEmail = userProfile.email || user.email;
+      whereClause = "WHERE (i.organization_id = ? OR i.inspector_email = ?)";
+      params.push(userProfile.organization_id, userEmail);
     }
     // SYSTEM_ADMIN não tem filtro
 

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
 
 type Env = {
@@ -44,7 +44,7 @@ async function canAssignToOrganization(
 }
 
 // GET /api/user-assignments/:userId - Listar atribuições de um usuário
-userAssignmentRoutes.get("/:userId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/:userId", tenantAuthMiddleware, async (c) => {
     const userId = c.req.param("userId");
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -86,7 +86,7 @@ userAssignmentRoutes.get("/:userId", demoAuthMiddleware, async (c) => {
 });
 
 // GET /api/user-assignments/organization/:orgId - Listar usuários de uma organização
-userAssignmentRoutes.get("/organization/:orgId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/organization/:orgId", tenantAuthMiddleware, async (c) => {
     const orgId = parseInt(c.req.param("orgId"));
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -127,7 +127,7 @@ userAssignmentRoutes.get("/organization/:orgId", demoAuthMiddleware, async (c) =
 });
 
 // GET /api/user-assignments/available/:orgId - Listar usuários disponíveis para atribuição
-userAssignmentRoutes.get("/available/:orgId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.get("/available/:orgId", tenantAuthMiddleware, async (c) => {
     const orgId = parseInt(c.req.param("orgId"));
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -177,7 +177,7 @@ userAssignmentRoutes.get("/available/:orgId", demoAuthMiddleware, async (c) => {
 });
 
 // POST /api/user-assignments - Criar nova atribuição
-userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.post("/", tenantAuthMiddleware, async (c) => {
     const currentUser = c.get("user");
     const db = c.env.DB;
 
@@ -223,7 +223,7 @@ userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
         // Se is_primary, remover flag de outras atribuições
         if (is_primary) {
             await db.prepare(`
-        UPDATE user_organizations SET is_primary = 0 WHERE user_id = ?
+        UPDATE user_organizations SET is_primary = false WHERE user_id = ?
       `).bind(user_id).run();
 
             // Atualizar organization_id na tabela users (retrocompatibilidade)
@@ -237,14 +237,14 @@ userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
         await db.prepare(`
       INSERT INTO user_organizations (
         id, user_id, organization_id, role, permissions, is_primary, is_active, assigned_by, assigned_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, true, ?, NOW())
     `).bind(
             assignmentId,
             user_id,
             organization_id,
             role,
             JSON.stringify(permissions || {}),
-            is_primary ? 1 : 0,
+            is_primary ? true : false,
             currentUser.id
         ).run();
 
@@ -260,8 +260,93 @@ userAssignmentRoutes.post("/", demoAuthMiddleware, async (c) => {
     }
 });
 
+// POST /api/user-assignments/bulk - Atribuição em massa
+userAssignmentRoutes.post("/bulk", tenantAuthMiddleware, async (c) => {
+    const currentUser = c.get("user");
+    const db = c.env.DB;
+
+    if (!currentUser) {
+        return c.json({ error: "Não autorizado" }, 401);
+    }
+
+    try {
+        const body = await c.req.json();
+        const { user_id, organization_ids, role, permissions } = body;
+
+        if (!user_id || !organization_ids || !Array.isArray(organization_ids) || organization_ids.length === 0 || !role) {
+            return c.json({ error: "user_id, organization_ids (array) e role são obrigatórios" }, 400);
+        }
+
+        // Verificar se usuário target existe
+        const targetUser = await db.prepare("SELECT * FROM users WHERE id = ?").bind(user_id).first() as any;
+        if (!targetUser) {
+            return c.json({ error: "Usuário alvo não encontrado" }, 404);
+        }
+
+        // Verificar permissões do usuário atual
+        const userProfile = await db.prepare("SELECT * FROM users WHERE id = ?").bind(currentUser.id).first();
+
+        const results = {
+            success: [] as number[],
+            failed: [] as { id: number, reason: string }[]
+        };
+
+        for (const orgId of organization_ids) {
+            try {
+                // Check permissions per org
+                const canAssign = await canAssignToOrganization(db, userProfile, orgId);
+                if (!canAssign) {
+                    results.failed.push({ id: orgId, reason: "Sem permissão" });
+                    continue;
+                }
+
+                // Check existing assignment
+                const existing = await db.prepare(`
+                    SELECT id FROM user_organizations 
+                    WHERE user_id = ? AND organization_id = ?
+                `).bind(user_id, orgId).first();
+
+                if (existing) {
+                    results.failed.push({ id: orgId, reason: "Já atribuído" });
+                    continue;
+                }
+
+                // Insert assignment
+                const assignmentId = crypto.randomUUID();
+                await db.prepare(`
+                    INSERT INTO user_organizations (
+                        id, user_id, organization_id, role, permissions, is_primary, is_active, assigned_by, assigned_at
+                    ) VALUES (?, ?, ?, ?, ?, false, true, ?, NOW())
+                `).bind(
+                    assignmentId,
+                    user_id,
+                    orgId,
+                    role,
+                    JSON.stringify(permissions || {}),
+                    currentUser.id
+                ).run();
+
+                results.success.push(orgId);
+
+            } catch (err: any) {
+                console.error(`Erro ao atribuir org ${orgId}:`, err);
+                results.failed.push({ id: orgId, reason: err.message || "Erro interno" });
+            }
+        }
+
+        return c.json({
+            message: "Processamento concluído",
+            results
+        });
+
+    } catch (error) {
+        console.error("Erro na atribuição em massa:", error);
+        return c.json({ error: "Erro interno ao processar atribuições em massa" }, 500);
+    }
+});
+
 // PUT /api/user-assignments/:assignmentId - Atualizar atribuição
-userAssignmentRoutes.put("/:assignmentId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.put("/:assignmentId", tenantAuthMiddleware, async (c) => {
     const assignmentId = c.req.param("assignmentId");
     const currentUser = c.get("user");
     const db = c.env.DB;
@@ -329,7 +414,7 @@ userAssignmentRoutes.put("/:assignmentId", demoAuthMiddleware, async (c) => {
 });
 
 // DELETE /api/user-assignments/:assignmentId - Remover atribuição
-userAssignmentRoutes.delete("/:assignmentId", demoAuthMiddleware, async (c) => {
+userAssignmentRoutes.delete("/:assignmentId", tenantAuthMiddleware, async (c) => {
     const assignmentId = c.req.param("assignmentId");
     const currentUser = c.get("user");
     const db = c.env.DB;

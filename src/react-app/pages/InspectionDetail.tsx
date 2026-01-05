@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+﻿import { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import Layout from '@/react-app/components/Layout';
 import {
@@ -20,12 +20,10 @@ import {
   FileText,
   Image as ImageIcon,
   Target,
-  PenTool,
   FileCheck,
-  Eye,
-  Share2,
   Sparkles,
-  Trash2
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { InspectionType, InspectionItemType, InspectionMediaType } from '@/shared/types';
 import { FieldResponse } from '@/shared/checklist-types';
@@ -36,6 +34,7 @@ import InspectionSummary from '@/react-app/components/InspectionSummary';
 import InspectionShare from '@/react-app/components/InspectionShare';
 import PDFGenerator from '@/react-app/components/PDFGenerator';
 import LoadingSpinner from '@/react-app/components/LoadingSpinner';
+import FloatingActionBar from '@/react-app/components/FloatingActionBar';
 import { useToast } from '@/react-app/hooks/useToast';
 
 export default function InspectionDetail() {
@@ -55,6 +54,10 @@ export default function InspectionDetail() {
   const [showSummary, setShowSummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showPDFGenerator, setShowPDFGenerator] = useState(false);
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [reopenJustification, setReopenJustification] = useState('');
+  const [isReopening, setIsReopening] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [signatures, setSignatures] = useState<{ inspector?: string; responsible?: string }>({});
   const [responses, setResponses] = useState<Record<number, any>>({});
   const [newItem, setNewItem] = useState({
@@ -77,6 +80,8 @@ export default function InspectionDetail() {
     priority: 'media' as 'baixa' | 'media' | 'alta'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+
 
   useEffect(() => {
     // Only fetch if ID is valid (truthy and not the literal string "undefined")
@@ -233,12 +238,7 @@ export default function InspectionDetail() {
               }
 
               // Always set the field value, even if null (for proper form rendering)
-              acc[fieldData.field_id] = parsedValue;
-
-              // Load existing comments
-              if (fieldData.comment) {
-                (acc as Record<string, any>)[`comment_${fieldData.field_id}`] = fieldData.comment;
-              }
+              acc[item.id] = parsedValue;
 
             } catch (error) {
               console.error('[TEMPLATE-RESPONSE] Error parsing field response:', error, 'item:', item);
@@ -254,10 +254,17 @@ export default function InspectionDetail() {
     } finally {
       setLoading(false);
     }
+
   };
 
+
+
+
+
+
+
   const handleDeleteItem = async (itemId: number, isTemplateItem: boolean = false) => {
-    if (!confirm('Tem certeza que deseja excluir este item? ' + (isTemplateItem ? 'Isso removerá a pergunta do relatório.' : ''))) return;
+    if (!confirm('Tem certeza que deseja excluir este item? ' + (isTemplateItem ? 'Isso removerÃ¡ a pergunta do relatÃ³rio.' : ''))) return;
 
     try {
       const response = await fetchWithAuth(`/api/inspection-items/${itemId}`, {
@@ -307,7 +314,7 @@ export default function InspectionDetail() {
         success('Item adicionado', 'Item foi adicionado com sucesso ao checklist');
         fetchInspectionDetails();
       } else {
-        error('Erro ao adicionar item', 'Não foi possível adicionar o item. Tente novamente.');
+        error('Erro ao adicionar item', 'NÃ£o foi possÃ­vel adicionar o item. Tente novamente.');
       }
     } catch (err) {
       console.error('Erro ao adicionar item:', err);
@@ -334,6 +341,39 @@ export default function InspectionDetail() {
       fetchInspectionDetails();
     } catch (error) {
       console.error('Erro ao atualizar item:', error);
+    }
+  };
+
+  const updateItemAnalysis = async (itemId: number, analysis: string | null) => {
+    try {
+      if (analysis === null) {
+        // Delete analysis
+        await fetchWithAuth(`/api/inspection-items/${itemId}/pre-analysis`, {
+          method: 'DELETE'
+        });
+      } else {
+        // Update analysis
+        await fetchWithAuth(`/api/inspection-items/${itemId}/analysis`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis })
+        });
+      }
+
+      // Update local state without full refresh if possible, or just refresh
+      // Updating templateItems local state to reflect change
+      setTemplateItems(prev => prev.map(item =>
+        item.id === itemId || item.id === String(itemId)
+          ? { ...item, ai_pre_analysis: analysis }
+          : item
+      ));
+
+    } catch (err) {
+      console.error('Erro ao atualizar análise:', err);
+      // Use standard alert if 'error' toast wrapper is shadowed or unavailable in this scope, 
+      // but 'error' from useToast is available in component scope.
+      // Renamed argument in catch block to 'err' to avoid shadowing 'error' function from useToast
+      error('Erro', 'Não foi possível atualizar a análise.');
     }
   };
 
@@ -442,12 +482,30 @@ export default function InspectionDetail() {
         console.error('Error saving signature to database:', saveError);
       }
     } else {
-      error('Erro na assinatura', 'Não foi possível capturar a assinatura. Tente novamente.');
+      error('Erro na assinatura', 'NÃ£o foi possÃ­vel capturar a assinatura. Tente novamente.');
     }
   };
 
   const handleFinalizeInspection = async () => {
-    // Validate signatures with better checks
+    // 1. Validate Checklist Responses (Mandatory Items)
+    const missingItems = templateItems.filter(item => {
+      // Parse field data to check if mandatory (assuming all are mandatory for now, or check 'required' prop if available)
+      // For now, we enforce that all items must have a value
+      const val = responses[item.id];
+      const isValid = val !== null && val !== undefined && val !== '' && !(Array.isArray(val) && val.length === 0);
+      return !isValid;
+    });
+
+    if (missingItems.length > 0) {
+      warning(
+        'Itens Pendentes',
+        `Você precisa responder ${missingItems.length} itens antes de finalizar a inspeção.`
+      );
+      // Optionally scroll to first missing item or show a list
+      return;
+    }
+
+    // 2. Validate Signatures
     const hasInspectorSignature = signatures.inspector && signatures.inspector.trim() !== '';
     const hasResponsibleSignature = signatures.responsible && signatures.responsible.trim() !== '';
 
@@ -457,8 +515,8 @@ export default function InspectionDetail() {
       if (!hasResponsibleSignature) missingSignatures.push('responsável');
 
       warning(
-        'Assinaturas obrigatórias',
-        `É necessário ter a(s) assinatura(s) do(s) ${missingSignatures.join(' e ')} para finalizar a inspeção. Por favor, desenhe as assinaturas nos campos correspondentes.`
+        'Assinaturas obrigatÃ³rias',
+        `Ã‰ necessÃ¡rio ter a(s) assinatura(s) do(s) ${missingSignatures.join(' e ')} para finalizar a inspeÃ§Ã£o. Por favor, desenhe as assinaturas nos campos correspondentes.`
       );
       return;
     }
@@ -503,12 +561,17 @@ export default function InspectionDetail() {
       if (!finalizeResponse.ok) {
         const errorData = await finalizeResponse.text();
         console.error('Failed to finalize inspection:', finalizeResponse.status, errorData);
-        throw new Error('Erro ao finalizar inspeção');
+        throw new Error('Erro ao finalizar inspeÃ§Ã£o');
       }
 
       console.log('Inspection finalized successfully');
       success('Inspeção finalizada', 'Inspeção foi finalizada com sucesso! As assinaturas foram salvas.');
+
+      // Update local state immediately to reflect completed status
+      setInspection(prev => prev ? { ...prev, status: 'concluida', completed_date: new Date().toISOString() } : null);
+
       setShowSignatures(false);
+      setShowSuccessModal(true); // Show success modal instead of just summary
       setShowSummary(true);
 
       // Invalidate signatures cache and fetch updated data
@@ -519,17 +582,55 @@ export default function InspectionDetail() {
           setSignatures(updatedSignatures);
           console.log('Updated signatures after finalization:', updatedSignatures);
         }
-      } catch (cacheError) {
-        console.error('Failed to refresh signatures cache:', cacheError);
+        return undefined;
+      } catch (error) {
+        console.error('Erro:', error);
+        return undefined;
       }
+
 
       // Fetch updated inspection details to ensure all data is current
       await fetchInspectionDetails();
     } catch (err) {
-      console.error('Erro ao finalizar inspeção:', err);
-      error('Erro ao finalizar inspeção', err instanceof Error ? err.message : 'Não foi possível finalizar a inspeção. Tente novamente.');
+      console.error('Erro ao finalizar inspeÃ§Ã£o:', err);
+      error('Erro ao finalizar inspeÃ§Ã£o', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel finalizar a inspeÃ§Ã£o. Tente novamente.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleReopenInspection = async () => {
+    if (!reopenJustification.trim()) {
+      warning('Justificativa obrigatória', 'Por favor, informe o motivo para reabrir a inspeção.');
+      return;
+    }
+
+    setIsReopening(true);
+    try {
+      const response = await fetchWithAuth(`/api/inspections/${id}/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          justification: reopenJustification.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao reabrir inspeÃ§Ã£o');
+      }
+
+      success('Inspeção reaberta', 'A inspeção foi reaberta e está pronta para edição. Novas assinaturas serão necessárias para finalizar.');
+      setShowReopenModal(false);
+      setReopenJustification('');
+
+      // Reload inspection data
+      await fetchInspectionDetails();
+    } catch (err) {
+      console.error('Erro ao reabrir inspeÃ§Ã£o:', err);
+      error('Erro ao reabrir', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel reabrir a inspeÃ§Ã£o.');
+    } finally {
+      setIsReopening(false);
     }
   };
 
@@ -545,7 +646,7 @@ export default function InspectionDetail() {
 
   const handleCreateManualAction = async () => {
     if (!newAction.title.trim()) {
-      error('Título obrigatório', 'Por favor, informe o título da ação');
+      error('TÃ­tulo obrigatÃ³rio', 'Por favor, informe o tÃ­tulo da aÃ§Ã£o');
       return;
     }
 
@@ -574,17 +675,17 @@ export default function InspectionDetail() {
           priority: 'media' as 'baixa' | 'media' | 'alta'
         });
         setShowNewAction(false);
-        success('Ação criada', 'Ação manual foi criada com sucesso!');
+        success('AÃ§Ã£o criada', 'AÃ§Ã£o manual foi criada com sucesso!');
 
         // Refresh inspection details to show the new action
         await fetchInspectionDetails();
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao criar ação');
+        throw new Error(errorData.error || 'Erro ao criar aÃ§Ã£o');
       }
     } catch (err) {
-      console.error('Erro ao criar ação:', err);
-      error('Erro ao criar ação', err instanceof Error ? err.message : 'Não foi possível criar a ação. Tente novamente.');
+      console.error('Erro ao criar aÃ§Ã£o:', err);
+      error('Erro ao criar aÃ§Ã£o', err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel criar a aÃ§Ã£o. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -601,7 +702,7 @@ export default function InspectionDetail() {
         .map(item => `${item.category}: ${item.item_description}${item.observations ? ` (${item.observations})` : ''}`);
 
       if (nonCompliantItems.length === 0) {
-        warning('Análise IA não disponível', 'Nenhum item não conforme encontrado para análise');
+        warning('AnÃ¡lise IA nÃ£o disponÃ­vel', 'Nenhum item nÃ£o conforme encontrado para anÃ¡lise');
         return;
       }
 
@@ -613,7 +714,7 @@ export default function InspectionDetail() {
         body: JSON.stringify({
           inspection_id: parseInt(id!),
           media_urls: mediaUrls,
-          inspection_context: `Inspeção: ${inspection.title} - Local: ${inspection.location} - Empresa: ${inspection.company_name || 'N/A'}`,
+          inspection_context: `InspeÃ§Ã£o: ${inspection.title} - Local: ${inspection.location} - Empresa: ${inspection.company_name || 'N/A'}`,
           non_compliant_items: nonCompliantItems
         })
       });
@@ -621,16 +722,21 @@ export default function InspectionDetail() {
       if (response.ok) {
         const result = await response.json();
         setActionPlan(result.action_plan);
-        success('Plano de ação gerado', 'Análise da IA foi concluída e plano de ação foi gerado!');
+        success('Plano de aÃ§Ã£o gerado', 'AnÃ¡lise da IA foi concluÃ­da e plano de aÃ§Ã£o foi gerado!');
+        console.log('[AI-USAGE] ✅ Global Analysis generated. Backend confirmed usage increment:', result.ai_usage_incremented);
+
+        // Dispatch update event
+        window.dispatchEvent(new Event('ai_usage_updated'));
 
         // Refresh inspection details to ensure action plan is saved and loaded
         await fetchInspectionDetails();
       } else {
-        throw new Error('Erro na análise de IA');
+        console.error('[AI-USAGE] ❌ Global Analysis request failed:', response.status);
+        throw new Error('Erro na anÃ¡lise de IA');
       }
     } catch (err) {
-      console.error('Erro ao gerar análise:', err);
-      error('Erro na análise IA', 'Não foi possível gerar a análise. Verifique se há itens não conformes.');
+      console.error('Erro ao gerar anÃ¡lise:', err);
+      error('Erro na anÃ¡lise IA', 'NÃ£o foi possÃ­vel gerar a anÃ¡lise. Verifique se hÃ¡ itens nÃ£o conformes.');
     } finally {
       setAiAnalyzing(false);
     }
@@ -654,6 +760,7 @@ export default function InspectionDetail() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'pendente': return 'Pendente';
+      case 'scheduled': return 'Agendado';
       case 'em_andamento': return 'Em Andamento';
       case 'concluida': return 'Concluída';
       case 'cancelada': return 'Cancelada';
@@ -699,18 +806,22 @@ export default function InspectionDetail() {
   if (showSummary && inspection.status === 'concluida') {
     return (
       <Layout>
-        <InspectionSummary
-          inspection={inspection}
-          items={items}
-          templateItems={templateItems}
-          media={media}
-          responses={responses}
-          signatures={signatures}
-          actionItems={actionItems}
-        />
+        <div className="pb-24"> {/* Add padding for FloatingActionBar */}
+          <InspectionSummary
+            inspection={inspection}
+            items={items}
+            templateItems={templateItems}
+            media={media}
+            responses={responses}
+            signatures={signatures}
+            actionItems={actionItems}
+          />
+        </div>
       </Layout>
     );
   }
+
+
 
 
 
@@ -741,48 +852,6 @@ export default function InspectionDetail() {
                 {getStatusLabel(inspection.status)}
               </span>
             </div>
-            {inspection.status === 'concluida' ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowPDFGenerator(true)}
-                  className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Gerar PDF"
-                >
-                  <FileText className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowSummary(true)}
-                  className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Ver Resumo"
-                >
-                  <Eye className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="p-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Compartilhar"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="p-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Compartilhar"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowSignatures(true)}
-                  className="flex items-center px-4 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-all shadow-sm"
-                >
-                  <PenTool className="w-4 h-4 mr-2" />
-                  Finalizar Inspeção
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -930,7 +999,7 @@ export default function InspectionDetail() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Título da Ação *
+                    TÃ­tulo da Ação *
                   </label>
                   <input
                     type="text"
@@ -962,7 +1031,7 @@ export default function InspectionDetail() {
                     value={newAction.where_location}
                     onChange={(e) => setNewAction({ ...newAction, where_location: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Local específico..."
+                    placeholder="Local especÃ­fico..."
                   />
                 </div>
                 <div>
@@ -974,19 +1043,19 @@ export default function InspectionDetail() {
                     onChange={(e) => setNewAction({ ...newAction, why_reason: e.target.value })}
                     rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Justificativa da ação..."
+                    placeholder="Justificativa da aÃ§Ã£o..."
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    <span className="text-indigo-600">Como?</span> (Método)
+                    <span className="text-indigo-600">Como?</span> (MÃ©todo)
                   </label>
                   <textarea
                     value={newAction.how_method}
                     onChange={(e) => setNewAction({ ...newAction, how_method: e.target.value })}
                     rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Como será executado..."
+                    placeholder="Como serÃ¡ executado..."
                   />
                 </div>
                 <div>
@@ -1020,7 +1089,7 @@ export default function InspectionDetail() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
+                    <option value="media">MÃ©dia</option>
                     <option value="alta">Alta</option>
                   </select>
                 </div>
@@ -1121,10 +1190,13 @@ export default function InspectionDetail() {
               </h3>
               <div className="bg-slate-50 rounded-lg p-4 mb-4">
                 <ChecklistForm
+                  key={`${inspection.id}-${inspection.status}`}
                   fields={templateItems.map((item, index) => {
                     const fieldData = JSON.parse(item.field_responses);
                     return {
-                      id: fieldData.field_id,
+                      // Use item.id (inspection_item.id) as the field ID for proper backend mapping
+                      id: parseInt(item.id),
+                      field_id: fieldData.field_id, // Keep original field_id for reference
                       // Prioritize item_description from DB column over JSON which might be stale/corrupt
                       field_name: item.item_description || fieldData.field_name,
                       field_type: fieldData.field_type,
@@ -1134,54 +1206,72 @@ export default function InspectionDetail() {
                       template_id: item.template_id,
                       compliance_enabled: fieldData.compliance_enabled ?? true,
                       compliance_mode: fieldData.compliance_mode ?? 'auto',
-                      compliance_config: fieldData.compliance_config
+                      compliance_config: fieldData.compliance_config,
+                      // Pass initial values
+                      initial_value: fieldData.response_value,
+                      initial_comment: fieldData.comment,
+                      initial_compliance_status: fieldData.compliance_status,
+                      initial_ai_analysis: item.ai_pre_analysis
                     };
                   })}
+                  onUpdateAiAnalysis={updateItemAnalysis}
                   onSubmit={handleFormSubmit}
                   initialValues={responses}
                   readonly={false}
                   inspectionId={parseInt(id!)}
                   inspectionItems={templateItems}
                   showComplianceSelector={inspection?.compliance_enabled !== false}
-                  onAutoSave={async (formResponses: Record<string, any>, comments: Record<string, any>) => {
+                  onAutoSave={async (formResponses: Record<string, any>, comments: Record<string, any>, complianceStatuses?: Record<string, any>) => {
                     // Prevent multiple simultaneous auto-save calls
                     if (isSubmitting) return;
 
                     try {
-                      // Don't update local state during auto-save to prevent field disappearing
-                      // The ChecklistForm component will handle its own state
+                      console.log('[AUTO-SAVE] Saving...', {
+                        responsesCount: Object.keys(formResponses).length,
+                        templateItemsCount: templateItems.length,
+                        statusesCount: complianceStatuses ? Object.keys(complianceStatuses).length : 0
+                      });
 
-                      // Prepare responses for database - map responses to inspection items
+                      // formResponses now keyed by item.id (inspection_item.id)
+                      // Build update payload directly
                       const responseUpdates: Record<string, any> = {};
 
-                      Object.entries(formResponses).forEach(([fieldId, value]) => {
-                        const field = templateItems.find(item => {
+                      // Process responses and statuses
+                      Object.keys({ ...formResponses, ...comments, ...(complianceStatuses || {}) }).forEach((itemId) => {
+                        // Find the template item by its id
+                        const item = templateItems.find(ti => String(ti.id) === itemId || ti.id === parseInt(itemId));
+
+                        if (item) {
                           try {
                             const fieldData = JSON.parse(item.field_responses);
-                            return fieldData.field_id === parseInt(fieldId);
-                          } catch {
-                            return false;
-                          }
-                        });
+                            if (formResponses[itemId] !== undefined) {
+                              fieldData.response_value = formResponses[itemId];
+                            }
+                            if (comments[itemId] !== undefined) {
+                              fieldData.comment = comments[itemId];
+                            }
+                            if (complianceStatuses && complianceStatuses[itemId] !== undefined) {
+                              fieldData.compliance_status = complianceStatuses[itemId];
 
-                        if (field?.id) {
-                          const comment = comments[parseInt(fieldId)] || '';
+                              // Also update item.compliance_status at the top level if needed by backend,
+                              // but for now storing in JSON
+                            }
 
-                          // Update the field_responses with the new value and comment
-                          try {
-                            const fieldData = JSON.parse(field.field_responses);
-                            fieldData.response_value = value;
-                            fieldData.comment = comment;
-                            responseUpdates[field.id] = fieldData;
-                          } catch (error) {
-                            console.error('[AUTO-SAVE] Error updating field data:', error);
+                            responseUpdates[item.id] = fieldData;
+                          } catch (e) {
+                            console.error('[AUTO-SAVE] Error parsing field_responses:', e);
                           }
                         }
                       });
 
-                      if (Object.keys(responseUpdates).length === 0) return;
+                      console.log('[AUTO-SAVE] Updates to send:', Object.keys(responseUpdates).length);
 
-                      const response = await fetch(`/api/inspections/${id}/template-responses`, {
+                      if (Object.keys(responseUpdates).length === 0) {
+                        console.log('[AUTO-SAVE] No updates to send');
+                        return;
+                      }
+
+                      const response = await fetchWithAuth(`/api/inspections/${id}/template-responses`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1190,20 +1280,20 @@ export default function InspectionDetail() {
                       });
 
                       if (!response.ok) {
-                        console.error('[AUTO-SAVE] Failed to save responses:', response.status);
+                        console.error('[AUTO-SAVE] Failed:', response.status);
                         const errorData = await response.text();
-                        console.error('[AUTO-SAVE] Error details:', errorData);
+                        console.error('[AUTO-SAVE] Error:', errorData);
                       } else {
+                        console.log('[AUTO-SAVE] Success!');
                         // Update local responses state after successful save
-                        setResponses(prevResponses => ({
-                          ...prevResponses,
+                        setResponses(prev => ({
+                          ...prev,
                           ...formResponses
                         }));
                       }
 
                     } catch (error) {
-                      console.error('[AUTO-SAVE] Error during auto-save:', error);
-                      // Don't show error to user for auto-save failures
+                      console.error('[AUTO-SAVE] Error:', error);
                     }
                   }}
                 />
@@ -1222,7 +1312,7 @@ export default function InspectionDetail() {
                 <AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500 font-medium">Nenhum item de checklist adicionado</p>
                 <p className="text-slate-400 text-sm mt-1">
-                  Adicione itens para começar a inspeção
+                  Adicione itens para comeÃ§ar a inspeÃ§Ã£o
                 </p>
               </div>
             ) : items.length === 0 ? (
@@ -1256,7 +1346,7 @@ export default function InspectionDetail() {
                         <button
                           onClick={() => updateItemCompliance(item.id!, false)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Marcar como não conforme"
+                          title="Marcar como nÃ£o conforme"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1430,7 +1520,7 @@ export default function InspectionDetail() {
                   <p className="text-blue-800 text-sm">{actionPlan.summary}</p>
                   {actionPlan.estimated_completion && (
                     <p className="text-blue-700 text-sm mt-2">
-                      <strong>Conclusão Estimada:</strong> {actionPlan.estimated_completion}
+                      <strong>ConclusÃ£o Estimada:</strong> {actionPlan.estimated_completion}
                     </p>
                   )}
                 </div>
@@ -1560,6 +1650,116 @@ export default function InspectionDetail() {
           )
         }
 
+        {/* Reopen Inspection Modal */}
+        {showReopenModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <RotateCcw className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h2 className="font-heading text-lg font-semibold text-slate-900">
+                      Reabrir Inspeção
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Esta ação será registrada para auditoria
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    <strong>Atenção:</strong> Ao reabrir a inspeção, as assinaturas atuais serão arquivadas e novas assinaturas serão necessárias para finalizar novamente.
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Justificativa para reabertura *
+                  </label>
+                  <textarea
+                    value={reopenJustification}
+                    onChange={(e) => setReopenJustification(e.target.value)}
+                    placeholder="Informe o motivo para reabrir esta inspeção..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setShowReopenModal(false);
+                      setReopenJustification('');
+                    }}
+                    className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleReopenInspection}
+                    disabled={!reopenJustification.trim() || isReopening}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isReopening ? (
+                      <>
+                        <LoadingSpinner size="sm" />
+                        Reabrindo...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-4 h-4" />
+                        Reabrir Inspeção
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Modal */}
+        {showSuccessModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-emerald-600" />
+
+              <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-300 delay-100">
+                <CheckCircle2 size={40} className="text-green-600" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Inspeção Concluída!</h2>
+              <p className="text-slate-600 mb-8">
+                O relatório foi gerado e salvo com sucesso. O gestor será notificado automaticamente.
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    // Stay on summary
+                  }}
+                  className="w-full py-3 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText size={20} />
+                  Visualizar Relatório
+                </button>
+
+                <button
+                  onClick={() => navigate('/agenda')}
+                  className="w-full py-3 px-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                >
+                  <Calendar size={20} />
+                  Voltar para Agenda
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Share Modal */}
         <InspectionShare
           inspectionId={parseInt(id!)}
@@ -1583,6 +1783,21 @@ export default function InspectionDetail() {
           parentOrganizationLogoUrl={undefined}
           organizationName={inspection.company_name || 'Organização'}
           parentOrganizationName="Matriz"
+        />
+
+        {/* Floating Action Bar */}
+        <FloatingActionBar
+          status={inspection.status}
+          onSave={() => {
+            // Trigger manual save if needed
+            console.log('Manual save triggered');
+          }}
+          onFinalize={() => setShowSignatures(true)}
+          onReopen={() => setShowReopenModal(true)}
+          onGeneratePDF={() => setShowPDFGenerator(true)}
+          onShare={() => setShowShareModal(true)}
+          onViewSummary={() => setShowSummary(true)}
+          isSaving={isSubmitting}
         />
       </div >
     </Layout >

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import ChecklistPreview from '@/react-app/components/ChecklistPreview';
 import TemplateSuggestions from '@/react-app/components/TemplateSuggestions';

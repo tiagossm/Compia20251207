@@ -293,7 +293,7 @@ export default function OrganizationHierarchy({
 
       {showAssignmentModal && selectedOrgForAssignment && (
         <UserAssignmentModal
-          organizationId={selectedOrgForAssignment.id}
+          organizationIds={[selectedOrgForAssignment.id]}
           organizationName={selectedOrgForAssignment.name}
           isOpen={showAssignmentModal}
           onClose={() => {

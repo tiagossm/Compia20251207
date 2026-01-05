@@ -1,10 +1,14 @@
 import { Hono } from 'hono';
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 const autosuggest = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
+type Env = {
+  DB: any;
+};
+
 // Companies autosuggest - now returns recent companies when search is empty
-autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
+autosuggest.get("/companies", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query("search") || "";
 
@@ -29,6 +33,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
             COALESCE(o.nome_fantasia, o.name) as value, 
             COALESCE(o.nome_fantasia, o.name) as label, 
             o.contact_email as email,
+            o.address,
             o.id as org_id
           FROM organizations o
           WHERE (COALESCE(o.nome_fantasia, o.name) LIKE ? OR o.razao_social LIKE ?)
@@ -43,6 +48,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
             COALESCE(o.nome_fantasia, o.name) as value, 
             COALESCE(o.nome_fantasia, o.name) as label, 
             o.contact_email as email,
+            o.address,
             o.id as org_id
           FROM organizations o
           WHERE o.is_active = true
@@ -58,6 +64,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
             COALESCE(o.nome_fantasia, o.name) as value, 
             COALESCE(o.nome_fantasia, o.name) as label, 
             o.contact_email as email,
+            o.address,
             o.id as org_id
           FROM organizations o
           INNER JOIN user_organizations uo ON uo.organization_id = o.id
@@ -75,6 +82,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
             COALESCE(o.nome_fantasia, o.name) as value, 
             COALESCE(o.nome_fantasia, o.name) as label, 
             o.contact_email as email,
+            o.address,
             o.id as org_id
           FROM organizations o
           INNER JOIN user_organizations uo ON uo.organization_id = o.id
@@ -93,6 +101,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
             COALESCE(o.nome_fantasia, o.name) as value, 
             COALESCE(o.nome_fantasia, o.name) as label, 
             o.contact_email as email,
+            o.address,
             o.id as org_id
           FROM organizations o
           WHERE o.id = ?
@@ -103,8 +112,11 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
       }
     }
 
+    const results = (companies.results || []).slice(0, 10);
+    console.log('[AUTOSUGGEST] Companies results:', JSON.stringify(results));
+
     return c.json({
-      suggestions: (companies.results || []).slice(0, 10)
+      suggestions: results
     });
   } catch (error) {
     console.error('Error fetching company suggestions:', error);
@@ -114,7 +126,7 @@ autosuggest.get("/companies", demoAuthMiddleware, async (c) => {
 
 
 // Inspector suggestions
-autosuggest.get('/inspectors', demoAuthMiddleware, async (c) => {
+autosuggest.get('/inspectors', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query('search') || '';
 
@@ -200,7 +212,7 @@ autosuggest.get('/inspectors', demoAuthMiddleware, async (c) => {
 });
 
 // Responsible person suggestions
-autosuggest.get('/responsibles', demoAuthMiddleware, async (c) => {
+autosuggest.get('/responsibles', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query('search') || '';
 
@@ -286,7 +298,7 @@ autosuggest.get('/responsibles', demoAuthMiddleware, async (c) => {
 });
 
 // Locations suggestions
-autosuggest.get('/locations', demoAuthMiddleware, async (c) => {
+autosuggest.get('/locations', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query('search') || '';
 
@@ -320,7 +332,7 @@ autosuggest.get('/locations', demoAuthMiddleware, async (c) => {
 });
 
 // Title suggestions for inspections
-autosuggest.get('/inspection-titles', demoAuthMiddleware, async (c) => {
+autosuggest.get('/inspection-titles', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query('search') || '';
 
@@ -389,7 +401,7 @@ autosuggest.get('/inspection-titles', demoAuthMiddleware, async (c) => {
 });
 
 // Description suggestions for inspections
-autosuggest.get('/inspection-descriptions', demoAuthMiddleware, async (c) => {
+autosuggest.get('/inspection-descriptions', tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const search = c.req.query('search') || '';
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Brain, FileEdit, X } from 'lucide-react';
 
 interface FloatingNewButtonProps {

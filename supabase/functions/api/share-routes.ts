@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { demoAuthMiddleware as authMiddleware } from './demo-auth-middleware.ts';
+import { tenantAuthMiddleware as authMiddleware } from './tenant-auth-middleware.ts';
+import { logActivity } from './audit-logger.ts';
 
 const shareRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
@@ -75,6 +76,18 @@ shareRoutes.post('/:id/share', authMiddleware, async (c) => {
     const qrCodeSVG = generateQRCodeSVG(shareUrl);
     const qrCodeBase64 = `data:image/svg+xml;base64,${btoa(qrCodeSVG)}`;
 
+    // Log Activity (Async)
+    await logActivity(c.env, {
+      userId: user.id,
+      orgId: user.organization_id || null, // Best effort
+      actionType: 'SHARE',
+      actionDescription: `Inspection Shared: ${inspectionId}`,
+      targetType: 'INSPECTION',
+      targetId: inspectionId,
+      metadata: { share_token: shareToken, permission },
+      req: c.req
+    });
+
     return c.json({
       id: result.meta.last_row_id,
       share_token: shareToken,
@@ -140,6 +153,18 @@ shareRoutes.post('/create', zValidator('json', CreateShareSchema), authMiddlewar
 
     // Convert SVG to base64 data URL
     const qrCodeBase64 = `data:image/svg+xml;base64,${btoa(qrCodeSVG)}`;
+
+    // Log Activity (Async)
+    await logActivity(c.env, {
+      userId: user.id,
+      orgId: user.organization_id || null,
+      actionType: 'SHARE',
+      actionDescription: `Inspection Shared (New): ${inspection_id}`,
+      targetType: 'INSPECTION',
+      targetId: inspection_id,
+      metadata: { share_token: token, permission },
+      req: c.req
+    });
 
     return c.json({
       success: true,
@@ -449,6 +474,18 @@ shareRoutes.delete('/:token', authMiddleware, async (c) => {
 
     return c.json({ success: true });
 
+    // Log Deactivation (Async)
+    logActivity(c.env, {
+      userId: user.id,
+      orgId: user.organization_id,
+      actionType: 'UNSHARE',
+      actionDescription: `Inspection Share Deactivated`,
+      targetType: 'INSPECTION',
+      targetId: shareResult.inspection_id,
+      metadata: { token },
+      req: c.req
+    });
+
   } catch (error) {
     console.error('Error deactivating share:', error);
     return c.json({ error: 'Erro ao desativar compartilhamento' }, 500);
@@ -464,6 +501,21 @@ shareRoutes.delete('/inspection-shares/:id', authMiddleware, async (c) => {
   `).bind(shareId).run();
 
   return c.json({ message: 'Link de compartilhamento excluído com sucesso' });
+
+  // Log Deletion (Async) - Note: User might not be available in context for this admin route easily if middleware doesn't set it perfectly? Middleware writes to c.get('user').
+  // We can try to get user.
+  const user = c.get('user');
+  if (user) {
+    logActivity(c.env, {
+      userId: user.id,
+      orgId: user.organization_id,
+      actionType: 'UNSHARE', // Admin delete
+      actionDescription: `Inspection Share Deleted: ${shareId}`,
+      targetType: 'INSPECTION_SHARE',
+      targetId: shareId,
+      req: c.req
+    });
+  }
 });
 
 export default shareRoutes;

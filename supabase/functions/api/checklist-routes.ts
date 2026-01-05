@@ -1,6 +1,9 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { USER_ROLES } from "./user-types.ts";
+import { logActivity } from "./audit-logger.ts";
+import { aiRateLimitMiddleware, finalizeAIUsage } from "./ai-rate-limit.ts";
+import { generateAICompletion } from "./ai-service.ts";
 
 type Env = {
   DB: any;
@@ -11,7 +14,23 @@ type Env = {
 const checklistRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // List all checklist templates - ENHANCED ADMIN VISIBILITY
-checklistRoutes.get("/checklist-templates", demoAuthMiddleware, async (c) => {
+// List all checklist templates - ENHANCED ADMIN VISIBILITY
+checklistRoutes.get("/templates", tenantAuthMiddleware, async (c) => {
+  // Reuse the same logic - copy paste or function extraction would be better but for now replacing content
+  // Actually, I can just mount the same handler if I extracted it, but for this tool I need to careful.
+  // I will just change the existing route to be /templates OR keep both if I want backward compatibility.
+  // Given this is a new app phase, let's just CHANGE it to /templates as it is cleaner, 
+  // BUT wait, looking at the code I see "/checklist-templates". I should probably just change that line to "/templates" 
+  // since "checklist" is already in the prefix from index.ts.
+  // So URL will be /api/checklist/templates. Perfect.
+  return handleListTemplates(c);
+});
+
+checklistRoutes.get("/checklist-templates", tenantAuthMiddleware, async (c) => {
+  return handleListTemplates(c);
+});
+
+async function handleListTemplates(c: any) {
   const env = c.env;
   const user = c.get("user");
 
@@ -106,10 +125,10 @@ checklistRoutes.get("/checklist-templates", demoAuthMiddleware, async (c) => {
     console.error('[TEMPLATES] [PROD] Error fetching templates:', error);
     return c.json({ error: error instanceof Error ? error.message : "Failed to fetch templates" }, 500);
   }
-});
+}
 
 // Get specific checklist template with fields
-checklistRoutes.get("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -158,7 +177,7 @@ checklistRoutes.get("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
 });
 
 // Create checklist template
-checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -193,8 +212,22 @@ checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
       folder_id || null
     ).run();
 
+    const newTemplateId = result.meta.last_row_id;
+
+    // Log Activity
+    await logActivity(env, {
+      userId: user.id,
+      orgId: userProfile?.organization_id || null,
+      actionType: 'CREATE',
+      actionDescription: `Checklist Template Created: ${name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: newTemplateId,
+      metadata: { name, category, is_public },
+      req: c.req
+    });
+
     return c.json({
-      id: result.meta.last_row_id,
+      id: newTemplateId,
       message: "Template created successfully"
     });
   } catch (error) {
@@ -204,7 +237,7 @@ checklistRoutes.post("/checklist-templates", demoAuthMiddleware, async (c) => {
 });
 
 // Create checklist field
-checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -269,7 +302,7 @@ checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
 });
 
 // Update checklist template
-checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -311,6 +344,18 @@ checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
       WHERE id = ?
     `).bind(name, description, category, is_public, folder_id || null, templateId).run();
 
+    // Log update
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id, // Use template org
+      actionType: 'UPDATE',
+      actionDescription: `Checklist Template Updated: ${name || template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { name, category, is_public },
+      req: c.req
+    });
+
     return c.json({ message: "Template updated successfully" });
   } catch (error) {
     console.error('Error updating template:', error);
@@ -319,7 +364,7 @@ checklistRoutes.put("/checklist-templates/:id", demoAuthMiddleware, async (c) =>
 });
 
 // Delete checklist template
-checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/checklist-templates/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -358,6 +403,18 @@ checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c)
     // Delete template
     await env.DB.prepare("DELETE FROM checklist_templates WHERE id = ?").bind(templateId).run();
 
+    // Log deletion
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id,
+      actionType: 'DELETE',
+      actionDescription: `Checklist Template Deleted: ${template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { name: template.name, category: template.category },
+      req: c.req
+    });
+
     return c.json({ message: "Template deleted successfully" });
   } catch (error) {
     console.error('Error deleting template:', error);
@@ -366,7 +423,7 @@ checklistRoutes.delete("/checklist-templates/:id", demoAuthMiddleware, async (c)
 });
 
 // Duplicate checklist template
-checklistRoutes.post("/checklist-templates/:id/duplicate", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/:id/duplicate", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -439,7 +496,7 @@ checklistRoutes.post("/checklist-templates/:id/duplicate", demoAuthMiddleware, a
 });
 
 // Share checklist template
-checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/checklist-templates/:id/share", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -491,6 +548,18 @@ checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async 
       WHERE id = ?
     `).bind(visibility, isPublic, sharedWithJson, templateId).run();
 
+    // Log sharing
+    await logActivity(env, {
+      userId: user.id,
+      orgId: template.organization_id,
+      actionType: 'SHARE',
+      actionDescription: `Checklist Template Shared: ${template.name}`,
+      targetType: 'CHECKLIST_TEMPLATE',
+      targetId: templateId,
+      metadata: { visibility, is_public: isPublic },
+      req: c.req
+    });
+
     return c.json({ message: "Sharing settings updated successfully" });
   } catch (error) {
     console.error('Error updating share settings:', error);
@@ -499,9 +568,12 @@ checklistRoutes.put("/checklist-templates/:id/share", demoAuthMiddleware, async 
 });
 
 // Generate AI checklist - simple version with enhanced error handling
-checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddleware, async (c) => {
+// Includes rate limiting to track usage per organization
+checklistRoutes.post("/checklist-templates/generate-ai-simple", tenantAuthMiddleware, aiRateLimitMiddleware('analysis'), async (c) => {
   const env = c.env;
   const user = c.get("user");
+
+  console.log('[AI-CHECKLIST] Prompt Generation Route Hit - VERSION 2.2 (Stable - Fallback Active)');
 
   if (!user) {
     return c.json({ error: "User not found" }, 401);
@@ -525,16 +597,19 @@ checklistRoutes.post("/checklist-templates/generate-ai-simple", demoAuthMiddlewa
       }, 400);
     }
 
-    // Check OpenAI API key
+    // Check API keys
     const openAiKey = env?.OPENAI_API_KEY || Deno.env.get('OPENAI_API_KEY');
+    const geminiKey = env?.GEMINI_API_KEY || Deno.env.get('GEMINI_API_KEY');
 
-    if (!openAiKey) {
-      console.error('[AI-CHECKLIST] OpenAI API key não configurada no ambiente');
+    if (!openAiKey && !geminiKey) {
+      console.error('[AI-CHECKLIST] Nenhuma chave de API (OpenAI ou Gemini) configurada');
       return c.json({
         success: false,
-        error: "IA não configurada no sistema (Chave ausente). Contate o suporte."
+        error: "IA não configurada no sistema. Contate o suporte."
       }, 500);
     }
+
+    console.log('[AI-CHECKLIST] Iniciando chamada para AI Service (Gemini/OpenAI)...');
 
     // Limit questions to prevent timeouts
     const limitedQuestions = Math.min(num_questions || 10, 15);
@@ -595,101 +670,45 @@ IMPORTANTE:
 - Se o nível for avançado, você pode usar "text" para observações obrigatórias em pontos críticos
 - Use "file" para solicitar evidências fotográficas quando necessário`;
 
-    console.log('[AI-CHECKLIST] Fazendo chamada para OpenAI...');
+    // Fetch system settings for AI preferences
+    let preferredProvider: 'gemini' | 'openai' = 'gemini';
+    let fallbackEnabled = true;
 
-    // Call OpenAI API with timeout and retry logic
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-    let openaiResponse;
     try {
-      openaiResponse = await globalThis.fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          max_tokens: Math.min(1500, limitedQuestions * 100),
-          temperature: 0.3 // Lower temperature for more consistent results
-        }),
-        signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timeoutId);
+      const settings = await env.DB.prepare("SELECT ai_primary_provider, ai_fallback_enabled FROM system_settings WHERE id = 'global'").first() as any;
+      if (settings) {
+        if (settings.ai_primary_provider === 'openai') preferredProvider = 'openai';
+        // default is gemini if null or 'gemini'
+
+        if (settings.ai_fallback_enabled === false || settings.ai_fallback_enabled === 0) {
+          fallbackEnabled = false;
+        }
+      }
+    } catch (err) {
+      console.warn('[AI-CHECKLIST] Failed to fetch settings, using defaults:', err);
     }
 
-    console.log('[AI-CHECKLIST] Response status:', openaiResponse.status);
+    // Call AI Service with fallback
+    const aiResult = await generateAICompletion(geminiKey, openAiKey, {
+      systemPrompt: 'Você é um especialista em segurança do trabalho. Responda SEMPRE com JSON válido, sem markdown ou texto adicional. Seja conciso e prático.',
+      userPrompt: prompt,
+      maxTokens: Math.min(1500, limitedQuestions * 100),
+      temperature: 0.3,
+      timeoutMs: 60000
+    }, { preferredProvider, fallbackEnabled });
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('[AI-CHECKLIST] OpenAI API Error:', openaiResponse.status, errorText);
-
-      // Return specific error messages based on status
-      if (openaiResponse.status === 429) {
-        return c.json({
-          success: false,
-          error: "Muitas requisições. Aguarde alguns minutos e tente novamente."
-        }, 429);
-      } else if (openaiResponse.status === 401) {
-        return c.json({
-          success: false,
-          error: "Chave da API OpenAI inválida ou expirada. Verifique as configurações."
-        }, 401);
-      } else if (openaiResponse.status >= 500) {
-        return c.json({
-          success: false,
-          error: "Servidor da OpenAI temporariamente indisponível. Tente novamente em alguns minutos."
-        }, 502);
-      } else {
-        return c.json({
-          success: false,
-          error: `Erro da OpenAI: ${openaiResponse.status}`
-        }, 502);
-      }
-    }
-
-    // Parse response with better error handling
-    let openaiResult;
-    try {
-      const responseText = await openaiResponse.text();
-      console.log('[AI-CHECKLIST] Response preview:', responseText.substring(0, 200));
-
-      // Check if response is HTML (error page)
-      if (responseText.trim().startsWith('<')) {
-        throw new Error('OpenAI retornou página de erro HTML');
-      }
-
-      openaiResult = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('[AI-CHECKLIST] Failed to parse OpenAI response:', parseError);
+    if (!aiResult.success) {
+      console.error('[AI-CHECKLIST] Erro na geração IA:', aiResult.error);
       return c.json({
         success: false,
-        error: "Erro ao processar resposta da IA. Tente novamente."
+        error: aiResult.error || "Erro ao gerar checklist com IA."
       }, 500);
     }
 
-    const content = openaiResult.choices?.[0]?.message?.content;
-    console.log('[AI-CHECKLIST] AI content preview:', content?.substring(0, 200));
+    const content = aiResult.content;
 
-    if (!content) {
-      console.error('[AI-CHECKLIST] Empty content from OpenAI');
-      return c.json({
-        success: false,
-        error: "Resposta vazia da IA. Tente novamente."
-      }, 500);
-    }
+    // Log which provider was used
+    console.log(`[AI-CHECKLIST] Sucesso via ${aiResult.provider} (${aiResult.model}). Fallback usado: ${aiResult.fallbackUsed}`);
 
     // Parse AI response with robust error handling
     let aiData;
@@ -800,6 +819,33 @@ IMPORTANTE:
 
     console.log('[AI-CHECKLIST] Checklist gerado com sucesso');
 
+    // Increment AI usage count for the organization
+    let usageIncremented = false;
+    try {
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(user.id || (user as any).sub).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        // Increment usage count
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        usageIncremented = true;
+        console.log('[AI-CHECKLIST] Usage incremented for org:', userProfile.organization_id);
+
+        // Log the AI usage for auditing
+        await env.DB.prepare(`
+          INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+          VALUES (?, ?, 'analysis', ?, 'success', NOW())
+        `).bind(userProfile.organization_id, user.id || (user as any).sub, aiResult.model).run();
+      }
+    } catch (usageError) {
+      console.error('[AI-CHECKLIST] Failed to update usage:', usageError);
+      // Don't fail the request if usage tracking fails
+    }
+
     return c.json({
       success: true,
       template: cleanTemplate,
@@ -807,7 +853,8 @@ IMPORTANTE:
       meta: {
         generated_at: new Date().toISOString(),
         requested_questions: num_questions,
-        delivered_questions: cleanFields.length
+        delivered_questions: cleanFields.length,
+        usage_incremented: usageIncremented
       }
     });
 
@@ -837,7 +884,7 @@ IMPORTANTE:
 });
 
 // Save generated checklist
-checklistRoutes.post("/checklist-templates/save-generated", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/save-generated", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -998,7 +1045,7 @@ checklistRoutes.post("/checklist-templates/save-generated", demoAuthMiddleware, 
 });
 
 // Delete template fields (for template editing)
-checklistRoutes.delete("/checklist-templates/:id/fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/checklist-templates/:id/fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const templateId = parseInt(c.req.param("id"));
@@ -1040,7 +1087,7 @@ checklistRoutes.delete("/checklist-templates/:id/fields", demoAuthMiddleware, as
 });
 
 // Create checklist field
-checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-fields", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -1147,7 +1194,7 @@ checklistRoutes.post("/checklist-fields", demoAuthMiddleware, async (c) => {
 });
 
 // Create folder for templates
-checklistRoutes.post("/checklist-templates/create-folder", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/checklist-templates/create-folder", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
 
@@ -1193,7 +1240,7 @@ checklistRoutes.post("/checklist-templates/create-folder", demoAuthMiddleware, a
 });
 
 // Pre-analysis with AI multimodal support
-checklistRoutes.post("/inspection-items/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1359,7 +1406,7 @@ Forneça uma análise estruturada e técnica (máximo 600 caracteres) em texto c
 });
 
 // Generate field response with AI multimodal analysis
-checklistRoutes.post("/inspection-items/:itemId/generate-field-response", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1626,7 +1673,7 @@ Seja tecnicamente preciso, detalhado e específico sobre as evidências analisad
 });
 
 // Create AI-generated action item for inspection item
-checklistRoutes.post("/inspection-items/:itemId/create-action", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspection-items/:itemId/create-action", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1941,7 +1988,7 @@ Responda APENAS em formato JSON:
 });
 
 // Delete pre-analysis for an inspection item
-checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -1972,7 +2019,7 @@ checklistRoutes.delete("/inspection-items/:itemId/pre-analysis", demoAuthMiddlew
 });
 
 // Get actions for specific inspection item
-checklistRoutes.get("/inspection-items/:itemId/actions", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/inspection-items/:itemId/actions", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const itemId = parseInt(c.req.param("itemId"));
@@ -2016,7 +2063,7 @@ checklistRoutes.get("/inspection-items/:itemId/actions", demoAuthMiddleware, asy
 // ================================
 
 // Get action plan for inspection
-checklistRoutes.get("/inspections/:id/action-plan", demoAuthMiddleware, async (c) => {
+checklistRoutes.get("/inspections/:id/action-plan", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("id"));
@@ -2074,7 +2121,7 @@ checklistRoutes.get("/inspections/:id/action-plan", demoAuthMiddleware, async (c
 });
 
 // Create manual action item
-checklistRoutes.post("/inspections/:inspectionId/action-items", demoAuthMiddleware, async (c) => {
+checklistRoutes.post("/inspections/:inspectionId/action-items", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const inspectionId = parseInt(c.req.param("inspectionId"));
@@ -2171,7 +2218,7 @@ checklistRoutes.post("/inspections/:inspectionId/action-items", demoAuthMiddlewa
 });
 
 // Update action item
-checklistRoutes.put("/action-items/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.put("/action-items/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));
@@ -2275,7 +2322,7 @@ checklistRoutes.put("/action-items/:id", demoAuthMiddleware, async (c) => {
 });
 
 // Delete action item
-checklistRoutes.delete("/action-items/:id", demoAuthMiddleware, async (c) => {
+checklistRoutes.delete("/action-items/:id", tenantAuthMiddleware, async (c) => {
   const env = c.env;
   const user = c.get("user");
   const actionId = parseInt(c.req.param("id"));

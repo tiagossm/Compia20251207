@@ -1,5 +1,13 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
+
+type Env = {
+    DB: any;
+    MOCHA_USERS_SERVICE_API_URL: string;
+    MOCHA_USERS_SERVICE_API_KEY: string;
+    OPENAI_API_KEY: string;
+    GOOGLE_CLIENT_ID: string;
+};
 
 const inspectionItemRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
@@ -100,16 +108,72 @@ async function transcribeAudio(
         await logToDb('WHISPER_SUCCESS', { transcription_preview: transcription.substring(0, 100) });
         return transcription.trim() || '[Áudio sem fala detectada]';
     } catch (error) {
-        console.error('[WHISPER] Error:', error);
+        console.error('[WHISPER] Unexpected error:', error);
         await logToDb('WHISPER_EXCEPTION', { error: error instanceof Error ? error.message : String(error) });
-        return `[Erro ao processar áudio: ${error instanceof Error ? error.message : 'desconhecido'}]`;
+        return '[Erro interno na transcrição]';
+    }
+}
+
+// Robust helper for AI Usage Increment
+async function incrementAiUsage(
+    db: any,
+    userId: string,
+    featureType: string,
+    modelUsed: string
+): Promise<{ success: boolean; debug_org_id?: number | null; error?: string }> {
+    try {
+        // Safe userId extraction
+        if (!userId) {
+            console.error('[AI-USAGE-HELPER] No userId provided');
+            return { success: false, error: 'no_user_id' };
+        }
+
+        console.log(`[AI-USAGE-HELPER] Incrementing for user: ${userId}`);
+
+        // Get User's Organization
+        const userProfile = await db.prepare(
+            "SELECT organization_id FROM users WHERE id = ?"
+        ).bind(userId).first() as { organization_id?: number };
+
+        if (!userProfile?.organization_id) {
+            console.error('[AI-USAGE-HELPER] Organization ID not found for user:', userId);
+            // Fallback: Checks if user has 'profile' json with org_id? No, relies on standard schema
+            return { success: false, debug_org_id: null, error: 'org_not_found' };
+        }
+
+        const orgId = userProfile.organization_id;
+        console.log(`[AI-USAGE-HELPER] Updating usage for Org: ${orgId}`);
+
+        // Update Counter
+        const updateResult = await db.prepare(
+            "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(orgId).run();
+
+        // Check if update affected any rows? Hono/D1 run() often returns { success: true, meta: ... }
+        // We assume success if no throw.
+
+        // Insert Log
+        try {
+            await db.prepare(`
+                INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+                VALUES (?, ?, ?, ?, 'success', NOW())
+            `).bind(orgId, userId, featureType, modelUsed).run();
+        } catch (logErr) {
+            console.warn('[AI-USAGE-HELPER] Log insertion failed (non-critical):', logErr);
+        }
+
+        return { success: true, debug_org_id: orgId };
+
+    } catch (err: any) {
+        console.error('[AI-USAGE-HELPER] Critical failure:', err);
+        return { success: false, error: err.message };
     }
 }
 
 
 // Get actions for specific inspection item
 // Path: /api/inspection-items/:itemId/actions
-inspectionItemRoutes.get("/:itemId/actions", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.get("/:itemId/actions", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -147,22 +211,32 @@ inspectionItemRoutes.get("/:itemId/actions", demoAuthMiddleware, async (c) => {
 });
 
 // Pre-analysis with AI - POST
-inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+// Pre-analysis with AI - POST
+inspectionItemRoutes.post("/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
+
+    // Gemini API Key (Using provided key)
+    const GEMINI_API_KEY = c.req.header('x-gemini-key') || 'AIzaSyABqbEA7HCEUiTS8k6IV9TX9YhpkOdmEgs';
 
     if (!user) {
         return c.json({ error: "User not found" }, 401);
     }
 
-    if (!env.OPENAI_API_KEY) {
-        return c.json({ error: "IA não disponível - Configure OPENAI_API_KEY" }, 503);
+    if (!env.OPENAI_API_KEY && !GEMINI_API_KEY) {
+        return c.json({ error: "IA não disponível - Configure API Keys" }, 503);
     }
 
     try {
         const body = await c.req.json();
         const { field_name, response_value, media_data, user_prompt, inspection_id } = body;
+
+        // Increment AI Usage
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'pre_analysis', GEMINI_API_KEY ? 'gemini-1.5-flash' : 'unknown');
+        const usageIncremented = usageResult.success;
+        const debugUsage = usageResult;
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -189,27 +263,61 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c)
         let mediaContext = '';
         let hasMedia = false;
         let audioTranscriptions: string[] = [];
+        const geminiParts: any[] = [];
 
         if (media_data && media_data.length > 0) {
             hasMedia = true;
-            console.log(`[PRE-ANALYSIS] Received ${media_data.length} media items:`,
-                media_data.map((m: any) => ({
-                    type: m.media_type,
-                    name: m.file_name,
-                    has_url: !!m.file_url,
-                    url_length: m.file_url?.length || 0,
-                    url_preview: m.file_url?.substring(0, 30) + '...'
-                }))
-            );
+            console.log(`[PRE-ANALYSIS] Received ${media_data.length} media items`);
 
             const mediaTypes = media_data.reduce((acc: any, media: any) => {
                 acc[media.media_type] = (acc[media.media_type] || 0) + 1;
                 return acc;
             }, {});
 
-            // Transcribe audio files using Whisper
+            // Prepare images for Gemini
+            const imageMedia = media_data.filter((m: any) => m.media_type === 'image');
+            for (const img of imageMedia) {
+                let base64Data = img.file_data;
+
+                // Put base64 cleaning here
+                if (base64Data && base64Data.includes(',')) {
+                    base64Data = base64Data.split(',')[1];
+                }
+
+                // If no base64 but has URL, fetch it
+                if (!base64Data && img.file_url) {
+                    try {
+                        console.log(`[PRE-ANALYSIS] Fetching image from URL: ${img.file_url}`);
+                        const imgResponse = await globalThis.fetch(img.file_url);
+                        if (imgResponse.ok) {
+                            const arrayBuffer = await imgResponse.arrayBuffer();
+                            base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                            console.log(`[PRE-ANALYSIS] Fetched and converted image to base64 (${base64Data.length} chars)`);
+                        } else {
+                            console.error(`[PRE-ANALYSIS] Failed to fetch image: ${imgResponse.status}`);
+                        }
+                    } catch (err) {
+                        console.error(`[PRE-ANALYSIS] Error fetching image URL:`, err);
+                    }
+                }
+
+                if (base64Data) {
+                    geminiParts.push({
+                        inlineData: {
+                            mimeType: img.mime_type || 'image/jpeg',
+                            data: base64Data
+                        }
+                    });
+                }
+            }
+
+            // Transcribe audio files using Whisper (Keep existing logic if OpenAI key exists, otherwise skip or use Gemini audio?)
+            // Gemini handles audio too! Let's try to add audio parts to Gemini if we have base64.
             const audioMedia = media_data.filter((m: any) => m.media_type === 'audio');
-            if (audioMedia.length > 0) {
+
+            // For now, we prefer Whisper for transcription quality if available, as text prompt is often better controlled.
+            // But if OpenAI key is missing, we could rely on Gemini processing the audio directly.
+            if (audioMedia.length > 0 && env.OPENAI_API_KEY) {
                 console.log(`[PRE-ANALYSIS] Found ${audioMedia.length} audio file(s), starting transcription...`);
                 for (let i = 0; i < Math.min(audioMedia.length, 3); i++) { // Limit to 3 audios
                     const audio = audioMedia[i];
@@ -226,6 +334,10 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c)
                         audioTranscriptions.push(`Áudio ${i + 1}: "${transcription}"`);
                     }
                 }
+            } else if (audioMedia.length > 0) {
+                // Forward audio bytes to Gemini if no OpenAI key? 
+                // (Simpler to just note presence for now to avoid complexity with mime types/encoding)
+                mediaContext += ` (Áudios presentes mas não transcritos/analisados)`;
             }
 
             mediaContext = `EVIDÊNCIAS DISPONÍVEIS: ${mediaTypes.image || 0} foto(s), ${mediaTypes.audio || 0} áudio(s), ${mediaTypes.video || 0} vídeo(s).`;
@@ -237,57 +349,93 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", demoAuthMiddleware, async (c)
             mediaContext = `EVIDÊNCIAS DISPONÍVEIS: Nenhuma mídia anexada.`;
         }
 
-        const prompt = `Você é um especialista em segurança do trabalho.
+        const promptText = `Você é um Auditor de Segurança do Trabalho Sênior.
 
-CONTEXTO:
-- Local: ${item.location}
-- Empresa: ${item.company_name}
-- Inspeção: ${item.inspection_title}
-- Campo: ${field_name}
-- Categoria: ${item.category}
-- Resposta: ${response_value !== null && response_value !== undefined ? response_value : 'Não respondido'}
+CONTEXTO DA INSPEÇÃO:
+- Item: ${field_name} (Categoria: ${item.category})
+- Local/Empresa: ${item.location} / ${item.company_name}
+- Situação Relatada pelo Inspetor: ${response_value === false ? 'NÃO CONFORME' : response_value === true ? 'CONFORME' : response_value || 'Não informado'}
 ${mediaContext}
-${user_prompt ? `Foco: ${user_prompt}` : ''}
+${user_prompt ? `Pedido Específico do Usuário: ${user_prompt}` : ''}
 
-${audioTranscriptions.length > 0 ? 'IMPORTANTE: Analise CUIDADOSAMENTE as transcrições de áudio acima, pois contêm informações verbais do inspetor sobre a situação.\n\n' : ''}Forneça análise técnica breve (máximo 500 caracteres) sobre conformidade, riscos e recomendações. Use texto simples sem formatação.`;
+INSTRUÇÃO CRÍTICA SOBRE AS IMAGENS:
+1. Analise se as imagens anexadas TÊM RELAÇÃO com o item "${field_name}".
+2. Se as fotos forem irrelevantes (ex: selfies, chão, fotos escuras, ou nada a ver com o item), IGNORE-AS e avise: "As imagens fornecidas não permitem análise visual do item."
+3. NÃO ALUCINE: Não invente defeitos que não são CLARAMENTE visíveis nas fotos. Se não dá para ver, não fale que está ruim.
+4. Se a situação é "NÃO CONFORME" mas a foto não mostra nada, diga: "O inspetor marcou como não conforme, porém as evidências visuais não demonstram claramente a irregularidade."
 
+SAÍDA ESPERADA:
+Análise técnica breve (máximo 500 caracteres). Se houver riscos visíveis, cite-os. Se não houver, dê apenas recomendações gerais baseadas nas normas (NRs) aplicáveis ao item.`;
 
-        const openaiResponse = await globalThis.fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: 'Você é um especialista em segurança do trabalho. Forneça análises técnicas objetivas e concisas.' },
-                    { role: 'user', content: prompt }
-                ],
-                max_tokens: 500,
-                temperature: 0.4
-            })
-        });
+        let cleanAnalysis = '';
+        let usedProvider = 'none';
 
-        if (!openaiResponse.ok) {
-            const errorText = await openaiResponse.text();
-            console.error('OpenAI API Error:', openaiResponse.status, errorText);
-            throw new Error(`Erro na API da OpenAI: ${openaiResponse.status}`);
+        // 1. Try Gemini (Default)
+        if (GEMINI_API_KEY) {
+            try {
+                // Add text prompt to parts
+                geminiParts.push({ text: promptText });
+
+                const geminiResponse = await globalThis.fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: geminiParts }],
+                        generationConfig: {
+                            maxOutputTokens: 500,
+                            temperature: 0.4
+                        }
+                    })
+                });
+
+                if (geminiResponse.ok) {
+                    const result = await geminiResponse.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        cleanAnalysis = text;
+                        usedProvider = 'gemini';
+                    }
+                } else {
+                    console.error("Gemini API Error:", await geminiResponse.text());
+                }
+            } catch (e) {
+                console.error("Gemini Exception:", e);
+            }
         }
 
-        const responseText = await openaiResponse.text();
-        if (responseText.trim().startsWith('<')) {
-            throw new Error('API da OpenAI retornou resposta inválida');
+        // 2. Fallback to OpenAI if Gemini failed
+        if (!cleanAnalysis && env.OPENAI_API_KEY) {
+            usedProvider = 'openai';
+            const openaiResponse = await globalThis.fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: 'Você é um especialista em segurança do trabalho. Forneça análises técnicas objetivas e concisas.' },
+                        { role: 'user', content: promptText }
+                    ],
+                    max_tokens: 500,
+                    temperature: 0.4
+                })
+            });
+
+            if (openaiResponse.ok) {
+                const responseText = await openaiResponse.text();
+                const openaiResult = JSON.parse(responseText);
+                cleanAnalysis = openaiResult.choices?.[0]?.message?.content || '';
+            }
         }
 
-        const openaiResult = JSON.parse(responseText);
-        const analysis = openaiResult.choices?.[0]?.message?.content;
-
-        if (!analysis) {
-            throw new Error('Resposta inválida da IA');
+        if (!cleanAnalysis) {
+            throw new Error('Falha na análise IA (Providers indisponíveis ou erro)');
         }
 
-        const cleanAnalysis = analysis
+        // Clean up markdown
+        cleanAnalysis = cleanAnalysis
             .replace(/\*\*/g, '')
             .replace(/\*/g, '')
             .replace(/#{1,6}\s/g, '')
@@ -308,12 +456,9 @@ ${audioTranscriptions.length > 0 ? 'IMPORTANTE: Analise CUIDADOSAMENTE as transc
             media_analyzed: hasMedia ? media_data.length : 0,
             item_id: itemId,
             timestamp: now,
-            // DEBUG INFO - remove after fixing
-            _debug: {
-                audio_count: media_data?.filter((m: any) => m.media_type === 'audio').length || 0,
-                transcriptions: audioTranscriptions,
-                prompt_preview: prompt?.substring(0, 200) + '...'
-            }
+            provider: usedProvider,
+            ai_usage_incremented: usageIncremented,
+            debug_usage: debugUsage
         });
 
     } catch (error) {
@@ -326,7 +471,7 @@ ${audioTranscriptions.length > 0 ? 'IMPORTANTE: Analise CUIDADOSAMENTE as transc
 });
 
 // Delete pre-analysis
-inspectionItemRoutes.delete("/:itemId/pre-analysis", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.delete("/:itemId/pre-analysis", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -354,8 +499,41 @@ inspectionItemRoutes.delete("/:itemId/pre-analysis", demoAuthMiddleware, async (
     }
 });
 
+// Update pre-analysis (manual edit)
+inspectionItemRoutes.put("/:itemId/analysis", tenantAuthMiddleware, async (c) => {
+    const env = c.env;
+    const user = c.get("user");
+    const itemId = parseInt(c.req.param("itemId"));
+
+    if (!user) {
+        return c.json({ error: "User not found" }, 401);
+    }
+
+    try {
+        const body = await c.req.json();
+        const { analysis } = body;
+
+        const now = new Date().toISOString();
+        await env.DB.prepare(`
+      UPDATE inspection_items 
+      SET ai_pre_analysis = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(analysis, now, itemId).run();
+
+        return c.json({
+            success: true,
+            message: "Análise atualizada com sucesso",
+            analysis: analysis
+        });
+
+    } catch (error) {
+        console.error('Error updating analysis:', error);
+        return c.json({ error: "Erro ao atualizar análise" }, 500);
+    }
+});
+
 // Create action for inspection item
-inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/create-action", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -370,7 +548,13 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
 
     try {
         const body = await c.req.json();
-        const { field_name, field_type, response_value, pre_analysis, media_data, inspection_id } = body;
+        const { field_name, field_type, response_value, comment, compliance_status, pre_analysis, media_data, inspection_id } = body;
+
+        // Increment AI Usage
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'action_plan', 'gpt-4o');
+        const usageIncremented = usageResult.success;
+        const debugUsage = usageResult;
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -380,7 +564,7 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
       WHERE ii.id = ?
     `).bind(itemId).first() as any;
 
-        // Fallback: If not found and we have inspection_id + field_name, search by those
+        // Fallback 1: If not found and we have inspection_id + field_name, search by exact match
         if (!item && inspection_id && field_name) {
             item = await env.DB.prepare(`
                 SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
@@ -390,7 +574,41 @@ inspectionItemRoutes.post("/:itemId/create-action", demoAuthMiddleware, async (c
             `).bind(inspection_id, field_name).first() as any;
         }
 
+        // Fallback 2: Search with LIKE (partial match) for flexibility
+        if (!item && inspection_id && field_name) {
+            item = await env.DB.prepare(`
+                SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
+                FROM inspection_items ii
+                JOIN inspections i ON ii.inspection_id = i.id
+                WHERE ii.inspection_id = ? AND LOWER(ii.item_description) LIKE LOWER(?)
+                LIMIT 1
+            `).bind(inspection_id, `%${field_name}%`).first() as any;
+        }
+
+        // Fallback 3: Try to match by field order if itemId looks like a template field id
+        if (!item && inspection_id && itemId > 100) {
+            // The itemId might be a template field ID, try to find by position
+            const items = await env.DB.prepare(`
+                SELECT ii.*, i.location, i.company_name, i.title as inspection_title, i.id as inspection_id
+                FROM inspection_items ii
+                JOIN inspections i ON ii.inspection_id = i.id
+                WHERE ii.inspection_id = ?
+                ORDER BY ii.id
+            `).bind(inspection_id).all();
+
+            // Log for debugging
+            console.log(`[CREATE-ACTION] Searching for template field ${itemId} in inspection ${inspection_id}, found ${items.results?.length || 0} items`);
+
+            // If we have items, use the first one that matches field_name loosely
+            if (items.results && items.results.length > 0 && field_name) {
+                item = items.results.find((i: any) =>
+                    i.item_description?.toLowerCase().includes(field_name.toLowerCase().substring(0, 10))
+                ) || items.results[0];
+            }
+        }
+
         if (!item) {
+            console.error('[CREATE-ACTION] Item not found:', { itemId, inspection_id, field_name });
             return c.json({ error: "Item de inspeção não encontrado", details: { itemId, inspection_id, field_name } }, 404);
         }
 
@@ -418,7 +636,8 @@ CONTEXTO DA INSPEÇÃO:
 - Local/Setor: ${item.location}
 - Item Inspecionado: ${item.inspection_title} > ${field_name}
 - Resposta do Inspetor: ${response_value === false ? 'NÃO CONFORME' : response_value === true ? 'CONFORME' : response_value || 'Não informado'}
-- Status da Conformidade: ${complianceStatus}
+- Comentário/Observação do Inspetor: ${comment || 'Nenhuma observação'}
+- Status da Conformidade: ${compliance_status === 'non_compliant' ? 'NÃO CONFORME' : compliance_status === 'compliant' ? 'CONFORME' : complianceStatus}
 - Análise Prévia (Evidências): ${pre_analysis || 'Nenhuma observação prévia'}
 - Nível de Risco Identificado: ${riskLevel}
 
@@ -476,10 +695,11 @@ Responda APENAS em JSON no seguinte formato:
         }
 
         let actionItemId = null;
+        let deadline: Date | null = null;
 
         if (actionData.requires_action) {
             const now = new Date().toISOString();
-            const deadline = new Date();
+            deadline = new Date();
             deadline.setDate(deadline.getDate() + (actionData.priority === 'critica' ? 7 : actionData.priority === 'alta' ? 14 : 30));
 
             const insertResult = await env.DB.prepare(`
@@ -508,10 +728,34 @@ Responda APENAS em JSON no seguinte formato:
             actionItemId = insertResult?.id || null;
         }
 
+        // Always return suggestion data for inline display, even if not saved
+        const finalAction = {
+            id: actionItemId || null,
+            title: field_name,
+            what_description: actionData.what || '',
+            why_description: actionData.why || '',
+            why_reason: actionData.why || '',
+            where_description: actionData.where || item.location,
+            where_location: actionData.where || item.location,
+            when_deadline: deadline?.toISOString().split('T')[0] || null,
+            who_responsible: actionData.who || 'A definir',
+            how_description: actionData.how || '',
+            how_method: actionData.how || '',
+            how_much_cost: actionData.how_much || 'A orçar',
+            priority: actionData.priority || 'media',
+            status: actionItemId ? 'pending' : 'suggested',
+            is_ai_generated: true,
+            requires_action: actionData.requires_action,
+            justification: actionData.justification || ''
+        };
+
         return c.json({
             success: true,
-            action: actionData,
-            action_item: actionItemId ? { id: actionItemId } : null
+            action_item: actionData.requires_action ? finalAction : null,
+            analysis: actionText,
+            raw_response: actionText,
+            ai_usage_incremented: usageIncremented,
+            debug_usage: debugUsage
         });
 
     } catch (error) {
@@ -543,7 +787,7 @@ Responda APENAS em JSON no seguinte formato:
 });
 
 // Delete inspection item
-inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.delete("/:itemId", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -566,7 +810,7 @@ inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
         }
 
         // Verify if user has permission (same organization or sys admin)
-        // Assuming demoAuthMiddleware handles basic tenant check via secureOrgId context if applicable
+        // Assuming tenantAuthMiddleware handles basic tenant check via secureOrgId context if applicable
         // But double checking logic:
         // if (item.organization_id !== user.organization_id && user.role !== 'sys_admin') ...
 
@@ -580,7 +824,7 @@ inspectionItemRoutes.delete("/:itemId", demoAuthMiddleware, async (c) => {
 });
 
 // Generate field response with AI for inspection items
-inspectionItemRoutes.post("/:itemId/generate-field-response", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));
@@ -596,6 +840,11 @@ inspectionItemRoutes.post("/:itemId/generate-field-response", demoAuthMiddleware
     try {
         const body = await c.req.json();
         const { field_name, field_type, current_response, media_data, field_options } = body;
+
+        // Increment AI Usage
+        const userId = user.id || (user as any).sub;
+        const usageResult = await incrementAiUsage(env.DB, userId, 'field_response', 'gpt-4o-mini');
+        const usageIncremented = usageResult.success;
 
         // Get inspection item and context
         const item = await env.DB.prepare(`
@@ -861,7 +1110,8 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
             confidence: aiResult.confidence || 'media',
             media_analyzed: mediaAnalyzed,
             item_id: itemId,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            ai_usage_incremented: usageIncremented
         });
 
     } catch (error) {
@@ -874,7 +1124,7 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
 });
 
 // Generate comprehensive action plan (5W2H) for inspection item
-inspectionItemRoutes.post("/:itemId/generate-action-plan", demoAuthMiddleware, async (c) => {
+inspectionItemRoutes.post("/:itemId/generate-action-plan", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const itemId = parseInt(c.req.param("itemId"));

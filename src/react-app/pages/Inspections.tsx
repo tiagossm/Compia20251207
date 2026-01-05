@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router-dom';
 import { fetchWithAuth } from '@/react-app/utils/auth';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import CSVExportImport from '@/react-app/components/CSVExportImport';
 import {
   Plus,
@@ -17,39 +17,30 @@ import {
   AlertCircle,
   Edit,
   Trash2,
-  Copy
+  Copy,
+  DownloadCloud
 } from 'lucide-react';
+import { syncService } from '@/lib/sync-service';
 import { InspectionType } from '@/shared/types';
 
 export default function Inspections() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedOrganization } = useOrganization();
   const [inspections, setInspections] = useState<InspectionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-    searchParams.get('org') ? parseInt(searchParams.get('org')!) : null
-  );
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     fetchInspections();
-  }, [selectedOrgId]);
-
-  useEffect(() => {
-    // Update URL params when organization changes
-    if (selectedOrgId) {
-      setSearchParams({ org: selectedOrgId.toString() });
-    } else {
-      setSearchParams({});
-    }
-  }, [selectedOrgId, setSearchParams]);
+  }, [selectedOrganization]); // Re-fetch on global org change
 
   const fetchInspections = () => {
     let url = '/api/inspections';
-    if (selectedOrgId) {
-      url += `?organization_id=${selectedOrgId}`;
+    if (selectedOrganization) {
+      url += `?organization_id=${selectedOrganization.id}`;
     }
 
     console.log('[INSPECTIONS] [REACT] Buscando inspeções de:', url);
@@ -151,6 +142,26 @@ export default function Inspections() {
     }
   };
 
+  const handleDownloadOffline = async () => {
+    if (!selectedOrganization?.id) {
+      alert("Selecione uma organização primeiro.");
+      return;
+    }
+    const confirmDownload = window.confirm("Deseja baixar todas as inspeções e modelos desta organização para uso offline? Isso pode levar alguns instantes.");
+    if (!confirmDownload) return;
+
+    setIsDownloading(true);
+    try {
+      await syncService.syncDown(selectedOrganization.id);
+      alert("Download concluído com sucesso! \nVocê já pode sair para campo com o app offline. \n(Certifique-se de que o ícone 'Instalar' do app já apareceu)");
+    } catch (e: any) {
+      console.error(e);
+      alert("Erro no download: " + (e.message || "Tente novamente online."));
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleImportInspections = async (data: any[]) => {
     setCsvLoading(true);
     try {
@@ -166,7 +177,7 @@ export default function Inspections() {
           scheduled_date: row.data_agendada || row.scheduled_date,
           address: row.endereco || row.address,
           cep: row.cep,
-          organization_id: selectedOrgId
+          organization_id: selectedOrganization?.id
         };
 
         const response = await fetchWithAuth('/api/inspections', {
@@ -266,15 +277,29 @@ export default function Inspections() {
             <p className="text-slate-600 mt-1 text-sm sm:text-base">
               Gerencie suas inspeções de segurança do trabalho
             </p>
+
           </div>
-          <Link
-            to="/inspections/new"
-            className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm sm:text-base"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Nova Inspeção</span>
-            <span className="sm:hidden">Nova</span>
-          </Link>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDownloadOffline}
+              disabled={isDownloading}
+              className="flex items-center justify-center px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors duration-200 text-sm sm:text-base disabled:opacity-50"
+              title="Baixar para Offline"
+            >
+              <DownloadCloud className={`w-4 h-4 mr-2 ${isDownloading ? 'animate-bounce' : ''}`} />
+              <span className="hidden sm:inline">{isDownloading ? 'Baixando...' : 'Baixar Offline'}</span>
+              <span className="sm:hidden"><DownloadCloud className="w-4 h-4" /></span>
+            </button>
+            <Link
+
+              to="/inspections/new"
+              className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm sm:text-base"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Nova Inspeção</span>
+              <span className="sm:hidden">Nova</span>
+            </Link>
+          </div>
         </div>
 
         {/* Filters - Responsive */}
@@ -292,11 +317,7 @@ export default function Inspections() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <OrganizationSelector
-                selectedOrgId={selectedOrgId}
-                onOrganizationChange={setSelectedOrgId}
-                showAllOption={true}
-              />
+              {/* Organization Selector Removed - Global in Header */}
 
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-slate-400 hidden sm:block" />
@@ -381,7 +402,15 @@ export default function Inspections() {
                         <span className="truncate max-w-[80px] sm:max-w-none">{inspection.location}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
+                        {(inspection as any).inspector_avatar ? (
+                          <img
+                            src={(inspection as any).inspector_avatar}
+                            alt={inspection.inspector_name}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-4 h-4" />
+                        )}
                         <span className="truncate max-w-[80px] sm:max-w-none">{inspection.inspector_name}</span>
                       </div>
                       {inspection.scheduled_date && (

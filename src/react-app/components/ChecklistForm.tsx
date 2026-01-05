@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChecklistField, FieldResponse } from '@/shared/checklist-types';
 import { calculateAutoCompliance } from '@/shared/compliance-utils';
 import { useMediaHandling } from '@/react-app/hooks/useMediaHandling';
@@ -7,8 +7,7 @@ import InspectionList from './InspectionList';
 import InspectionItem from './InspectionItem';
 import CameraModal from './CameraModal';
 import {
-  Star, Calendar, Clock,
-  Upload, CheckCircle
+  Star, Upload, CheckCircle, ThumbsUp, ThumbsDown, Save, Loader2
 } from 'lucide-react';
 
 interface ChecklistFormProps {
@@ -18,19 +17,32 @@ interface ChecklistFormProps {
   readonly?: boolean;
   inspectionId?: number;
   inspectionItems?: any[];
-  onAutoSave?: (responses: Record<number, any>, comments: Record<number, string>, complianceStatuses?: Record<number, any>) => void;
+  onAutoSave?: (responses: Record<string, any>, comments: Record<string, any>, complianceStatuses?: Record<string, any>) => Promise<void>;
   onSaveSuccess?: () => void;
   showComplianceSelector?: boolean;
+  onUpdateAiAnalysis?: (itemId: number, analysis: string | null) => Promise<void>;
 }
 
 export default function ChecklistForm({
   fields,
   onSubmit,
   initialValues = {},
-  onAutoSave,
   inspectionId,
-  showComplianceSelector = true
+  showComplianceSelector = true,
+  onAutoSave,
+  onUpdateAiAnalysis
 }: ChecklistFormProps) {
+
+  // Debug log - Mount only
+  useEffect(() => {
+    console.log('[CHECKLIST] ChecklistForm MOUNTED', {
+      fieldsCount: fields.length,
+      hasOnAutoSave: !!onAutoSave
+    });
+
+    // Check render count
+    return () => console.log('[CHECKLIST] ChecklistForm UNMOUNTED');
+  }, []);
 
   // State
   const [responses, setResponses] = useState<Record<number, any>>(initialValues);
@@ -40,14 +52,119 @@ export default function ChecklistForm({
   const [generatingResponse, setGeneratingResponse] = useState<Record<number, boolean>>({});
   const [itemsAnalysis, setItemsAnalysis] = useState<Record<number, string>>({});
   const [creatingAction, setCreatingAction] = useState<Record<number, boolean>>({});
+  const [itemsActionPlan, setItemsActionPlan] = useState<Record<number, any>>({});
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+
+  // Initialize state from fields (responses, comments, compliance status, and AI analysis)
+  // Track previous inspection ID to prevent state reset on auto-save updates
+  const prevInspectionIdRef = useRef<number | undefined>(undefined);
+
+  // Initialize state from fields (responses, comments, compliance status, and AI analysis)
+  useEffect(() => {
+    // Only re-initialize if inspectionId changes (navigation) or if it's the first mount.
+    // We ignore updates to 'initialValues' alone because they often come from our own auto-save,
+    // and resetting state would overwrite user input that happened during the save (race condition).
+    const currentId = inspectionId || 0;
+    if (prevInspectionIdRef.current !== undefined && prevInspectionIdRef.current === currentId) {
+      return;
+    }
+    prevInspectionIdRef.current = currentId;
+
+    const initResponses: Record<number, any> = {};
+    const initComments: Record<number, string> = {};
+    const initStatuses: Record<number, string> = {};
+    const initAnalysis: Record<number, string> = {};
+
+    fields.forEach(field => {
+      if (!field.id) return;
+
+      // Initialize response
+      if (initialValues[field.id] !== undefined) {
+        initResponses[field.id] = initialValues[field.id];
+      } else if (field.initial_value !== undefined) {
+        initResponses[field.id] = field.initial_value;
+      }
+
+      // Initialize comments
+      if (field.initial_comment) {
+        initComments[field.id] = field.initial_comment;
+      }
+
+      // Initialize compliance status
+      if (field.initial_compliance_status) {
+        initStatuses[field.id] = field.initial_compliance_status;
+      }
+
+      // Initialize AI Analysis
+      if (field.initial_ai_analysis) {
+        initAnalysis[field.id] = field.initial_ai_analysis;
+      }
+    });
+
+    setResponses(initResponses);
+    setItemsComments(initComments);
+    setComplianceStatuses(initStatuses);
+    setItemsAnalysis(initAnalysis);
+  }, [fields, initialValues, inspectionId]);
+
+  // Auto-save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Media Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeMediaFieldId = useRef<number | null>(null);
   const activeMediaType = useRef<string>('image');
 
+  // Debounced auto-save function
+  const triggerAutoSave = useCallback((newResponses: Record<number, any>, newComments: Record<number, string>, newStatuses: Record<number, any>) => {
+    console.log('[CHECKLIST] triggerAutoSave called', {
+      hasOnAutoSave: !!onAutoSave,
+      autoSaveEnabled,
+      responsesCount: Object.keys(newResponses).length
+    });
+
+    if (!onAutoSave || !autoSaveEnabled) {
+      console.log('[CHECKLIST] Auto-save skipped:', { hasOnAutoSave: !!onAutoSave, autoSaveEnabled });
+      return;
+    }
+
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce: wait 500ms before saving
+    saveTimeoutRef.current = setTimeout(async () => {
+      console.log('[CHECKLIST] Executing auto-save...');
+      setSaveStatus('saving');
+      try {
+        await onAutoSave(newResponses, newComments, newStatuses);
+        console.log('[CHECKLIST] Auto-save success!');
+        setSaveStatus('saved');
+        setLastSaveTime(new Date());
+        // Reset to idle after 3 seconds
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } catch (error) {
+        console.error('[CHECKLIST] Auto-save failed:', error);
+        setSaveStatus('idle');
+      }
+    }, 500);
+  }, [onAutoSave, autoSaveEnabled]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const updateResponse = (fieldId: number, value: any) => {
+    console.log('[CHECKLIST] updateResponse called', { fieldId, value });
     const field = fields.find(f => f.id === fieldId);
 
     setResponses(prev => {
@@ -59,14 +176,14 @@ export default function ChecklistForm({
         if (autoStatus) {
           setComplianceStatuses(prevStatus => {
             const nextStatus = { ...prevStatus, [fieldId]: autoStatus };
-            if (onAutoSave) onAutoSave(next, itemsComments, nextStatus);
+            triggerAutoSave(next, itemsComments, nextStatus);
             return nextStatus;
           });
           return next;
         }
       }
 
-      if (onAutoSave) onAutoSave(next, itemsComments, complianceStatuses);
+      triggerAutoSave(next, itemsComments, complianceStatuses);
       return next;
     });
   };
@@ -74,7 +191,7 @@ export default function ChecklistForm({
   const updateComment = (fieldId: number, comment: string) => {
     setItemsComments(prev => {
       const next = { ...prev, [fieldId]: comment };
-      if (onAutoSave) onAutoSave(responses, next, complianceStatuses);
+      triggerAutoSave(responses, next, complianceStatuses);
       return next;
     });
   };
@@ -82,13 +199,13 @@ export default function ChecklistForm({
   const updateComplianceStatus = (fieldId: number, status: string) => {
     setComplianceStatuses(prev => {
       const next = { ...prev, [fieldId]: status };
-      if (onAutoSave) onAutoSave(responses, itemsComments, next);
+      triggerAutoSave(responses, itemsComments, next);
       return next;
     });
   };
 
   // --- Media Logic ---
-  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime } = useMediaHandling({
+  const { uploadFile, startAudioRecording, stopRecording, recording, recordingTime, uploading } = useMediaHandling({
     inspectionId: inspectionId || 0,
     onMediaUploaded: (media) => {
       const fieldId = activeMediaFieldId.current;
@@ -118,7 +235,12 @@ export default function ChecklistForm({
     } else if (type === 'audio') {
       if (source === 'camera') {
         if (recording === 'audio') {
-          stopRecording();
+          // Stop recording and upload the blob
+          const blob = await stopRecording();
+          if (blob && fieldId) {
+            const audioFile = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+            await uploadFile(audioFile, fieldId, 'audio');
+          }
         } else {
           activeMediaFieldId.current = fieldId;
           await startAudioRecording();
@@ -159,7 +281,7 @@ export default function ChecklistForm({
 
   const handleMediaDelete = async (fieldId: number, mediaId: number) => {
     try {
-      const response = await fetchWithAuth(`/api/media/${mediaId}`, {
+      const response = await fetchWithAuth(`/api/media/${inspectionId}/media/${mediaId}`, {
         method: 'DELETE'
       });
 
@@ -208,6 +330,11 @@ export default function ChecklistForm({
       if (response.ok) {
         const data = await response.json();
         setItemsAnalysis(prev => ({ ...prev, [fieldId]: data.pre_analysis || data.analysis || 'Análise concluída.' }));
+        if (onUpdateAiAnalysis) {
+          onUpdateAiAnalysis(fieldId, data.pre_analysis || data.analysis || 'Análise concluída.');
+        }
+        console.log('[AI-USAGE] ✅ Analysis generated. Backend confirmed usage increment:', data.ai_usage_incremented);
+        window.dispatchEvent(new Event('ai_usage_updated'));
       } else {
         console.error("AI Analysis failed", response.statusText);
         alert("Erro ao gerar análise IA. Tente novamente.");
@@ -236,12 +363,17 @@ export default function ChecklistForm({
         file_name: m.file_name
       }));
 
+      const field = fields.find(f => f.id === fieldId);
+
       const response = await fetchWithAuth(`/api/inspection-items/${fieldId}/create-action`, {
         method: 'POST',
         body: JSON.stringify({
           inspection_id: inspectionId,
-          field_name: fields.find(f => f.id === fieldId)?.field_name || '',
+          field_name: field?.field_name || '',
+          field_type: field?.field_type || 'text',
           response_value: responses[fieldId] || '',
+          comment: itemsComments[fieldId] || '',
+          compliance_status: complianceStatuses[fieldId] || 'unanswered',
           pre_analysis: itemsAnalysis[fieldId] || null,
           media_data: mediaData
         })
@@ -249,7 +381,12 @@ export default function ChecklistForm({
 
       if (response.ok) {
         const data = await response.json();
-        alert(`✅ Plano de Ação 5W2H criado com sucesso! ID: ${data.action_item?.id || 'N/A'}`);
+        // Store action plan for inline display
+        if (data.action_item) {
+          setItemsActionPlan(prev => ({ ...prev, [fieldId]: data.action_item }));
+        }
+        console.log('[AI-USAGE] ✅ 5W2H Action Plan generated. Backend confirmed usage increment:', data.ai_usage_incremented);
+        window.dispatchEvent(new Event('ai_usage_updated'));
       } else {
         const err = await response.json().catch(() => ({}));
         console.error("AI Action Plan failed", err);
@@ -356,13 +493,13 @@ export default function ChecklistForm({
           }
         }
         return (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {options.map(opt => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => update(opt)}
-                className={`px-4 py-2 rounded-full text-xs font-medium border transition-all ${value === opt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${value === opt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
               >
                 {opt}
               </button>
@@ -416,28 +553,22 @@ export default function ChecklistForm({
 
       case 'date':
         return (
-          <div className="relative">
-            <Calendar className="absolute left-0 top-3 text-slate-400 w-5 h-5" />
-            <input
-              type="date"
-              value={value || ''}
-              onChange={e => update(e.target.value)}
-              className="w-full border-b border-slate-200 py-3 pl-8 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent"
-            />
-          </div>
+          <input
+            type="date"
+            value={value || ''}
+            onChange={e => update(e.target.value)}
+            className="border-b border-slate-200 py-2 px-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[160px] cursor-pointer"
+          />
         );
 
       case 'time':
         return (
-          <div className="relative">
-            <Clock className="absolute left-0 top-3 text-slate-400 w-5 h-5" />
-            <input
-              type="time"
-              value={value || ''}
-              onChange={e => update(e.target.value)}
-              className="w-full border-b border-slate-200 py-3 pl-8 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent"
-            />
-          </div>
+          <input
+            type="time"
+            value={value || ''}
+            onChange={e => update(e.target.value)}
+            className="border-b border-slate-200 py-2 px-2 text-slate-800 focus:border-blue-600 focus:outline-none bg-transparent max-w-[120px] cursor-pointer"
+          />
         );
 
       case 'rating':
@@ -483,16 +614,18 @@ export default function ChecklistForm({
             <button
               type="button"
               onClick={() => update(true)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${value === true ? 'bg-green-600 text-white border-green-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-green-300 hover:bg-green-50'}`}
             >
-              Conforme
+              <ThumbsUp size={14} />
+              <span>Conforme</span>
             </button>
             <button
               type="button"
               onClick={() => update(false)}
-              className={`flex-1 py-3 rounded-lg border text-sm font-semibold transition-all ${value === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm transform scale-[1.02]' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${value === false ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-red-300 hover:bg-red-50'}`}
             >
-              Não Conforme
+              <ThumbsDown size={14} />
+              <span>Não Conforme</span>
             </button>
           </div>
         );
@@ -513,6 +646,51 @@ export default function ChecklistForm({
 
   return (
     <>
+      {/* Auto-save toggle bar */}
+      <div className="flex items-center justify-between mb-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoSaveEnabled}
+            onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm text-slate-600">Auto-salvar</span>
+        </label>
+
+        {/* Save status indicator - always show last save time */}
+        <div className="flex items-center gap-1.5 text-xs">
+          {saveStatus === 'saving' && (
+            <>
+              <Loader2 size={14} className="animate-spin text-blue-500" />
+              <span className="text-blue-500">Salvando...</span>
+            </>
+          )}
+          {saveStatus === 'saved' && lastSaveTime && (
+            <>
+              <Save size={14} className="text-green-500" />
+              <span className="text-green-600">
+                Salvo às {lastSaveTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </>
+          )}
+          {saveStatus === 'idle' && lastSaveTime && autoSaveEnabled && (
+            <>
+              <Save size={14} className="text-slate-400" />
+              <span className="text-slate-500">
+                Última alteração: {lastSaveTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </>
+          )}
+          {saveStatus === 'idle' && !lastSaveTime && autoSaveEnabled && (
+            <span className="text-slate-400">Nenhuma alteração</span>
+          )}
+          {!autoSaveEnabled && (
+            <span className="text-amber-500">Auto-save desativado</span>
+          )}
+        </div>
+      </div>
+
       {/* Hidden File Input for Media Actions */}
       <input
         type="file"
@@ -531,7 +709,7 @@ export default function ChecklistForm({
           const itemData = {
             id: field.id,
             description: field.field_name,
-            category: 'Geral',
+            category: 'Geral', // Assuming 'Geral' or a function like getCategoryForField(field) if defined elsewhere
             response: responses[field.id],
             comment: itemsComments[field.id],
             aiAnalysis: itemsAnalysis[field.id],
@@ -546,16 +724,23 @@ export default function ChecklistForm({
               complianceEnabled={field.compliance_enabled !== false}
               complianceMode={field.compliance_mode || 'auto'}
               complianceStatus={complianceStatuses[field.id] as any}
-              onComplianceChange={showComplianceSelector ? (status) => updateComplianceStatus(field.id!, status) : undefined}
-              onCommentChange={(val) => updateComment(field.id!, val)}
-              onMediaUpload={(type, source) => handleMediaRequest(field.id!, type, source)}
-              onMediaDelete={(mediaId) => handleMediaDelete(field.id!, mediaId)}
-              onAiAnalysisRequest={(ids) => handleAiAnalysisRequest(field.id!, ids)}
-              onAiActionPlanRequest={(ids) => handleAiActionPlanRequest(field.id!, ids)}
-              onManualActionSave={(data) => handleManualActionSave(field.id!, data)}
+              onComplianceChange={showComplianceSelector ? (status: any) => updateComplianceStatus(field.id!, status) : undefined}
+              onCommentChange={(val: string) => updateComment(field.id!, val)}
+              isUploading={uploading}
+              onMediaUpload={(type: 'image' | 'audio' | 'video' | 'file', source?: 'camera' | 'upload') => handleMediaRequest(field.id!, type, source)}
+              onMediaDelete={(mediaId: number) => handleMediaDelete(field.id!, mediaId)}
+
+              onAiAnalysisRequest={(mediaIds) => handleAiAnalysisRequest(field.id!, mediaIds)}
+              onAiAnalysisUpdate={onUpdateAiAnalysis ? (analysis) => {
+                setItemsAnalysis(prev => ({ ...prev, [field.id!]: analysis || '' }));
+                onUpdateAiAnalysis(field.id!, analysis);
+              } : undefined}
+              onAiActionPlanRequest={(ids: number[]) => handleAiActionPlanRequest(field.id!, ids)}
+              onManualActionSave={(data: { title: string; priority: string; what_description?: string }) => handleManualActionSave(field.id!, data)}
+              actionPlan={itemsActionPlan[field.id] || null}
               isAiAnalyzing={generatingResponse[field.id]}
               isCreatingAction={creatingAction[field.id]}
-              isRecording={recording === 'audio' && activeMediaFieldId.current === field.id}
+              isRecording={isCameraOpen === false && activeMediaFieldId.current === field.id && recording === 'audio'}
               recordingTime={recordingTime}
               index={index}
             >
@@ -572,7 +757,25 @@ export default function ChecklistForm({
         onCapture={(blob) => {
           const fieldId = activeMediaFieldId.current;
           if (fieldId) {
-            const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            // Find field metadata for naming
+            const fieldIndex = fields.findIndex(f => f.id === fieldId);
+            const field = fields[fieldIndex];
+            const indexStr = (fieldIndex + 1).toString().padStart(2, '0');
+
+            // Clean strings for filename
+            const clean = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "_") : 'Item';
+
+            const getCategoryForField = (f: any) => f.category || 'Geral';
+
+            const category = clean(getCategoryForField(field));
+            const itemName = clean(field?.field_name || '');
+            const insId = inspectionId ? `INS-${inspectionId}` : 'INS';
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-').split('T').join('_').slice(0, 19);
+
+            // Pattern: 01_Categoria_Item_INS-123_2025-12-22_14-30-00.jpg
+            const fileName = `${indexStr}_${category}_${itemName}_${insId}_${dateStr}.jpg`;
+
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
             uploadFile(file, fieldId, 'image');
           }
         }}

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware as authMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware as authMiddleware } from "./tenant-auth-middleware.ts";
 import { requireProtectedSysAdmin } from "./rbac-middleware.ts";
 import {
   checkProtectedUserIntegrity,

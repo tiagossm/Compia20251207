@@ -1,14 +1,14 @@
-# Sistema Multi-Empresa IA SST - Documentação Completa
+# Sistema Multi-Empresa COMPIA - Documentação Completa
 
 ## Visão Geral
 
-O IA SST foi desenvolvido com uma arquitetura multi-empresa escalável que permite a você (criador do sistema) vender o sistema para empresas clientes, que por sua vez podem gerenciar suas próprias organizações subsidiárias e usuários internos.
+O COMPIA foi desenvolvido com uma arquitetura multi-empresa escalável que permite a você (criador do sistema) vender o sistema para empresas clientes, que por sua vez podem gerenciar suas próprias organizações subsidiárias e usuários internos.
 
 ## Estrutura Hierárquica
 
 ### Níveis Organizacionais
 
-1. **Master** - Sua organização (IA SST Master)
+1. **Master** - Sua organização (COMPIA Master)
    - Controle total do sistema
    - Pode criar empresas clientes
    - Vê todos os dados do sistema
@@ -25,7 +25,7 @@ O IA SST foi desenvolvido com uma arquitetura multi-empresa escalável que permi
 ## Perfis de Usuário
 
 ### 1. System Admin (Administrador do Sistema)
-- **Quem é**: Você (criador do IA SST)
+- **Quem é**: Você (criador do COMPIA)
 - **Permissões**:
   - Acesso total ao sistema
   - Criar/editar/excluir qualquer organização
@@ -269,5 +269,5 @@ O sistema foi projetado para escalar facilmente:
 
 ---
 
-**Sistema desenvolvido para IA SST**  
+**Sistema desenvolvido para COMPIA**  
 *Arquitetura multi-tenant escalável para o mercado B2B de segurança do trabalho*

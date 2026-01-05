@@ -1,177 +1,67 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/react-app/context/AuthContext';
-import { ExtendedMochaUser } from '@/shared/user-types';
-import { Building2, ChevronDown, Check } from 'lucide-react';
-import { fetchWithAuth } from '@/react-app/utils/auth';
+import { useOrganization } from "@/react-app/context/OrganizationContext";
+import { Building2, ChevronDown, Check } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 
-interface Organization {
-  id: number;
-  name: string;
-  type: string;
-  is_active: boolean;
-}
-
-interface OrganizationSelectorProps {
-  selectedOrgId?: number | null;
-  onOrganizationChange: (orgId: number | null) => void;
-  showAllOption?: boolean;
-  className?: string;
-}
-
-export default function OrganizationSelector({
-  selectedOrgId,
-  onOrganizationChange,
-  showAllOption = true,
-  className = ""
-}: OrganizationSelectorProps) {
-  const { user } = useAuth();
-  const extendedUser = user as ExtendedMochaUser;
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+export function OrganizationSelector() {
+  const { selectedOrganization, availableOrganizations, setSelectedOrganization, isLoading } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Close when clicking outside
   useEffect(() => {
-    fetchOrganizations();
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchOrganizations = async () => {
-    try {
-      const response = await fetchWithAuth('/api/organizations');
-      if (response.ok) {
-        const data = await response.json();
-        let availableOrgs = data.organizations || [];
+  if (isLoading) return <div className="h-9 w-32 bg-slate-100 rounded animate-pulse" />;
 
-        // For non-admin users, filter by their organization
-        if (extendedUser?.profile?.role !== 'admin' && extendedUser?.profile?.organization_id) {
-          availableOrgs = availableOrgs.filter((org: Organization) =>
-            org.id === extendedUser.profile?.organization_id
-          );
-        }
+  if (!selectedOrganization) return null;
 
-        setOrganizations(availableOrgs);
-      }
-    } catch (error) {
-      console.error('Error fetching organizations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getSelectedOrganization = () => {
-    if (selectedOrgId === null || selectedOrgId === undefined) {
-      return showAllOption ? 'Todas as Organizações' : 'Selecionar Organização';
-    }
-    const org = organizations.find(o => o.id === selectedOrgId);
-    return org ? org.name : 'Organização não encontrada';
-  };
-
-  const getOrganizationTypeLabel = (type: string) => {
-    switch (type) {
-      case 'company': return 'Empresa';
-      case 'consultancy': return 'Consultoria';
-      case 'client': return 'Cliente';
-      default: return type;
-    }
-  };
-
-  // Auto-select single organization in useEffect to avoid setState during render
-  useEffect(() => {
-    if (organizations.length === 1 && extendedUser?.profile?.role !== 'admin' && selectedOrgId !== organizations[0].id) {
-      onOrganizationChange(organizations[0].id);
-    }
-  }, [organizations, extendedUser?.profile?.role, selectedOrgId, onOrganizationChange]);
-
-  if (loading) {
-    return (
-      <div className={`animate-pulse ${className}`}>
-        <div className="h-10 bg-slate-200 rounded-lg"></div>
-      </div>
-    );
-  }
-
-  if (organizations.length === 0) {
-    return (
-      <div className={`text-sm text-slate-500 ${className}`}>
-        Nenhuma organização disponível
-      </div>
-    );
-  }
+  // If only 1 org, just show static badge or nothing?
+  // User wanted explicit visual, so let's show it even if single.
 
   return (
-    <div className={`relative ${className}`}>
+    <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-2 bg-white border border-slate-300 rounded-lg text-left hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+        className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-sm font-medium transition-colors"
       >
-        <div className="flex items-center">
-          <Building2 className="w-4 h-4 text-slate-400 mr-2" />
-          <span className="text-sm font-medium text-slate-900 truncate">
-            {getSelectedOrganization()}
-          </span>
-        </div>
-        <ChevronDown className="w-4 h-4 text-slate-400 ml-2 flex-shrink-0" />
+        <Building2 size={16} className="text-slate-400" />
+        <span className="max-w-[150px] truncate">{selectedOrganization.name}</span>
+        {availableOrganizations.length > 1 && (
+          <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        )}
       </button>
 
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-            {showAllOption && extendedUser?.profile?.role === 'admin' && (
-              <button
-                onClick={() => {
-                  onOrganizationChange(null);
-                  setIsOpen(false);
-                }}
-                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-100"
-              >
-                <div className="flex items-center">
-                  <Building2 className="w-4 h-4 text-slate-400 mr-3" />
-                  <div>
-                    <span className="text-sm font-medium text-slate-900">
-                      Todas as Organizações
-                    </span>
-                    <p className="text-xs text-slate-500">
-                      Ver dados de todas as organizações
-                    </p>
-                  </div>
-                </div>
-                {(selectedOrgId === null || selectedOrgId === undefined) && (
-                  <Check className="w-4 h-4 text-blue-600" />
-                )}
-              </button>
-            )}
-
-            {organizations.map((org) => (
-              <button
-                key={org.id}
-                onClick={() => {
-                  onOrganizationChange(org.id);
-                  setIsOpen(false);
-                }}
-                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center">
-                  <div className={`w-3 h-3 rounded-full mr-3 ${org.is_active ? 'bg-green-400' : 'bg-red-400'
-                    }`} />
-                  <div>
-                    <span className="text-sm font-medium text-slate-900">
-                      {org.name}
-                    </span>
-                    <p className="text-xs text-slate-500">
-                      {getOrganizationTypeLabel(org.type)}
-                    </p>
-                  </div>
-                </div>
-                {selectedOrgId === org.id && (
-                  <Check className="w-4 h-4 text-blue-600" />
-                )}
-              </button>
-            ))}
+      {isOpen && availableOrganizations.length > 1 && (
+        <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-100 py-1 z-50">
+          <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Trocar Organização
           </div>
-        </>
+          {availableOrganizations.map(org => (
+            <button
+              key={org.id}
+              onClick={() => {
+                setSelectedOrganization(org);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors
+                 ${selectedOrganization.id === org.id ? 'bg-primary-50 text-primary-700' : 'text-slate-700'}
+               `}
+            >
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{org.name}</span>
+                <span className="text-[10px] text-slate-500 uppercase">{org.type === 'master' ? 'Consultoria' : 'Cliente'}</span>
+              </div>
+              {selectedOrganization.id === org.id && <Check size={14} className="text-primary-600" />}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

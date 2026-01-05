@@ -19,17 +19,14 @@ import {
   MessageSquare,
   Brain,
   PenTool,
-  Share2,
-  Mail,
-  MessageCircle,
   X,
-  FileDown,
   QrCode,
   Smartphone,
   Globe,
   MinusCircle,
   HelpCircle
 } from 'lucide-react';
+import { fetchWithAuth } from '@/react-app/utils/auth'; // Added fetchWithAuth
 // QR Code generation now handled by backend
 import { InspectionType, InspectionItemType, InspectionMediaType } from '@/shared/types';
 import SignaturePreview from '@/react-app/components/SignaturePreview';
@@ -61,7 +58,7 @@ export default function InspectionSummary({
       if (inspection?.id) {
         try {
           // First, try to get existing share links
-          const shareResponse = await fetch(`/api/inspections/${inspection.id}/shares`);
+          const shareResponse = await fetch(`/api/share/${inspection.id}/shares`);
           let shareToken = null;
 
           if (shareResponse.ok) {
@@ -74,7 +71,7 @@ export default function InspectionSummary({
 
           // If no active share exists, create one
           if (!shareToken) {
-            const createShareResponse = await fetch(`/api/inspections/${inspection.id}/share`, {
+            const createShareResponse = await fetch(`/api/share/${inspection.id}/share`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -103,7 +100,21 @@ export default function InspectionSummary({
 
     generateQRCode();
   }, [inspection?.id]);
-  const [showShareDropdown, setShowShareDropdown] = useState(false);
+
+  // Audit History State
+  const [history, setHistory] = useState<any[]>([]);
+  useEffect(() => {
+    if (inspection?.id) {
+      fetchWithAuth(`/api/inspections/${inspection.id}/history`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.history) setHistory(data.history);
+        })
+        .catch(err => console.error("Failed to load history", err));
+    }
+  }, [inspection?.id]);
+
+  // Removed showShareDropdown - now using FloatingActionBar
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [showPDFGenerator, setShowPDFGenerator] = useState(false);
   const [includeActionPlan, setIncludeActionPlan] = useState(false);
@@ -299,27 +310,61 @@ export default function InspectionSummary({
     conformanceRate: 0
   };
 
+  // Helper to normalize compliance status values
+  const normalizeComplianceStatus = (status: string | null | undefined): string => {
+    if (!status) return 'unanswered';
+    const s = status.toLowerCase().replace(/_/g, ' ').trim();
+    if (s === 'conforme' || s === 'compliant') return 'compliant';
+    if (s === 'nao conforme' || s === 'não conforme' || s === 'non compliant' || s === 'non_compliant' || s === 'nao_conforme') return 'non_compliant';
+    if (s === 'nao aplicavel' || s === 'não aplicável' || s === 'not applicable' || s === 'not_applicable' || s === 'nao_aplicavel' || s === 'n/a') return 'not_applicable';
+    if (s === 'parcialmente conforme' || s === 'parcialmente_conforme' || s === 'partial') return 'partial';
+    return 'unanswered';
+  };
+
+  // Helper to detect compliance from text responses
+  const inferComplianceFromText = (text: string | null | undefined): string | null => {
+    if (!text) return null;
+    const t = text.toString().toLowerCase().trim();
+
+    // Explicit compliance patterns
+    if (t === 'conforme' || t === 'adequado' || t === 'adequada' || t === 'bom' || t === 'boa' || t === 'sim' || t === 'yes') return 'compliant';
+    if (t === 'não conforme' || t === 'nao conforme' || t === 'inadequado' || t === 'inadequada' || t === 'inadequadas' ||
+      t === 'ruim' || t === 'crítico' || t === 'critico' || t === 'não' || t === 'nao' || t === 'no') return 'non_compliant';
+    if (t === 'não aplicável' || t === 'nao aplicavel' || t === 'n/a') return 'not_applicable';
+
+    // Pattern matching for partial text
+    if (t.includes('não conforme') || t.includes('nao conforme')) return 'non_compliant';
+    if (t.includes('conforme') && !t.includes('não')) return 'compliant';
+    if (t.includes('inadequad') || t.includes('ruim') || t.includes('ruín') || t.includes('crítico') || t.includes('critico')) return 'non_compliant';
+
+    return null; // Cannot infer
+  };
+
+  // Helper to count compliance based on status
+  const countCompliance = (status: string) => {
+    switch (status) {
+      case 'compliant':
+        stats.compliantItems++;
+        break;
+      case 'non_compliant':
+      case 'partial':
+        stats.nonCompliantItems++;
+        break;
+      case 'not_applicable':
+        stats.notApplicableItems++;
+        break;
+      default:
+        stats.unansweredItems++;
+    }
+  };
+
   // Count manual items
   items.forEach(item => {
     stats.totalItems++;
 
     // Check if item has explicit compliance_status
     if (item.compliance_status) {
-      switch (item.compliance_status) {
-        case 'compliant':
-          stats.compliantItems++;
-          break;
-        case 'non_compliant':
-          stats.nonCompliantItems++;
-          break;
-        case 'not_applicable':
-          stats.notApplicableItems++;
-          break;
-        case 'unanswered':
-        default:
-          stats.unansweredItems++;
-          break;
-      }
+      countCompliance(normalizeComplianceStatus(item.compliance_status));
     } else {
       // Fallback to legacy is_compliant logic
       if (item.is_compliant === true) {
@@ -339,61 +384,65 @@ export default function InspectionSummary({
     try {
       const fieldData = JSON.parse(item.field_responses);
 
-      // Check if item has explicit compliance_status
+      // Priority 1: Check item-level compliance_status (from database column)
       if (item.compliance_status) {
-        switch (item.compliance_status) {
-          case 'compliant':
-            stats.compliantItems++;
-            break;
-          case 'non_compliant':
-            stats.nonCompliantItems++;
-            break;
-          case 'not_applicable':
-            stats.notApplicableItems++;
-            break;
-          case 'unanswered':
-          default:
-            stats.unansweredItems++;
-            break;
-        }
-      } else {
-        // Improved logic for determining compliance from responses
-        const response = responses[fieldData.field_id];
+        countCompliance(normalizeComplianceStatus(item.compliance_status));
+        return;
+      }
 
-        if (fieldData.field_type === 'boolean') {
-          if (response === true || response === 'true') {
-            stats.compliantItems++;
-          } else if (response === false || response === 'false') {
-            stats.nonCompliantItems++;
-          } else {
-            stats.unansweredItems++;
-          }
-        } else if (fieldData.field_type === 'rating') {
-          if (response !== null && response !== undefined && response !== '') {
-            // For ratings, consider <= 2 as non-compliant, >= 4 as compliant, 3 as needs review
-            const rating = parseInt(response);
+      // Priority 2: Check field_responses.compliance_status (from JSON)
+      if (fieldData.compliance_status) {
+        countCompliance(normalizeComplianceStatus(fieldData.compliance_status));
+        return;
+      }
+
+      // Priority 3: Use item.id to lookup responses
+      const response = responses[item.id];
+
+      // Priority 4: Auto-detect based on field type and response value
+      if (fieldData.field_type === 'boolean') {
+        if (response === true || response === 'true') {
+          stats.compliantItems++;
+        } else if (response === false || response === 'false') {
+          stats.nonCompliantItems++;
+        } else {
+          stats.unansweredItems++;
+        }
+      } else if (fieldData.field_type === 'rating') {
+        if (response !== null && response !== undefined && response !== '') {
+          const rating = parseInt(response);
+          if (!isNaN(rating)) {
             if (rating >= 4) {
               stats.compliantItems++;
-            } else if (rating <= 2) {
-              stats.nonCompliantItems++;
-            } else if (rating === 3) {
-              // Rating of 3 is considered "needs attention" - count as non-compliant for safety
-              stats.nonCompliantItems++;
             } else {
-              stats.unansweredItems++;
+              stats.nonCompliantItems++;
             }
           } else {
             stats.unansweredItems++;
           }
         } else {
-          // For other field types, we can't automatically determine compliance
-          // This should be explicitly set by the user in the new system
-          if (response !== null && response !== undefined && response !== '') {
-            // Default to unanswered since we can't infer compliance
-            stats.unansweredItems++;
+          stats.unansweredItems++;
+        }
+      } else if (fieldData.field_type === 'select' || fieldData.field_type === 'text') {
+        // Try to infer compliance from the text response
+        const responseValue = response || fieldData.response_value;
+        if (responseValue) {
+          const inferred = inferComplianceFromText(responseValue);
+          if (inferred) {
+            countCompliance(inferred);
           } else {
+            // Has response but can't infer compliance - count as unanswered for compliance purposes
             stats.unansweredItems++;
           }
+        } else {
+          stats.unansweredItems++;
+        }
+      } else {
+        // For date, time, etc - these are informational, count as not applicable
+        if (response !== null && response !== undefined && response !== '') {
+          stats.notApplicableItems++;
+        } else {
+          stats.unansweredItems++;
         }
       }
     } catch (error) {
@@ -412,54 +461,7 @@ export default function InspectionSummary({
     setShowPrintOptions(false);
   };
 
-  // Share functions
-  const handleShareByEmail = () => {
-    const subject = encodeURIComponent(`Relatório de Inspeção - ${inspection.title}`);
-    const body = encodeURIComponent(`
-Olá,
-
-Segue o relatório da inspeção realizada:
-
-Título: ${inspection.title}
-Local: ${inspection.location}
-Inspetor: ${inspection.inspector_name}
-Data: ${inspection.scheduled_date ? new Date(inspection.scheduled_date).toLocaleDateString('pt-BR') : 'N/A'}
-
-Estatísticas:
-- Total de Itens: ${stats.totalItems}
-- Conformes: ${stats.compliantItems}
-- Não Conformes: ${stats.nonCompliantItems}
-- Taxa de Conformidade: ${stats.conformanceRate}%
-
-Atenciosamente,
-Sistema de Inspeções Compia
-    `);
-
-    const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
-    window.open(mailtoUrl, '_blank');
-  };
-
-  const handleShareByWhatsApp = () => {
-    const message = encodeURIComponent(`
-📋 *Relatório de Inspeção*
-
-*Título:* ${inspection.title}
-*Local:* ${inspection.location}
-*Inspetor:* ${inspection.inspector_name}
-*Data:* ${inspection.scheduled_date ? new Date(inspection.scheduled_date).toLocaleDateString('pt-BR') : 'N/A'}
-
-📊 *Estatísticas:*
-• Total de Itens: ${stats.totalItems}
-• Conformes: ${stats.compliantItems} ✅
-• Não Conformes: ${stats.nonCompliantItems} ❌
-• Taxa de Conformidade: ${stats.conformanceRate}%
-
-_Relatório gerado pelo Sistema Compia_
-    `);
-
-    const whatsappUrl = `https://wa.me/?text=${message}`;
-    window.open(whatsappUrl, '_blank');
-  };
+  // Share functions removed - now using FloatingActionBar
 
   return (
     <div className="space-y-8">
@@ -535,57 +537,7 @@ _Relatório gerado pelo Sistema Compia_
             </h1>
             <p className="text-slate-600 mt-1">{inspection.title}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowPDFGenerator(true)}
-                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                Gerar PDF
-              </button>
-              <button
-                onClick={() => setShowPrintOptions(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimir
-              </button>
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setShowShareDropdown(!showShareDropdown)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                Compartilhar
-              </button>
-              {showShareDropdown && (
-                <div className="absolute top-full mt-2 right-0 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-48">
-                  <button
-                    onClick={() => {
-                      handleShareByEmail();
-                      setShowShareDropdown(false);
-                    }}
-                    className="flex items-center w-full px-4 py-3 text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <Mail className="w-4 h-4 mr-3" />
-                    Compartilhar por E-mail
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleShareByWhatsApp();
-                      setShowShareDropdown(false);
-                    }}
-                    className="flex items-center w-full px-4 py-3 text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-3" />
-                    Compartilhar por WhatsApp
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Action buttons removed - using FloatingActionBar instead */}
         </div>
 
         {/* Print Header - Only visible when printing */}
@@ -739,8 +691,8 @@ _Relatório gerado pelo Sistema Compia_
                 try {
                   const fieldData = JSON.parse(item.field_responses);
                   const itemMedia = getItemMedia(item.id);
-                  const response = responses[fieldData.field_id];
-                  const comment = (responses as Record<string, any>)[`comment_${fieldData.field_id}`];
+                  const response = responses[item.id];
+                  const comment = (responses as Record<string, any>)[`comment_${item.id}`];
 
                   return (
                     <div key={item.id} className="border border-slate-200 rounded-lg p-4 space-y-4 print:border-gray-400 print:page-break-inside-avoid">
@@ -1247,6 +1199,119 @@ _Relatório gerado pelo Sistema Compia_
           shareLink={shareLink}
           actionItems={actionItems}
         />
+        {/* SIGNATURES SECTION */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 print:shadow-none print:border-gray-300 print:break-inside-avoid">
+          <h2 className="font-heading text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2">
+            <PenTool className="w-5 h-5" /> Assinaturas
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Inspector Signature */}
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-4 uppercase tracking-wide">Inspetor Técnico</p>
+              {signatures.inspector ? (
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                  <img src={signatures.inspector} alt="Assinatura do Inspetor" className="h-24 object-contain mx-auto" />
+                  <div className="mt-2 text-center border-t border-slate-200 pt-2">
+                    <p className="font-bold text-slate-900">{inspection.inspector_name}</p>
+                    <p className="text-xs text-slate-500">{new Date().toLocaleDateString()}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-32 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400">
+                  Pendente
+                </div>
+              )}
+            </div>
+
+            {/* Responsible Signature */}
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-4 uppercase tracking-wide">Responsável da Empresa</p>
+              {signatures.responsible ? (
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                  <img src={signatures.responsible} alt="Assinatura do Responsável" className="h-24 object-contain mx-auto" />
+                  <div className="mt-2 text-center border-t border-slate-200 pt-2">
+                    <p className="font-bold text-slate-900">{inspection.responsible_name}</p>
+                    <p className="text-xs text-slate-500">Aceite Digital</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-32 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400">
+                  Pendente
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* AUDIT TRAIL & MAP (Manager/Admin View) - Printed Only if Option Selected or specific perm */}
+        <div className="bg-slate-50 rounded-xl shadow-sm border border-slate-200 p-6 print:break-before-page">
+          <h2 className="font-heading text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-blue-600" /> Rastreabilidade & Auditoria
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Timeline */}
+            <div>
+              <h3 className="text-sm font-bold text-slate-700 uppercase mb-4">Linha do Tempo</h3>
+              <div className="space-y-4 border-l-2 border-slate-200 ml-2 pl-4">
+                {history.map((h, i) => (
+                  <div key={i} className="relative">
+                    <div className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-white ${h.status_to === 'completed' ? 'bg-green-500' :
+                      h.status_to === 'in_progress' ? 'bg-blue-500' :
+                        h.status_to === 'delivered' ? 'bg-purple-500' : 'bg-slate-400'
+                      } shadow-sm`}></div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {h.status_to === 'in_progress' ? 'Iniciada' :
+                        h.status_to === 'completed' ? 'Concluída' :
+                          h.status_to === 'delivered' ? 'Entregue' : h.status_to}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(h.created_at).toLocaleString()} por {h.user_email || 'Sistema'}
+                    </p>
+                    {h.location_lat && (
+                      <a
+                        href={`https://maps.google.com/?q=${h.location_lat},${h.location_lng}`}
+                        target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] text-blue-600 mt-1 hover:underline"
+                      >
+                        <MapPin size={10} /> Localização Registrada
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {history.length === 0 && <p className="text-sm text-slate-500 italic">Nenhum registro de auditoria.</p>}
+              </div>
+            </div>
+
+            {/* Map Visualization (Placeholder / Iframe) */}
+            <div>
+              <h3 className="text-sm font-bold text-slate-700 uppercase mb-4">Geolocalização</h3>
+              {inspection.location_start_lat ? (
+                <div className="bg-white p-2 rounded-lg border border-slate-200 h-64 flex flex-col items-center justify-center text-slate-500 text-sm">
+                  {/* Ideally, use Google Maps Embed API here */}
+                  <MapPin size={32} className="mb-2 text-rose-500" />
+                  <p>Início: {inspection.location_start_lat}, {inspection.location_start_lng}</p>
+                  {inspection.location_end_lat && (
+                    <p>Fim: {inspection.location_end_lat}, {inspection.location_end_lng}</p>
+                  )}
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${inspection.location_start_lat},${inspection.location_start_lng}&destination=${inspection.location_end_lat || inspection.location_start_lat},${inspection.location_end_lng || inspection.location_start_lng}`}
+                    target="_blank"
+                    className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
+                  >
+                    Ver Rota no Maps
+                  </a>
+                </div>
+              ) : (
+                <div className="bg-slate-100 h-64 rounded-lg flex items-center justify-center text-slate-400 text-sm">
+                  Sem dados de GPS disponíveis
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import CSVExportImport from '@/react-app/components/CSVExportImport';
 import {
   Target,
@@ -54,14 +54,13 @@ interface FilterState {
 
 
 export default function ActionPlans() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  // const [searchParams, setSearchParams] = useSearchParams();
+  const { selectedOrganization } = useOrganization();
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [csvLoading, setCsvLoading] = useState(false);
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-    searchParams.get('org') ? parseInt(searchParams.get('org')!) : null
-  );
+
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -81,26 +80,19 @@ export default function ActionPlans() {
 
   useEffect(() => {
     fetchAllActionItems();
-  }, [selectedOrgId]);
+  }, [selectedOrganization]); // Fetch on global org change
 
   useEffect(() => {
     applyFilters();
   }, [actionItems, filters]);
 
-  useEffect(() => {
-    // Update URL params when organization changes
-    if (selectedOrgId) {
-      setSearchParams({ org: selectedOrgId.toString() });
-    } else {
-      setSearchParams({});
-    }
-  }, [selectedOrgId, setSearchParams]);
+  // Removed URL sync effect for org - handled by Context/Header
 
   const fetchAllActionItems = async () => {
     try {
       let url = '/api/action-plans/all';
-      if (selectedOrgId) {
-        url += `?organization_id=${selectedOrgId}`;
+      if (selectedOrganization) {
+        url += `?organization_id=${selectedOrganization.id}`;
       }
 
       const response = await fetch(url);
@@ -406,11 +398,7 @@ export default function ActionPlans() {
               />
             </div>
             <div>
-              <OrganizationSelector
-                selectedOrgId={selectedOrgId}
-                onOrganizationChange={setSelectedOrgId}
-                showAllOption={true}
-              />
+              {/* Organization Selector Removed - Global in Header */}
             </div>
 
             <select

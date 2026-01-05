@@ -49,6 +49,8 @@ export default function Organizations() {
   const [organizationToAssign, setOrganizationToAssign] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
+  const [assignmentOrgIds, setAssignmentOrgIds] = useState<number[]>([]);
+
 
   // Estados para filtros e busca
   const [searchTerm, setSearchTerm] = useState('');
@@ -233,10 +235,7 @@ export default function Organizations() {
     console.log('Exportar organizações:', organizationIds);
   };
 
-  const handleBulkInviteUsers = async (organizationIds: number[]) => {
-    // Implementar convite em lote
-    console.log('Convidar usuários para organizações:', organizationIds);
-  };
+
 
   // Filtrar organizações baseado na busca e filtros
   const filteredOrganizations = organizations.filter(org => {
@@ -294,6 +293,12 @@ export default function Organizations() {
     } else {
       setSelectedOrganizations(prev => [...prev, organization]);
     }
+  };
+
+  const handleBulkAssignment = (orgIds: number[]) => {
+    setAssignmentOrgIds(orgIds);
+    setOrganizationToAssign(null);
+    setShowAssignmentModal(true);
   };
 
   const clearFilters = () => {
@@ -660,7 +665,7 @@ export default function Organizations() {
           onBulkActivate={handleBulkActivate}
           onBulkDeactivate={handleBulkDeactivate}
           onBulkExport={handleBulkExport}
-          onBulkInviteUsers={handleBulkInviteUsers}
+          onBulkInviteUsers={handleBulkAssignment}
         />
 
         {/* Modals */}
@@ -704,19 +709,22 @@ export default function Organizations() {
         )}
 
         <UserAssignmentModal
-          organizationId={organizationToAssign?.id || 0}
-          organizationName={organizationToAssign?.name || ''}
+          organizationIds={assignmentOrgIds}
+          organizationName={assignmentOrgIds.length === 1 ? (organizationToAssign?.name || '') : ''}
           isOpen={showAssignmentModal}
           onClose={() => {
             setShowAssignmentModal(false);
+            setAssignmentOrgIds([]);
             setOrganizationToAssign(null);
           }}
           onSuccess={() => {
-            fetchOrganizations();
             fetchStats();
+            fetchOrganizations();
           }}
         />
       </div>
     </Layout>
   );
 }
+
+

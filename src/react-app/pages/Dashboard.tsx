@@ -1,25 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/react-app/context/AuthContext';
+import { useOrganization } from '@/react-app/context/OrganizationContext';
 import Layout from '@/react-app/components/Layout';
-import OrganizationSelector from '@/react-app/components/OrganizationSelector';
 import DashboardCharts from '@/react-app/components/DashboardCharts';
-import StatsCard from '@/react-app/components/StatsCard';
+import WelcomeHero from '@/react-app/components/WelcomeHero';
 import { ExtendedMochaUser } from '@/shared/user-types';
 import UnassignedUserBanner from '@/react-app/components/UnassignedUserBanner';
 import {
   Shield,
-  ClipboardList,
   Target,
   AlertTriangle,
-  CheckCircle2,
   Clock,
-  TrendingUp,
   Users,
   Building2,
   PlusCircle,
   FileCheck,
   BarChart3,
-
   Zap
 } from 'lucide-react';
 
@@ -43,26 +39,24 @@ interface ActionPlanSummary {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { selectedOrganization } = useOrganization();
   const extendedUser = user as ExtendedMochaUser;
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [actionSummary, setActionSummary] = useState<ActionPlanSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
-    extendedUser?.profile?.organization_id || null
-  );
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedOrgId]);
+  }, [selectedOrganization]); // Re-fetch when global org changes
 
   const fetchDashboardData = async () => {
     try {
       let statsUrl = '/api/dashboard/stats';
       let actionUrl = '/api/dashboard/action-plan-summary';
 
-      if (selectedOrgId) {
-        statsUrl += `?organization_id=${selectedOrgId}`;
-        actionUrl += `?organization_id=${selectedOrgId}`;
+      if (selectedOrganization) {
+        statsUrl += `?organization_id=${selectedOrganization.id}`;
+        actionUrl += `?organization_id=${selectedOrganization.id}`;
       }
 
       const [statsResponse, actionResponse] = await Promise.all([
@@ -122,82 +116,14 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Welcome Banner Clean - Responsive */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 flex flex-col gap-4 shadow-sm">
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-800">
-                Olá, {extendedUser?.profile?.name || user?.email?.split('@')[0]}! 👋
-              </h2>
-              <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-100">
-                {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
-              </span>
-            </div>
-            <p className="text-slate-500 text-sm mt-1">
-              {stats && (
-                <span className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  {getCompletionRate()}% de conclusão em inspeções de hoje.
-                </span>
-              )}
-            </p>
-          </div>
+        {/* Stats Bar with Quick Actions */}
+        <WelcomeHero
+          stats={stats}
+          completionRate={getCompletionRate()}
+          showOrgSelector={false}
+        />
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-            {extendedUser?.profile?.role === 'system_admin' && (
-              <div className="w-full sm:w-48">
-                <OrganizationSelector
-                  selectedOrgId={selectedOrgId}
-                  onOrganizationChange={setSelectedOrgId}
-                  showAllOption={true}
-                  className="bg-white border-gray-200 text-slate-700"
-                />
-              </div>
-            )}
-            <a
-              href="/inspections/new"
-              className="bg-primary hover:bg-primary-hover text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">Nova Inspeção</span>
-              <span className="sm:hidden">Nova</span>
-            </a>
-          </div>
-        </div>
 
-        {/* Stats Cards - Clean White */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatsCard
-            title="Total de Inspeções"
-            value={stats?.total || 0}
-            icon={ClipboardList}
-            color="blue"
-            trend={stats?.total ? { value: "+12%", isPositive: true } : undefined}
-          />
-
-          <StatsCard
-            title="Pendentes"
-            value={stats?.pending || 0}
-            icon={Clock}
-            color="yellow"
-            trend={stats?.pending ? { value: "-5%", isPositive: true } : undefined}
-          />
-
-          <StatsCard
-            title="Em Andamento"
-            value={stats?.inProgress || 0}
-            icon={TrendingUp}
-            color="purple"
-            trend={stats?.inProgress ? { value: "+8%", isPositive: true } : undefined}
-          />
-          <StatsCard
-            title="Concluídas"
-            value={stats?.completed || 0}
-            icon={CheckCircle2}
-            color="green"
-            trend={stats?.completed ? { value: "+15%", isPositive: true } : undefined}
-          />
-        </div>
 
         {/* Priority Alerts - Light Theme */}
         {actionSummary && (actionSummary.overdue_actions > 0 || actionSummary.high_priority_pending > 0) && (

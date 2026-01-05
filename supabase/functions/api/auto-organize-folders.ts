@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 const autoOrganizeRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
@@ -57,7 +57,7 @@ function generateSlug(name: string, existing: string[] = []): string {
 }
 
 // Endpoint para organizar automaticamente um template em pasta
-autoOrganizeRoutes.post("/auto-organize/:templateId", demoAuthMiddleware, async (c) => {
+autoOrganizeRoutes.post("/auto-organize/:templateId", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
     const templateId = c.req.param("templateId");
@@ -164,7 +164,7 @@ autoOrganizeRoutes.post("/auto-organize/:templateId", demoAuthMiddleware, async 
 });
 
 // Endpoint para organizar TODOS os templates não organizados
-autoOrganizeRoutes.post("/auto-organize-all", demoAuthMiddleware, async (c) => {
+autoOrganizeRoutes.post("/auto-organize-all", tenantAuthMiddleware, async (c) => {
     const env = c.env;
     const user = c.get("user");
 

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { demoAuthMiddleware } from "./demo-auth-middleware.ts";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 import { ExtendedMochaUser, USER_ROLES, ORGANIZATION_LEVELS } from "./user-types.ts";
 
 type Env = {
@@ -14,8 +14,17 @@ const getDatabase = (env: any) => env.DB;
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
+// DEBUG: Log all requests hitting this router
+app.get('*', async (c, next) => {
+  console.log('[ORGS_ROUTER] Incoming request path:', c.req.path);
+  await next();
+});
+
+// DEBUG: Public ping route
+app.get('/ping', (c) => c.json({ message: 'pong', path: c.req.path }));
+
 // Organizations stats endpoint
-app.get('/stats', demoAuthMiddleware, async (c) => {
+app.get('/stats', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -28,7 +37,7 @@ app.get('/stats', demoAuthMiddleware, async (c) => {
       userManagedStats: undefined as any
     };
 
-    if (user.profile?.role === USER_ROLES.SYSTEM_ADMIN) {
+    if (user.profile?.role === USER_ROLES.SYSTEM_ADMIN || user.profile?.role === 'sys_admin') {
       // System admin gets global stats
       const masterOrgs = await db.prepare('SELECT COUNT(*) as count FROM organizations WHERE organization_level = ?').bind(ORGANIZATION_LEVELS.MASTER).first();
       const companies = await db.prepare('SELECT COUNT(*) as count FROM organizations WHERE organization_level = ?').bind(ORGANIZATION_LEVELS.COMPANY).first();
@@ -85,21 +94,25 @@ app.get('/stats', demoAuthMiddleware, async (c) => {
 });
 
 // Get all organizations (with user filtering)
-app.get('/', demoAuthMiddleware, async (c) => {
+app.get('/', tenantAuthMiddleware, async (c) => {
+  console.log('[ORGS] GET / route handler reached');
   try {
     const user = c.get('user') as ExtendedMochaUser;
+    console.log('[ORGS] User:', user?.email || 'NO USER');
     const db = getDatabase(c.env);
 
     // Get user profile
     const userProfile = await db.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first() as any;
 
     if (!userProfile) {
-      return c.json({ error: "User profile not found" }, 404);
+      console.error('[ORGS] User profile NOT found for ID:', user.id);
+      return c.json({ error: "User profile not found (DB mismatch)" }, 400);
     }
+    console.log('[ORGS] User profile found, role:', userProfile.role);
 
     let query = `
       SELECT o.*,
-  (SELECT COUNT(*) FROM users WHERE organization_id = o.id AND is_active = true) as user_count,
+  (SELECT COUNT(*) FROM user_organizations WHERE organization_id = o.id AND is_active = true) as user_count,
     (SELECT COUNT(*) FROM organizations WHERE parent_organization_id = o.id AND is_active = true) as subsidiary_count,
       po.name as parent_organization_name
       FROM organizations o
@@ -113,21 +126,41 @@ app.get('/', demoAuthMiddleware, async (c) => {
     if (userProfile.role === USER_ROLES.SYSTEM_ADMIN || userProfile.role === 'sys_admin') {
       // System admin sees all organizations
       whereConditions.push("o.is_active = true");
-    } else if (userProfile.role === USER_ROLES.ORG_ADMIN) {
-      // Org admin sees their organization and subsidiaries
-      if (userProfile.managed_organization_id) {
-        whereConditions.push("(o.id = ? OR o.parent_organization_id = ?) AND o.is_active = true");
-        params.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
-      } else {
-        whereConditions.push("o.is_active = false"); // No access
-      }
     } else {
-      // Regular users see only their organization
+      // All other users see:
+      // 1. Orgs they manage (if Org Admin) + Subsidiaries
+      // 2. Orgs they are explicitly assigned to via user_organizations
+      // 3. Their primary organization (fallback)
+
+      const userId = user.id;
+      // We use a broader clause:
+      // ID in user_organizations
+      // OR ID = primary org
+      // OR (Role=OrgAdmin AND (ID=Managed OR Parent=Managed))
+
+      let subConditions = [];
+      const subParams = [];
+
+      // 1. Explicit assignments & Primary (via user_organizations usually has primary, but legacy fallback:)
+      subConditions.push(`o.id IN (SELECT organization_id FROM user_organizations WHERE user_id = '${userId}')`);
+
+      // 2. Legacy Primary
       if (userProfile.organization_id) {
-        whereConditions.push("o.id = ? AND o.is_active = true");
-        params.push(userProfile.organization_id);
+        subConditions.push("o.id = ?");
+        subParams.push(userProfile.organization_id);
+      }
+
+      // 3. Managed Hierarchy (Org Admin)
+      if (userProfile.role === USER_ROLES.ORG_ADMIN && userProfile.managed_organization_id) {
+        subConditions.push("(o.id = ? OR o.parent_organization_id = ?)");
+        subParams.push(userProfile.managed_organization_id, userProfile.managed_organization_id);
+      }
+
+      if (subConditions.length > 0) {
+        whereConditions.push(`(${subConditions.join(' OR ')}) AND o.is_active = true`);
+        params.push(...subParams);
       } else {
-        whereConditions.push("o.is_active = false"); // No access
+        whereConditions.push("1 = 0"); // No access
       }
     }
 
@@ -158,7 +191,7 @@ app.get('/', demoAuthMiddleware, async (c) => {
 });
 
 // Get single organization by ID
-app.get('/:id', demoAuthMiddleware, async (c) => {
+app.get('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -184,10 +217,38 @@ app.get('/:id', demoAuthMiddleware, async (c) => {
       const orgCheck = await db.prepare(`
         SELECT id FROM organizations 
         WHERE id = ? AND(id = ? OR parent_organization_id = ?)
-  `).bind(organizationId, userProfile.managed_organization_id, userProfile.managed_organization_id).first();
+        `).bind(organizationId, userProfile.managed_organization_id, userProfile.managed_organization_id).first();
       hasAccess = !!orgCheck;
     } else {
-      hasAccess = userProfile.organization_id === organizationId;
+      console.log(`[ORGS - DEBUG] Deep Check for User: ${user.email} Role: ${userProfile.role} `);
+      console.log(`[ORGS - DEBUG] User OrgID: ${userProfile.organization_id} (Type: ${typeof userProfile.organization_id})`);
+      console.log(`[ORGS - DEBUG] Target OrgID: ${organizationId} (Type: ${typeof organizationId})`);
+
+      // Use loose equality to handle possible BigInt/Number mismatch
+      hasAccess = userProfile.organization_id == organizationId;
+      console.log(`[ORGS - DEBUG] Direct Access Result: ${hasAccess} `);
+    }
+
+    if (!hasAccess) {
+      // Allow access if user is participating in an event or inspection in this organization
+      const userEmail = userProfile.email || user.email;
+      console.log(`[ORGS] Checking participation for ${userEmail} in Org ${organizationId} `);
+
+      const inspectionAccess = await db.prepare("SELECT id FROM inspections WHERE organization_id = ? AND inspector_email = ?").bind(organizationId, userEmail).first();
+      if (inspectionAccess) {
+        console.log('[ORGS-DEBUG] Access granted via Inspection:', inspectionAccess);
+        hasAccess = true;
+      } else {
+        // Check calendar participation
+        console.log(`[ORGS - DEBUG] Checking calendar for: ${userEmail} `);
+        const calendarAccess = await db.prepare("SELECT id FROM calendar_events WHERE organization_id = ? AND participants::text LIKE ?").bind(organizationId, `%"${userEmail}"%`).first();
+        if (calendarAccess) {
+          console.log('[ORGS-DEBUG] Access granted via Calendar:', calendarAccess);
+          hasAccess = true;
+        } else {
+          console.log('[ORGS-DEBUG] No calendar access found.');
+        }
+      }
     }
 
     if (!hasAccess) {
@@ -197,9 +258,9 @@ app.get('/:id', demoAuthMiddleware, async (c) => {
     // Get organization with additional data
     const organization = await db.prepare(`
       SELECT o.*,
-  (SELECT COUNT(*) FROM users WHERE organization_id = o.id AND is_active = true) as user_count,
-    (SELECT COUNT(*) FROM organizations WHERE parent_organization_id = o.id AND is_active = true) as subsidiary_count,
-      po.name as parent_organization_name
+        (SELECT COUNT(*) FROM users WHERE organization_id = o.id AND is_active = true) as user_count,
+  (SELECT COUNT(*) FROM organizations WHERE parent_organization_id = o.id AND is_active = true) as subsidiary_count,
+    po.name as parent_organization_name
       FROM organizations o
       LEFT JOIN organizations po ON o.parent_organization_id = po.id
       WHERE o.id = ?
@@ -211,14 +272,18 @@ app.get('/:id', demoAuthMiddleware, async (c) => {
 
     return c.json({ organization });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching organization:', error);
-    return c.json({ error: 'Erro ao buscar organização' }, 500);
+    return c.json({
+      error: 'Erro ao buscar organização',
+      details: error.message,
+      stack: error.stack
+    }, 500);
   }
 });
 
 // Create new organization
-app.post('/', demoAuthMiddleware, async (c) => {
+app.post('/', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -279,7 +344,7 @@ app.post('/', demoAuthMiddleware, async (c) => {
     created_at, updated_at
   ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
   RETURNING id
-    `).bind(
+  `).bind(
       name,
       type || 'company',
       description || null,
@@ -350,7 +415,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Update organization
-app.put('/:id', demoAuthMiddleware, async (c) => {
+app.put('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -442,7 +507,7 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
 });
 
 // Delete organization
-app.delete('/:id', demoAuthMiddleware, async (c) => {
+app.delete('/:id', tenantAuthMiddleware, async (c) => {
   try {
     const user = c.get('user') as ExtendedMochaUser;
     const db = getDatabase(c.env);
@@ -538,6 +603,68 @@ VALUES(?, ?, ?, ?, ?, ?, NOW())
   } catch (error) {
     console.error('Error deleting organization:', error);
     return c.json({ error: 'Erro ao excluir organização' }, 500);
+  }
+});
+
+// Increment AI usage count for an organization
+app.post('/increment-ai-usage', tenantAuthMiddleware, async (c) => {
+  try {
+    const user = c.get('user') as ExtendedMochaUser;
+    const db = getDatabase(c.env);
+
+    const body = await c.req.json();
+    const { organization_id } = body;
+
+    if (!organization_id) {
+      return c.json({ error: 'organization_id é obrigatório' }, 400);
+    }
+
+    // Get user profile to verify access
+    const userProfile = await db.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first() as any;
+
+    if (!userProfile) {
+      return c.json({ error: "User profile not found" }, 404);
+    }
+
+    // Verify user belongs to this organization or is admin
+    const hasAccess =
+      userProfile.organization_id === organization_id ||
+      userProfile.managed_organization_id === organization_id ||
+      userProfile.role === USER_ROLES.SYSTEM_ADMIN ||
+      userProfile.role === 'sys_admin';
+
+    if (!hasAccess) {
+      return c.json({ error: 'Acesso negado' }, 403);
+    }
+
+    // Increment the counter
+    await db.prepare(`
+      UPDATE organizations 
+      SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1,
+  updated_at = NOW()
+      WHERE id = ?
+  `).bind(organization_id).run();
+
+    // Log to ai_usage_log if table exists
+    try {
+      await db.prepare(`
+        INSERT INTO ai_usage_log(organization_id, user_id, feature_type, model_used, status, created_at)
+VALUES(?, ?, 'analysis', 'gpt-4o-mini', 'success', NOW())
+  `).bind(organization_id, user.id).run();
+    } catch (logError) {
+      console.warn('[AI-USAGE] Could not log to ai_usage_log:', logError);
+    }
+
+    console.log('[AI-USAGE] ✅ Incremented for org:', organization_id, 'by user:', user.id);
+
+    return c.json({
+      success: true,
+      message: 'Uso de IA contabilizado'
+    });
+
+  } catch (error) {
+    console.error('Error incrementing AI usage:', error);
+    return c.json({ error: 'Erro ao contabilizar uso de IA' }, 500);
   }
 });
 

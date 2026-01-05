@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/react-app/components/Layout';
 import ChecklistPreview from '@/react-app/components/ChecklistPreview';
 import TemplateSuggestions from '@/react-app/components/TemplateSuggestions';
+import { useAuth } from '@/react-app/context/AuthContext';
 import {
   Brain,
   ArrowLeft,
@@ -13,6 +14,7 @@ import {
 
 export default function AIChecklistGenerator() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [generating, setGenerating] = useState(false);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
@@ -188,6 +190,31 @@ export default function AIChecklistGenerator() {
 
       setGeneratedTemplate(result);
       console.log('Checklist gerado com sucesso!');
+
+      // Increment AI usage count via backend API
+      // SMART FALLBACK: Only increment if backend didn't do it
+      const backendIncremented = (result.meta as any)?.usage_incremented === true;
+
+      if (!backendIncremented) {
+        console.warn('[AI-USAGE] Backend did not increment usage. Triggering Frontend Fallback...');
+        try {
+          const orgId = (user as any)?.organization_id || (user as any)?.profile?.organization_id;
+          if (orgId) {
+            await fetch('/api/organizations/increment-ai-usage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ organization_id: orgId })
+            });
+            console.log('[AI-USAGE] ✅ Fallback increment successful');
+          }
+        } catch (fallbackError) {
+          console.error('[AI-USAGE] Fallback failed:', fallbackError);
+        }
+      } else {
+        console.log('[AI-USAGE] ✅ Backend confirmed usage increment');
+      }
+
+      window.dispatchEvent(new Event('ai_usage_updated'));
 
     } catch (error) {
       console.error('Erro detalhado:', error);

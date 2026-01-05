@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { setCookie, deleteCookie, getCookie } from "hono/cookie";
+import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
 
 const authRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -13,6 +14,17 @@ async function hashPassword(password: string): Promise<string> {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Debug endpoint to check permissions
+authRoutes.get("/debug-permissions", tenantAuthMiddleware, (c) => {
+    const tenantContext = c.get("tenantContext");
+    const user = c.get("user");
+    return c.json({
+        user_id: user?.id,
+        role: user?.role,
+        tenant_context: tenantContext
+    });
+});
 
 // Get current user details - supports both Supabase auth and session cookie
 authRoutes.get("/me", async (c) => {
@@ -46,6 +58,25 @@ authRoutes.get("/me", async (c) => {
             return c.json({ user: null });
         }
 
+        // VERIFICAÇÃO CRÍTICA: Bloquear usuários pendentes
+        if (dbUser.approval_status === 'pending') {
+            return c.json({
+                error: "Conta em análise",
+                message: "Sua conta aguarda aprovação do administrador.",
+                code: "APPROVAL_PENDING",
+                approval_status: "pending",
+                user: null
+            }, 403);
+        } else if (dbUser.approval_status === 'rejected') {
+            return c.json({
+                error: "Conta recusada",
+                message: "Sua solicitação de cadastro foi recusada.",
+                code: "APPROVAL_REJECTED",
+                approval_status: "rejected",
+                user: null
+            }, 403);
+        }
+
         // Build profile object as expected by frontend
         const profile = {
             id: dbUser.id,
@@ -59,7 +90,8 @@ authRoutes.get("/me", async (c) => {
             managed_organization_id: dbUser.managed_organization_id,
             created_at: dbUser.created_at,
             updated_at: dbUser.updated_at,
-            profile_completed: true
+            profile_completed: true,
+            approval_status: dbUser.approval_status
         };
 
         // Helper to extract Google Data
@@ -82,6 +114,19 @@ authRoutes.get("/me", async (c) => {
             googleUserData = (user as any).google_user_data;
         }
 
+        // Fetch accessible organizations
+        let accessibleOrganizations: any[] = [];
+        try {
+            accessibleOrganizations = await env.DB.prepare(`
+                SELECT o.id, o.name, o.type, o.organization_level, uo.role, uo.is_primary
+                FROM organizations o
+                JOIN user_organizations uo ON o.id = uo.organization_id
+                WHERE uo.user_id = ? AND o.is_active = true
+            `).bind(dbUser.id).all().then((res: any) => res.results || []);
+        } catch (e) {
+            console.error('[AUTH-ME] Error fetching user organizations:', e);
+        }
+
         return c.json({
             success: true,
             user: {
@@ -89,8 +134,10 @@ authRoutes.get("/me", async (c) => {
                 email: dbUser.email,
                 name: dbUser.name,
                 role: dbUser.role,
+                approval_status: dbUser.approval_status,
                 profile: profile, // Frontend expects user.profile.role
-                google_user_data: googleUserData // Pass Verified Google Data
+                google_user_data: googleUserData, // Pass Verified Google Data
+                organizations: accessibleOrganizations // N-to-N Orgs list
             }
         });
     } catch (error) {
