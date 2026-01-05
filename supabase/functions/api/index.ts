@@ -28,6 +28,7 @@ import adminDebugRoutes from "./admin-debug-routes.ts";
 import databaseDebugRoutes from "./database-debug-routes.ts";
 import autoOrganizeFolders from "./auto-organize-folders.ts";
 import autosuggestRoutes from "./autosuggest-routes.ts";
+import { aiUsageRoutes } from "./ai-usage-routes.ts";
 import securityEndpoints from "./security-endpoints.ts";
 import actionPlansRoutes from "./action-plans-routes.ts";
 import resetProjectRoutes from "./reset-project.ts";
@@ -86,7 +87,7 @@ app.use('*', async (c, next) => {
     console.log(`[AUTH-DEBUG] ===== Request: ${c.req.method} ${path} =====`);
 
     // Rotas públicas que não precisam de autenticação
-    const publicPaths = ['/api/health', '/api/', '/api/shared', '/api/test-orgs/debug', '/test-orgs/debug', '/api/calendar/debug'];
+    const publicPaths = ['/api/health', '/api/', '/api/shared', '/api/test-orgs/debug', '/test-orgs/debug', '/api/calendar/debug', '/api/debug-usage'];
     const isPublicRoute = publicPaths.some(p => path === p || path.startsWith(p + '/'));
 
     if (isPublicRoute) {
@@ -247,6 +248,7 @@ apiRoutes.route('/notifications', notificationsRoutes);
 apiRoutes.route('/admin', adminApprovalRoutes);
 apiRoutes.route('/user-assignments', userAssignmentRoutes);
 apiRoutes.route('/multi-tenant', multiTenantRoutes);
+apiRoutes.route('/ai-usage', aiUsageRoutes);
 apiRoutes.route('/system-admin', systemAdminRoutes);
 apiRoutes.route('/role-permissions', rolePermissionsRoutes);
 apiRoutes.route('/cep', cepRoutes);
@@ -266,6 +268,18 @@ apiRoutes.route('/audit', auditRoutes);
 apiRoutes.route('/calendar', calendarRoutes);
 apiRoutes.route('/calendar-upload', calendarUploadRoutes);
 apiRoutes.route('/integrations', integrationsRoutes);
+
+// TEMPORARY DEBUG ROUTE
+apiRoutes.get('/debug-usage/:orgId', async (c) => {
+    const orgId = c.req.param('orgId');
+    try {
+        // @ts-ignore
+        const result = await c.env.DB.prepare('SELECT id, name, ai_usage_count FROM organizations WHERE id = ?').bind(orgId).first();
+        return c.json(result || { error: 'Not found' });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
 
 // App principal monta o sub-app em dois lugares:
 // 1. Na raiz '/' (para chamadas diretas ou sem prefixo)

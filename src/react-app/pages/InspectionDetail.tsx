@@ -1,9 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react'; // Added import
 import { fetchWithAuth } from '@/react-app/utils/auth';
 import Layout from '@/react-app/components/Layout';
-import TemplateSelectionModal from '@/react-app/components/TemplateSelectionModal';
 import {
   ArrowLeft,
   Plus,
@@ -26,8 +24,6 @@ import {
   Sparkles,
   Trash2,
   RotateCcw,
-  Settings,
-  Bot
 } from 'lucide-react';
 import { InspectionType, InspectionItemType, InspectionMediaType } from '@/shared/types';
 import { FieldResponse } from '@/shared/checklist-types';
@@ -85,17 +81,7 @@ export default function InspectionDetail() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- Configuration State (Deferred) ---
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [configData, setConfigData] = useState({
-    template_id: '',
-    ai_assistant_id: ''
-  });
-  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
-  const [availableFolders, setAvailableFolders] = useState<any[]>([]);
-  const [availableAIAssistants, setAvailableAIAssistants] = useState<any[]>([]);
-  const [showTemplateSelect, setShowTemplateSelect] = useState(false);
-  const [selectedTemplateName, setSelectedTemplateName] = useState('');
+
 
   useEffect(() => {
     // Only fetch if ID is valid (truthy and not the literal string "undefined")
@@ -271,68 +257,11 @@ export default function InspectionDetail() {
 
   };
 
-  const fetchConfigurationOptions = async () => {
-    try {
-      // Fetch Templates
-      const tplResponse = await fetchWithAuth('/api/checklist/checklist-templates');
-      if (tplResponse.ok) {
-        const data = await tplResponse.json();
-        setAvailableTemplates(data.templates || []);
-        setAvailableFolders(data.folders || []);
-      }
 
-      // Fetch AI Assistants
-      const aiResponse = await fetchWithAuth('/api/ai-assistants');
-      if (aiResponse.ok) {
-        const data = await aiResponse.json();
-        setAvailableAIAssistants(data.assistants || []);
-      }
-    } catch (error) {
-      console.error('Error fetching config options:', error);
-    }
-  };
 
-  useEffect(() => {
-    if (inspection && !inspection.template_id) {
-      fetchConfigurationOptions();
-      setShowConfigModal(true);
-    }
-  }, [inspection]);
 
-  const handleSaveConfiguration = async () => {
-    if (!configData.template_id) {
-      error('Template obrigatÃ³rio', 'Por favor, selecione um checklist para continuar.');
-      return;
-    }
 
-    setIsSubmitting(true);
-    try {
-      const response = await fetchWithAuth(`/api/inspections/${id}/configure`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template_id: Number(configData.template_id),
-          ai_assistant_id: configData.ai_assistant_id ? Number(configData.ai_assistant_id) : null
-        })
-      });
 
-      if (response.ok) {
-        success('ConfiguraÃ§Ã£o salva', 'InspeÃ§Ã£o configurada com sucesso!');
-        setShowConfigModal(false);
-        // Reload inspection to apply template items
-        // We force a page reload or full re-fetch because the backend "configure" endpoint 
-        // likely generates the inspection items from the template.
-        window.location.reload();
-      } else {
-        throw new Error('Falha ao configurar inspeÃ§Ã£o');
-      }
-    } catch (err) {
-      console.error(err);
-      error('Erro', 'NÃ£o foi possÃ­vel salvar a configuraÃ§Ã£o.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDeleteItem = async (itemId: number, isTemplateItem: boolean = false) => {
     if (!confirm('Tem certeza que deseja excluir este item? ' + (isTemplateItem ? 'Isso removerÃ¡ a pergunta do relatÃ³rio.' : ''))) return;
@@ -440,11 +369,11 @@ export default function InspectionDetail() {
       ));
 
     } catch (err) {
-      console.error('Erro ao atualizar anÃ¡lise:', err);
+      console.error('Erro ao atualizar análise:', err);
       // Use standard alert if 'error' toast wrapper is shadowed or unavailable in this scope, 
       // but 'error' from useToast is available in component scope.
       // Renamed argument in catch block to 'err' to avoid shadowing 'error' function from useToast
-      error('Erro', 'NÃ£o foi possÃ­vel atualizar a anÃ¡lise.');
+      error('Erro', 'Não foi possível atualizar a análise.');
     }
   };
 
@@ -516,7 +445,7 @@ export default function InspectionDetail() {
       // But if we saved successfully, refreshing is safer.
     } catch (err) {
       console.error('Erro ao salvar respostas:', err);
-      error('Erro ao salvar respostas', 'NÃ£o foi possÃ­vel salvar as respostas. Tente novamente.');
+      error('Erro ao salvar respostas', 'Não foi possível salvar as respostas. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -533,7 +462,7 @@ export default function InspectionDetail() {
         });
         return updated;
       });
-      success('Assinatura salva', `Assinatura do ${type === 'inspector' ? 'inspetor' : 'responsÃ¡vel'} foi capturada com sucesso`);
+      success('Assinatura salva', `Assinatura do ${type === 'inspector' ? 'inspetor' : 'responsável'} foi capturada com sucesso`);
 
       // Immediately save signature to database
       try {
@@ -570,7 +499,7 @@ export default function InspectionDetail() {
     if (missingItems.length > 0) {
       warning(
         'Itens Pendentes',
-        `VocÃª precisa responder ${missingItems.length} itens antes de finalizar a inspeÃ§Ã£o.`
+        `Você precisa responder ${missingItems.length} itens antes de finalizar a inspeção.`
       );
       // Optionally scroll to first missing item or show a list
       return;
@@ -583,7 +512,7 @@ export default function InspectionDetail() {
     if (!hasInspectorSignature || !hasResponsibleSignature) {
       const missingSignatures = [];
       if (!hasInspectorSignature) missingSignatures.push('inspetor');
-      if (!hasResponsibleSignature) missingSignatures.push('responsÃ¡vel');
+      if (!hasResponsibleSignature) missingSignatures.push('responsável');
 
       warning(
         'Assinaturas obrigatÃ³rias',
@@ -636,7 +565,7 @@ export default function InspectionDetail() {
       }
 
       console.log('Inspection finalized successfully');
-      success('InspeÃ§Ã£o finalizada', 'InspeÃ§Ã£o foi finalizada com sucesso! As assinaturas foram salvas.');
+      success('Inspeção finalizada', 'Inspeção foi finalizada com sucesso! As assinaturas foram salvas.');
 
       // Update local state immediately to reflect completed status
       setInspection(prev => prev ? { ...prev, status: 'concluida', completed_date: new Date().toISOString() } : null);
@@ -653,9 +582,12 @@ export default function InspectionDetail() {
           setSignatures(updatedSignatures);
           console.log('Updated signatures after finalization:', updatedSignatures);
         }
-      } catch (cacheError) {
-        console.error('Failed to refresh signatures cache:', cacheError);
+        return undefined;
+      } catch (error) {
+        console.error('Erro:', error);
+        return undefined;
       }
+
 
       // Fetch updated inspection details to ensure all data is current
       await fetchInspectionDetails();
@@ -669,7 +601,7 @@ export default function InspectionDetail() {
 
   const handleReopenInspection = async () => {
     if (!reopenJustification.trim()) {
-      warning('Justificativa obrigatÃ³ria', 'Por favor, informe o motivo para reabrir a inspeÃ§Ã£o.');
+      warning('Justificativa obrigatória', 'Por favor, informe o motivo para reabrir a inspeção.');
       return;
     }
 
@@ -688,7 +620,7 @@ export default function InspectionDetail() {
         throw new Error(errorData.error || 'Erro ao reabrir inspeÃ§Ã£o');
       }
 
-      success('InspeÃ§Ã£o reaberta', 'A inspeÃ§Ã£o foi reaberta e estÃ¡ pronta para ediÃ§Ã£o. Novas assinaturas serÃ£o necessÃ¡rias para finalizar.');
+      success('Inspeção reaberta', 'A inspeção foi reaberta e está pronta para edição. Novas assinaturas serão necessárias para finalizar.');
       setShowReopenModal(false);
       setReopenJustification('');
 
@@ -791,10 +723,15 @@ export default function InspectionDetail() {
         const result = await response.json();
         setActionPlan(result.action_plan);
         success('Plano de aÃ§Ã£o gerado', 'AnÃ¡lise da IA foi concluÃ­da e plano de aÃ§Ã£o foi gerado!');
+        console.log('[AI-USAGE] ✅ Global Analysis generated. Backend confirmed usage increment:', result.ai_usage_incremented);
+
+        // Dispatch update event
+        window.dispatchEvent(new Event('ai_usage_updated'));
 
         // Refresh inspection details to ensure action plan is saved and loaded
         await fetchInspectionDetails();
       } else {
+        console.error('[AI-USAGE] ❌ Global Analysis request failed:', response.status);
         throw new Error('Erro na anÃ¡lise de IA');
       }
     } catch (err) {
@@ -825,7 +762,7 @@ export default function InspectionDetail() {
       case 'pendente': return 'Pendente';
       case 'scheduled': return 'Agendado';
       case 'em_andamento': return 'Em Andamento';
-      case 'concluida': return 'ConcluÃ­da';
+      case 'concluida': return 'Concluída';
       case 'cancelada': return 'Cancelada';
       default: return status;
     }
@@ -845,7 +782,7 @@ export default function InspectionDetail() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <LoadingSpinner size="lg" text="Carregando detalhes da inspeÃ§Ã£o..." />
+          <LoadingSpinner size="lg" text="Carregando detalhes da inspeção..." />
         </div>
       </Layout>
     );
@@ -856,9 +793,9 @@ export default function InspectionDetail() {
       <Layout>
         <div className="text-center py-12">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">InspeÃ§Ã£o nÃ£o encontrada</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Inspeção não encontrada</h2>
           <Link to="/inspections" className="text-blue-600 hover:underline">
-            Voltar para inspeÃ§Ãµes
+            Voltar para inspeções
           </Link>
         </div>
       </Layout>
@@ -884,106 +821,7 @@ export default function InspectionDetail() {
     );
   }
 
-  // --- CONFIGURATION MODAL ---
-  if (showConfigModal && inspection) {
-    return (
-      <Layout>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="bg-blue-600 p-6 text-white text-center">
-              <Settings className="w-12 h-12 mx-auto mb-3 opacity-90" />
-              <h2 className="text-xl font-bold">ConfiguraÃ§Ã£o da InspeÃ§Ã£o</h2>
-              <p className="text-blue-100 text-sm mt-1">
-                Esta inspeÃ§Ã£o foi agendada sem detalhes tÃ©cnicos.
-                <br />Por favor, defina o checklist e o assistente antes de iniciar.
-              </p>
-            </div>
 
-            <div className="p-6 space-y-6">
-              {/* Summary of Context */}
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-600 space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-semibold">Cliente:</span>
-                  <span>{inspection.company_name || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold">Local:</span>
-                  <span>{inspection.location || 'N/A'}</span>
-                </div>
-              </div>
-
-              {/* Template Select */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Checklist / Template *</label>
-                <button
-                  onClick={() => setShowTemplateSelect(true)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-300 rounded-lg hover:border-blue-500 hover:ring-2 hover:ring-blue-100 transition-all text-left group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 text-blue-600 rounded group-hover:bg-blue-100 transition-colors">
-                      <FileText size={18} />
-                    </div>
-                    <span className={selectedTemplateName ? 'text-slate-900 font-medium' : 'text-slate-400'}>
-                      {selectedTemplateName || 'Selecione um checklist...'}
-                    </span>
-                  </div>
-                  <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-500" />
-                </button>
-              </div>
-
-              {/* AI Assistant Select */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Assistente de IA</label>
-                <div className="relative">
-                  <Bot className="absolute left-3 top-3 text-slate-400" size={18} />
-                  <select
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
-                    value={configData.ai_assistant_id}
-                    onChange={(e) => setConfigData({ ...configData, ai_assistant_id: e.target.value })}
-                  >
-                    <option value="">Sem assistente específico (Padrão)</option>
-                    {availableAIAssistants.map(ai => (
-                      <option key={ai.id} value={ai.id}>{ai.name} - {ai.role}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <button
-                onClick={handleSaveConfiguration}
-                disabled={isSubmitting || !configData.template_id}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <LoadingSpinner size="sm" />
-                    Configurando...
-                  </>
-                ) : (
-                  <>
-                    <Check size={20} />
-                    Confirmar e Iniciar
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <TemplateSelectionModal
-            isOpen={showTemplateSelect}
-            onClose={() => setShowTemplateSelect(false)}
-            folders={availableFolders}
-            templates={availableTemplates}
-            onSelect={(template) => {
-              setConfigData({ ...configData, template_id: String(template.id) });
-              setSelectedTemplateName(template.name);
-              setShowTemplateSelect(false);
-            }}
-          />
-        </div>
-      </Layout>
-    );
-  }
 
 
 
@@ -1002,7 +840,7 @@ export default function InspectionDetail() {
             <h1 className="font-heading text-3xl font-bold text-slate-900">
               {inspection.title}
             </h1>
-            <p className="text-slate-600 mt-1">Detalhes da inspeÃ§Ã£o</p>
+            <p className="text-slate-600 mt-1">Detalhes da inspeção</p>
           </div>
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full ${getPriorityColor(inspection.priority)}`}>
@@ -1083,7 +921,7 @@ export default function InspectionDetail() {
           </div>
           {inspection.description && (
             <div className="mt-6 pt-6 border-t border-slate-200">
-              <p className="text-sm text-slate-500 mb-2">DescriÃ§Ã£o</p>
+              <p className="text-sm text-slate-500 mb-2">Descrição</p>
               <p className="text-slate-700">{inspection.description}</p>
             </div>
           )}
@@ -1101,7 +939,7 @@ export default function InspectionDetail() {
                 <Link
                   to={`/inspections/${id}/action-plan`}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-white text-purple-700 border border-purple-200 text-sm font-medium rounded-lg hover:bg-purple-50 transition-colors shadow-sm"
-                  title="Visualizar todas as aÃ§Ãµes geradas ou criadas manualmente"
+                  title="Visualizar todas as ações geradas ou criadas manualmente"
                 >
                   <Target className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Ver Plano de Ação</span>
@@ -1111,7 +949,7 @@ export default function InspectionDetail() {
                   onClick={generateAIAnalysis}
                   disabled={aiAnalyzing || isSubmitting}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                  title="Gera anÃ¡lise automÃ¡tica (5W2H) para todos os itens nÃ£o conformes"
+                  title="Gera análise automática (5W2H) para todos os itens não conformes"
                 >
                   {aiAnalyzing ? (
                     <LoadingSpinner size="sm" />
@@ -1120,7 +958,7 @@ export default function InspectionDetail() {
                   )}
                   {aiAnalyzing ? 'Analisando...' : (
                     <>
-                      <span className="hidden sm:inline">Gerar AnÃ¡lises (IA)</span>
+                      <span className="hidden sm:inline">Gerar Análises (IA)</span>
                       <span className="sm:hidden">IA</span>
                     </>
                   )}
@@ -1134,7 +972,7 @@ export default function InspectionDetail() {
                 <button
                   onClick={() => setShowNewAction(true)}
                   className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors shadow-sm"
-                  title="Criar uma aÃ§Ã£o manual"
+                  title="Criar uma ação manual"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Nova Ação</span>
@@ -1169,12 +1007,12 @@ export default function InspectionDetail() {
                     value={newAction.title}
                     onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Ex: Instalar equipamento de proteÃ§Ã£o"
+                    placeholder="Ex: Instalar equipamento de proteção"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    <span className="text-red-600">O que?</span> (DescriÃ§Ã£o)
+                    <span className="text-red-600">O que?</span> (Descrição)
                   </label>
                   <textarea
                     value={newAction.what_description}
@@ -1229,7 +1067,7 @@ export default function InspectionDetail() {
                     value={newAction.who_responsible}
                     onChange={(e) => setNewAction({ ...newAction, who_responsible: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Responsável pela execuÃ§Ã£o..."
+                    placeholder="Responsável pela execução..."
                   />
                 </div>
                 <div>
@@ -1306,14 +1144,14 @@ export default function InspectionDetail() {
                 />
                 <input
                   type="text"
-                  placeholder="DescriÃ§Ã£o do item"
+                  placeholder="Descrição do item"
                   value={newItem.item_description}
                   onChange={(e) => setNewItem({ ...newItem, item_description: e.target.value })}
                   className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <textarea
-                placeholder="ObservaÃ§Ãµes (opcional)"
+                placeholder="Observações (opcional)"
                 value={newItem.observations}
                 onChange={(e) => setNewItem({ ...newItem, observations: e.target.value })}
                 className="w-full mt-4 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1531,7 +1369,7 @@ export default function InspectionDetail() {
                           <AlertCircle className="w-4 h-4" />
                         )}
                         <span className="text-sm font-medium">
-                          {item.is_compliant ? 'Conforme' : 'NÃ£o Conforme'}
+                          {item.is_compliant ? 'Conforme' : 'Não Conforme'}
                         </span>
                       </div>
                     )
@@ -1548,7 +1386,7 @@ export default function InspectionDetail() {
           <div className="flex items-center gap-2 mb-4">
             <ImageIcon className="w-5 h-5 text-slate-600" />
             <h2 className="font-heading text-xl font-semibold text-slate-900">
-              MÃ­dias da Inspeção
+              Mídias da Inspeção
             </h2>
           </div>
           <MediaUpload
@@ -1594,7 +1432,7 @@ export default function InspectionDetail() {
                           }`}>
                           {action.status === 'pending' ? 'Pendente' :
                             action.status === 'in_progress' ? 'Em Progresso' :
-                              action.status === 'completed' ? 'ConcluÃ­do' : action.status}
+                              action.status === 'completed' ? 'Concluído' : action.status}
                         </span>
                       </div>
                     </div>
@@ -1775,7 +1613,7 @@ export default function InspectionDetail() {
                       <InspectionSignature
                         onSignatureSaved={(signature) => handleSignatureSaved('responsible', signature)}
                         existingSignature={signatures.responsible}
-                        signerName={inspection.responsible_name || "Responsável TÃ©cnico"}
+                        signerName={inspection.responsible_name || "Responsável Técnico"}
                         signerRole="Empresa"
                       />
                     </div>
@@ -1826,14 +1664,14 @@ export default function InspectionDetail() {
                       Reabrir Inspeção
                     </h2>
                     <p className="text-sm text-slate-500">
-                      Esta aÃ§Ã£o serÃ¡ registrada para auditoria
+                      Esta ação será registrada para auditoria
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-amber-800">
-                    <strong>AtenÃ§Ã£o:</strong> Ao reabrir a inspeÃ§Ã£o, as assinaturas atuais serÃ£o arquivadas e novas assinaturas serÃ£o necessÃ¡rias para finalizar novamente.
+                    <strong>Atenção:</strong> Ao reabrir a inspeção, as assinaturas atuais serão arquivadas e novas assinaturas serão necessárias para finalizar novamente.
                   </p>
                 </div>
 
@@ -1844,7 +1682,7 @@ export default function InspectionDetail() {
                   <textarea
                     value={reopenJustification}
                     onChange={(e) => setReopenJustification(e.target.value)}
-                    placeholder="Informe o motivo para reabrir esta inspeÃ§Ã£o..."
+                    placeholder="Informe o motivo para reabrir esta inspeção..."
                     rows={3}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
                   />

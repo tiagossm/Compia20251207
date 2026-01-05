@@ -56,7 +56,20 @@ export default function ChecklistForm({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Initialize state from fields (responses, comments, compliance status, and AI analysis)
+  // Track previous inspection ID to prevent state reset on auto-save updates
+  const prevInspectionIdRef = useRef<number | undefined>(undefined);
+
+  // Initialize state from fields (responses, comments, compliance status, and AI analysis)
   useEffect(() => {
+    // Only re-initialize if inspectionId changes (navigation) or if it's the first mount.
+    // We ignore updates to 'initialValues' alone because they often come from our own auto-save,
+    // and resetting state would overwrite user input that happened during the save (race condition).
+    const currentId = inspectionId || 0;
+    if (prevInspectionIdRef.current !== undefined && prevInspectionIdRef.current === currentId) {
+      return;
+    }
+    prevInspectionIdRef.current = currentId;
+
     const initResponses: Record<number, any> = {};
     const initComments: Record<number, string> = {};
     const initStatuses: Record<number, string> = {};
@@ -92,7 +105,7 @@ export default function ChecklistForm({
     setItemsComments(initComments);
     setComplianceStatuses(initStatuses);
     setItemsAnalysis(initAnalysis);
-  }, [fields, initialValues]);
+  }, [fields, initialValues, inspectionId]);
 
   // Auto-save state
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
@@ -320,6 +333,8 @@ export default function ChecklistForm({
         if (onUpdateAiAnalysis) {
           onUpdateAiAnalysis(fieldId, data.pre_analysis || data.analysis || 'Análise concluída.');
         }
+        console.log('[AI-USAGE] ✅ Analysis generated. Backend confirmed usage increment:', data.ai_usage_incremented);
+        window.dispatchEvent(new Event('ai_usage_updated'));
       } else {
         console.error("AI Analysis failed", response.statusText);
         alert("Erro ao gerar análise IA. Tente novamente.");
@@ -370,6 +385,8 @@ export default function ChecklistForm({
         if (data.action_item) {
           setItemsActionPlan(prev => ({ ...prev, [fieldId]: data.action_item }));
         }
+        console.log('[AI-USAGE] ✅ 5W2H Action Plan generated. Backend confirmed usage increment:', data.ai_usage_incremented);
+        window.dispatchEvent(new Event('ai_usage_updated'));
       } else {
         const err = await response.json().catch(() => ({}));
         console.error("AI Action Plan failed", err);

@@ -223,7 +223,7 @@ userAssignmentRoutes.post("/", tenantAuthMiddleware, async (c) => {
         // Se is_primary, remover flag de outras atribuições
         if (is_primary) {
             await db.prepare(`
-        UPDATE user_organizations SET is_primary = 0 WHERE user_id = ?
+        UPDATE user_organizations SET is_primary = false WHERE user_id = ?
       `).bind(user_id).run();
 
             // Atualizar organization_id na tabela users (retrocompatibilidade)
@@ -237,14 +237,14 @@ userAssignmentRoutes.post("/", tenantAuthMiddleware, async (c) => {
         await db.prepare(`
       INSERT INTO user_organizations (
         id, user_id, organization_id, role, permissions, is_primary, is_active, assigned_by, assigned_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, true, ?, NOW())
     `).bind(
             assignmentId,
             user_id,
             organization_id,
             role,
             JSON.stringify(permissions || {}),
-            is_primary ? 1 : 0,
+            is_primary ? true : false,
             currentUser.id
         ).run();
 
@@ -316,7 +316,7 @@ userAssignmentRoutes.post("/bulk", tenantAuthMiddleware, async (c) => {
                 await db.prepare(`
                     INSERT INTO user_organizations (
                         id, user_id, organization_id, role, permissions, is_primary, is_active, assigned_by, assigned_at
-                    ) VALUES (?, ?, ?, ?, ?, 0, 1, ?, NOW())
+                    ) VALUES (?, ?, ?, ?, ?, false, true, ?, NOW())
                 `).bind(
                     assignmentId,
                     user_id,

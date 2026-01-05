@@ -58,11 +58,15 @@ export default function Layout({ children, actionButton }: LayoutProps) {
     }
 
     const handleUsageUpdate = () => {
+      console.log('[AI-USAGE-LAYOUT] 👂 Event caught: ai_usage_updated. Org ID:', profile?.organization_id);
       if (profile?.organization_id) {
         fetchOrgUsage(profile.organization_id);
+      } else {
+        console.warn('[AI-USAGE-LAYOUT] No Organization ID found in profile when event received.');
       }
     };
 
+    console.log('[AI-USAGE-LAYOUT] Listener mounted for org:', profile?.organization_id);
     window.addEventListener('ai_usage_updated', handleUsageUpdate);
 
     return () => {
@@ -72,18 +76,22 @@ export default function Layout({ children, actionButton }: LayoutProps) {
 
   const fetchOrgUsage = async (orgId: number | string) => {
     try {
+      console.log(`[AI-USAGE-LAYOUT] Fetching usage for org: ${orgId}`);
       const response = await fetch(`/api/organizations/${orgId}`);
       if (response.ok) {
         const data = await response.json();
         const orgData = data.organization || data;
+        console.log('[AI-USAGE-LAYOUT] Fetched usage data:', { current: orgData.ai_usage_count, limit: orgData.ai_limit });
         setOrgUsage({
           current: orgData.ai_usage_count || 0,
           limit: orgData.ai_limit || 100,
           resetDate: orgData.ai_reset_date
         });
+      } else {
+        console.error('[AI-USAGE-LAYOUT] Failed to fetch usage. Status:', response.status);
       }
     } catch (e) {
-      console.error('Failed to fetch org usage', e);
+      console.error('[AI-USAGE-LAYOUT] Exception fetching org usage', e);
     }
   };
 
@@ -166,6 +174,7 @@ export default function Layout({ children, actionButton }: LayoutProps) {
             <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-4">Visão Geral</p>
             <NavItem item={{ name: 'Dashboard', href: '/', icon: LayoutDashboard }} />
             <NavItem item={{ name: 'Relatórios', href: '/reports', icon: BarChart3 }} />
+            <NavItem item={{ name: 'Uso de IA', href: '/ai-reports', icon: BarChart3 }} />
           </div>
 
           {/* Operação */}

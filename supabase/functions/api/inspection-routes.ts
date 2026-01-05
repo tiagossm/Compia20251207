@@ -4,6 +4,7 @@ import { USER_ROLES } from "./user-types.ts";
 // import database-init removido
 import { TenantContext } from "./tenant-auth-middleware.ts";
 import { logActivity } from "./audit-logger.ts";
+import { addXP } from "./gamification-routes.ts";
 
 type Env = {
   DB: any;
@@ -229,22 +230,48 @@ inspectionRoutes.post("/", tenantAuthMiddleware, async (c) => {
       is_offline_sync = false
     } = body;
 
-    // CRÍTICO: organization_id vem do contexto SEGURO, não do body
-    // Isso previne ataques de injeção de tenant
-    const secureOrgId = tenantContext?.organizationId || user.organization_id;
+    // CRÍTICO: organization_id validação segura
+    // O usuário pode especificar qualquer organização que ele tenha acesso (allowedOrganizationIds)
+    let secureOrgId = tenantContext?.organizationId || user.organization_id;
+
+    console.log(`[DEBUG-INSPECTION] User: ${user.id}, Role: ${user.role}, IsSystemAdmin: ${tenantContext?.isSystemAdmin}`);
+    console.log(`[DEBUG-INSPECTION] AllowedOrgs: ${JSON.stringify(tenantContext?.allowedOrganizationIds)}`);
+    console.log(`[DEBUG-INSPECTION] Requested Org: ${body.organization_id} (Type: ${typeof body.organization_id})`);
+
+    if (body.organization_id) {
+      // Validação: Se o usuário enviou um ID, ele deve estar na lista de IDs permitidos
+      // Cast para Number para garantir comparação correta
+      const reqOrgId = Number(body.organization_id);
+
+      // Se isSystemAdmin (user.role == sys_admin), permite qualquer ID
+      if (tenantContext?.isSystemAdmin || tenantContext?.allowedOrganizationIds?.includes(reqOrgId)) {
+        secureOrgId = reqOrgId;
+      } else {
+        const allowedIdsSt = tenantContext?.allowedOrganizationIds?.join(', ') || 'Nenhum';
+        const middlewareError = c.get('tenantAuthError' as any); // Capture error from middleware
+        console.warn(`[SECURITY] Bloqueada tentativa de criar inspeção em organização não permitida. User: ${user.id}, Target: ${body.organization_id}`);
+        return c.json({
+          error: "Permissão negada",
+          message: `Você não tem permissão para criar inspeções nesta organização. (Debug: MiddlewareErr=${middlewareError || 'None'}, Req=${reqOrgId}, Allowed=[${allowedIdsSt}])`,
+          debug: {
+            user_id: user.id,
+            requested_org_id: reqOrgId,
+            allowed_org_ids: tenantContext?.allowedOrganizationIds || [],
+            is_system_admin: tenantContext?.isSystemAdmin,
+            middleware_error: middlewareError,
+            middleware_log: (tenantContext as any)?._debugLog
+          }
+        }, 403);
+      }
+    }
 
     if (!secureOrgId) {
       return c.json({
         error: "Organização não definida",
-        message: "Usuário não está associado a nenhuma organização"
+        message: "Usuário não está associado a nenhuma organização e nenhuma foi selecionada."
       }, 400);
     }
 
-    // Validar se o body tenta injetar organization_id diferente (log de segurança)
-    if (body.organization_id && body.organization_id !== secureOrgId) {
-      console.warn(`[SECURITY] Tentativa de injeção de org_id detectada.User: ${user.id}, Body: ${body.organization_id}, Seguro: ${secureOrgId} `);
-      // Não bloquear, apenas ignorar o valor do body e usar o seguro
-    }
 
     // Capturar IP e User-Agent para auditoria
     const ipAddress = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
@@ -1397,6 +1424,139 @@ SELECT * FROM inspections WHERE id = ?
 });
 
 
+// Generate Full AI Analysis for Inspection (Action Plan)
+inspectionRoutes.post("/:id/ai-analysis", tenantAuthMiddleware, async (c) => {
+  const env = c.env;
+  const user = c.get("user");
+  const inspectionId = parseInt(c.req.param("id"));
+
+  if (!user) {
+    return c.json({ error: "User not found" }, 401);
+  }
+
+  if (!env.OPENAI_API_KEY) {
+    return c.json({ error: "IA não disponível" }, 503);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { media_urls, inspection_context, non_compliant_items } = body;
+
+    // Verify access
+    const inspection = await env.DB.prepare("SELECT * FROM inspections WHERE id = ?").bind(inspectionId).first() as any;
+    if (!inspection) {
+      return c.json({ error: "Inspeção não encontrada" }, 404);
+    }
+
+    // Increment AI Usage
+    let usageIncremented = false;
+    try {
+      const userId = user.id || (user as any).sub;
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(userId).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        usageIncremented = true;
+
+        try {
+          await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'analysis', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
+        } catch (e) { /* ignore log error */ }
+      }
+    } catch (usageErr) {
+      console.error("Failed to increment AI usage:", usageErr);
+    }
+
+    // Prepare OpenAI Prompt
+    const systemMessage = {
+      role: 'system',
+      content: 'Você é um especialista sênior em Segurança do Trabalho. Sua função é analisar listas de não conformidades e gerar um PLANO DE AÇÃO PRÁTICO e assertivo.'
+    };
+
+    const userMessage = {
+      role: 'user',
+      content: `CONTEXTO DA INSPEÇÃO:
+${inspection_context}
+
+ITENS NÃO CONFORMES IDENTIFICADOS:
+${non_compliant_items.join('\n')}
+
+EVIDÊNCIAS:
+${media_urls?.length || 0} arquivos de mídia anexados pelo inspetor.
+
+TAREFA:
+Com base APENAS nos itens não conformes listados, gere um PLANO DE AÇÃO consolidado.
+O plano deve ser prático, direto e focado em resolver os problemas de segurança.
+
+Retorne APENAS um JSON no seguinte formato:
+{
+  "action_plan": "Texto completo do plano de ação formatado em Markdown (use tópicos, negrito para destaque)",
+  "priority": "alta|media|baixa",
+  "estimated_time": "Tempo estimado para resolução (ex: 5 dias)"
+}`
+    };
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [systemMessage, userMessage],
+        temperature: 0.4,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha na comunicação com a OpenAI');
+    }
+
+    const aiData = await response.json();
+    const content = aiData.choices?.[0]?.message?.content;
+
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch (e) {
+      // Fallback for plain text
+      result = { action_plan: content, priority: 'media' };
+    }
+
+    // Save Action Plan to Inspection
+    await env.DB.prepare("UPDATE inspections SET action_plan = ?, updated_at = NOW() WHERE id = ?")
+      .bind(result.action_plan, inspectionId).run();
+
+    // Award XP (15 XP for full analysis)
+    try {
+      await addXP(user.id, 15, env.DB);
+    } catch (xpError) {
+      console.error('Error awarding XP:', xpError);
+    }
+
+    return c.json({
+      success: true,
+      action_plan: result.action_plan,
+      priority: result.priority,
+      ai_usage_incremented: usageIncremented
+    });
+
+  } catch (error) {
+    console.error('Error in AI Analysis:', error);
+    return c.json({ error: "Erro ao gerar análise de IA" }, 500);
+  }
+});
+
+
 // Generate field response with AI for inspection items
 inspectionRoutes.post("/items/:itemId/generate-field-response", tenantAuthMiddleware, async (c) => {
   const env = c.env;
@@ -1414,6 +1574,32 @@ inspectionRoutes.post("/items/:itemId/generate-field-response", tenantAuthMiddle
   try {
     const body = await c.req.json();
     const { field_name, field_type, current_response, media_data, field_options } = body;
+
+    // Increment AI Usage
+    let usageIncremented = false;
+    try {
+      const userId = user.id || (user as any).sub;
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(userId).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        usageIncremented = true;
+
+        try {
+          await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'analysis', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
+        } catch (e) { /* ignore log error */ }
+      }
+    } catch (usageErr) {
+      console.error("Failed to increment AI usage:", usageErr);
+    }
 
     // Get inspection item and context
     const item = await env.DB.prepare(`
@@ -1666,15 +1852,27 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
       }
     }
 
-    return c.json({
+    const responseJson = {
       success: true,
+      ai_usage_incremented: usageIncremented,
       generated_response: finalResponse,
       generated_comment: aiResult.generated_comment || '',
       confidence: aiResult.confidence || 'media',
       media_analyzed: mediaAnalyzed,
       item_id: itemId,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Award XP (5 XP for field help)
+    // Note: We intentionally do this after sending response to not block UI, but technically Hono waits. 
+    // Ideally use waitUntil but not available here easily without ctx.
+    try {
+      await addXP(user.id, 5, env.DB);
+    } catch (e) { console.error('XP Error', e); }
+
+    return c.json(responseJson);
+
+
 
   } catch (error) {
     console.error('Error generating field response:', error);
@@ -1795,6 +1993,32 @@ inspectionRoutes.post("/items/:itemId/create-action", tenantAuthMiddleware, asyn
   try {
     const body = await c.req.json();
     const { field_name, field_type, response_value, pre_analysis, media_data, user_prompt } = body;
+
+    // Increment AI Usage
+    let usageIncremented = false;
+    try {
+      const userId = user.id || (user as any).sub;
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(userId).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        usageIncremented = true;
+
+        try {
+          await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'action_plan', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
+        } catch (e) { /* ignore log error */ }
+      }
+    } catch (usageErr) {
+      console.error("Failed to increment AI usage:", usageErr);
+    }
 
     // Get inspection item and context
     const item = await env.DB.prepare(`
@@ -2090,10 +2314,17 @@ Base sua decisão exclusivamente nas evidências analisadas e seja específico s
       actionPlan.id = result.meta.last_row_id;
       actionPlan.evidence_analysis = enhancedPlan.evidence_analysis;
       actionPlan.visual_findings = enhancedPlan.visual_findings;
+      actionPlan.visual_findings = enhancedPlan.visual_findings;
     }
+
+    // Award XP (10 XP for creating action item)
+    try {
+      await addXP(user.id, 10, env.DB);
+    } catch (e) { console.error('XP Error', e); }
 
     return c.json({
       success: true,
+      ai_usage_incremented: usageIncremented,
       action: actionPlan,
       item_id: itemId,
       timestamp: new Date().toISOString()
@@ -2125,6 +2356,32 @@ inspectionRoutes.post("/items/:itemId/pre-analysis", tenantAuthMiddleware, async
   try {
     const body = await c.req.json();
     const { field_name, field_type, response_value, media_data, user_prompt } = body;
+
+    // Increment AI Usage
+    let usageIncremented = false;
+    try {
+      const userId = user.id || (user as any).sub;
+      const userProfile = await env.DB.prepare(
+        "SELECT organization_id FROM users WHERE id = ?"
+      ).bind(userId).first() as { organization_id?: number };
+
+      if (userProfile?.organization_id) {
+        await env.DB.prepare(
+          "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+        ).bind(userProfile.organization_id).run();
+
+        usageIncremented = true;
+
+        try {
+          await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'pre_analysis', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
+        } catch (e) { /* ignore log error */ }
+      }
+    } catch (usageErr) {
+      console.error("Failed to increment AI usage:", usageErr);
+    }
 
     // Get inspection item with inspection context
     const item = await env.DB.prepare(`
@@ -2290,8 +2547,14 @@ Seja técnico, específico e cite detalhes visuais / sonoros concretos das evid�
       WHERE id = ?
   `).bind(analysis, itemId).run();
 
+    // Award XP (5 XP for pre-analysis)
+    try {
+      await addXP(user.id, 5, env.DB);
+    } catch (e) { console.error('XP Error', e); }
+
     return c.json({
       success: true,
+      ai_usage_incremented: usageIncremented,
       pre_analysis: analysis,
       analysis: analysis, // For backward compatibility
       media_analyzed: mediaAnalyzed,

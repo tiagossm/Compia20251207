@@ -41,6 +41,7 @@ const AuditLogs = lazy(() => import("@/react-app/pages/AuditLogs"));
 const LandingPage = lazy(() => import("@/react-app/pages/LandingPage"));
 const AgendaPage = lazy(() => import("@/react-app/pages/AgendaPage"));
 const IntegrationsPage = lazy(() => import("@/react-app/pages/IntegrationsPage"));
+const AIUsageReport = lazy(() => import("@/react-app/pages/AIUsageReport"));
 
 export default function App() {
   return (
@@ -86,6 +87,7 @@ export default function App() {
                 <Route path="/activities" element={<AuthGuard><ActivitiesHub /></AuthGuard>} />
                 <Route path="/agenda" element={<AuthGuard><AgendaPage /></AuthGuard>} />
                 <Route path="/integrations" element={<AuthGuard><IntegrationsPage /></AuthGuard>} />
+                <Route path="/ai-reports" element={<AuthGuard><AIUsageReport /></AuthGuard>} />
 
                 {/* Admin routes */}
                 <Route path="/users" element={<AuthGuard requiredRoles={["system_admin", "admin"]}><Users /></AuthGuard>} />

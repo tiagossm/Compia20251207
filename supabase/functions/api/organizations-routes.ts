@@ -112,7 +112,7 @@ app.get('/', tenantAuthMiddleware, async (c) => {
 
     let query = `
       SELECT o.*,
-  (SELECT COUNT(*) FROM users WHERE organization_id = o.id AND is_active = true) as user_count,
+  (SELECT COUNT(*) FROM user_organizations WHERE organization_id = o.id AND is_active = true) as user_count,
     (SELECT COUNT(*) FROM organizations WHERE parent_organization_id = o.id AND is_active = true) as subsidiary_count,
       po.name as parent_organization_name
       FROM organizations o

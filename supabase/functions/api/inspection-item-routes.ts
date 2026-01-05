@@ -1,6 +1,14 @@
 import { Hono } from "hono";
 import { tenantAuthMiddleware } from "./tenant-auth-middleware.ts";
 
+type Env = {
+    DB: any;
+    MOCHA_USERS_SERVICE_API_URL: string;
+    MOCHA_USERS_SERVICE_API_KEY: string;
+    OPENAI_API_KEY: string;
+    GOOGLE_CLIENT_ID: string;
+};
+
 const inspectionItemRoutes = new Hono<{ Bindings: Env; Variables: { user: any } }>();
 
 // Helper function to transcribe audio using OpenAI Whisper API
@@ -167,6 +175,32 @@ inspectionItemRoutes.post("/:itemId/pre-analysis", tenantAuthMiddleware, async (
     try {
         const body = await c.req.json();
         const { field_name, response_value, media_data, user_prompt, inspection_id } = body;
+
+        // Increment AI Usage
+        let usageIncremented = false;
+        try {
+            const userId = user.id || (user as any).sub;
+            const userProfile = await env.DB.prepare(
+                "SELECT organization_id FROM users WHERE id = ?"
+            ).bind(userId).first() as { organization_id?: number };
+
+            if (userProfile?.organization_id) {
+                await env.DB.prepare(
+                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+                ).bind(userProfile.organization_id).run();
+
+                usageIncremented = true;
+
+                try {
+                    await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'pre_analysis', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gemini-1.5-flash').run();
+                } catch (e) { /* ignore log error */ }
+            }
+        } catch (usageErr) {
+            console.error("Failed to increment AI usage:", usageErr);
+        }
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -386,7 +420,8 @@ Análise técnica breve (máximo 500 caracteres). Se houver riscos visíveis, ci
             media_analyzed: hasMedia ? media_data.length : 0,
             item_id: itemId,
             timestamp: now,
-            provider: usedProvider
+            provider: usedProvider,
+            ai_usage_incremented: usageIncremented,
         });
 
     } catch (error) {
@@ -477,6 +512,32 @@ inspectionItemRoutes.post("/:itemId/create-action", tenantAuthMiddleware, async 
     try {
         const body = await c.req.json();
         const { field_name, field_type, response_value, comment, compliance_status, pre_analysis, media_data, inspection_id } = body;
+
+        // Increment AI Usage
+        let usageIncremented = false;
+        try {
+            const userId = user.id || (user as any).sub;
+            const userProfile = await env.DB.prepare(
+                "SELECT organization_id FROM users WHERE id = ?"
+            ).bind(userId).first() as { organization_id?: number };
+
+            if (userProfile?.organization_id) {
+                await env.DB.prepare(
+                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+                ).bind(userProfile.organization_id).run();
+
+                usageIncremented = true;
+
+                try {
+                    await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'action_plan', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o').run();
+                } catch (e) { /* ignore log error */ }
+            }
+        } catch (usageErr) {
+            console.error("Failed to increment AI usage:", usageErr);
+        }
 
         // First, try to find by itemId (direct ID)
         let item = await env.DB.prepare(`
@@ -674,7 +735,8 @@ Responda APENAS em JSON no seguinte formato:
         return c.json({
             success: true,
             action: actionData,
-            action_item: actionSuggestion // Always return for inline display
+            action_item: actionSuggestion, // Always return for inline display
+            ai_usage_incremented: usageIncremented
         });
 
     } catch (error) {
@@ -759,6 +821,32 @@ inspectionItemRoutes.post("/:itemId/generate-field-response", tenantAuthMiddlewa
     try {
         const body = await c.req.json();
         const { field_name, field_type, current_response, media_data, field_options } = body;
+
+        // Increment AI Usage
+        let usageIncremented = false;
+        try {
+            const userId = user.id || (user as any).sub;
+            const userProfile = await env.DB.prepare(
+                "SELECT organization_id FROM users WHERE id = ?"
+            ).bind(userId).first() as { organization_id?: number };
+
+            if (userProfile?.organization_id) {
+                await env.DB.prepare(
+                    "UPDATE organizations SET ai_usage_count = COALESCE(ai_usage_count, 0) + 1 WHERE id = ?"
+                ).bind(userProfile.organization_id).run();
+
+                usageIncremented = true;
+
+                try {
+                    await env.DB.prepare(`
+             INSERT INTO ai_usage_log (organization_id, user_id, feature_type, model_used, status, created_at)
+             VALUES (?, ?, 'analysis', ?, 'success', NOW())
+           `).bind(userProfile.organization_id, userId, 'gpt-4o-mini').run();
+                } catch (e) { /* ignore log error */ }
+            }
+        } catch (usageErr) {
+            console.error("Failed to increment AI usage:", usageErr);
+        }
 
         // Get inspection item and context
         const item = await env.DB.prepare(`
@@ -1024,7 +1112,8 @@ Seja específico sobre as evidências analisadas e cite detalhes visuais / sonor
             confidence: aiResult.confidence || 'media',
             media_analyzed: mediaAnalyzed,
             item_id: itemId,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            ai_usage_incremented: usageIncremented
         });
 
     } catch (error) {
